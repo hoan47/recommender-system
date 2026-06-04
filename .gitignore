@@ -1,0 +1,26 @@
+# Data files - do NOT commit raw data
+data/*.csv
+data/*.json
+data/*.sql
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Environment
+.env
+*.env.local
