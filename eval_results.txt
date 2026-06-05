@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import csv, statistics; from collections import Counter; orders = list(csv.DictReader(open('data/orders.csv'))); print('ORDERS:', len(orders), '| Users:', len(set(r['user_id'] for r in orders))); es = Counter(r['eval_set'] for r in orders); print('Eval:', dict(es)); prior = list(csv.DictReader(open('data/order_products__prior.csv'))); print('PRIOR rows:', len(prior), '| Orders:', len(set(r['order_id'] for r in prior)), '| Prods:', len(set(r['product_id'] for r in prior))); rc=Counter(r['reordered'] for r in prior); t=rc['0']+rc['1']; print(f'Reord: 0={rc["0"]} 1={rc["1"]} Rate={rc["1"]/t*100:.1f}%'); opc=Counter(); [opc.update({r['order_id']:1}) for r in prior]; s=list(opc.values()); print(f'Per order: min={min(s)} max={max(s)} avg={statistics.mean(s):.1f} med={statistics.median(s)}'); train=list(csv.DictReader(open('data/order_products__train.csv'))); rc2=Counter(r['reordered'] for r in train); t2=rc2['0']+rc2['1']; print(f'TRAIN: {len(train)} rows | Reord rate={rc2["1"]/t2*100:.1f}%'); prods=list(csv.DictReader(open('data/products.csv'))); depts=set(r['department_id'] for r in prods); aisles=set(r['aisle_id'] for r in prods); print(f'PRODS: {len(prods)} depts={len(depts)} aisles={len(aisles)}'); uoc=Counter(r['user_id'] for r in orders); uo=list(uoc.values()); print(f'Ord/user: min={min(uo)} max={max(uo)} avg={statistics.mean(uo):.1f} med={statistics.median(uo)}')
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\b2h16\AppData\Local\Programs\Python\Python313\Lib\csv.py", line 178, in __next__
+    row = next(self.reader)
+  File "C:\Users\b2h16\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 23, in decode
+    return codecs.charmap_decode(input,self.errors,decoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'charmap' codec can't decode byte 0x9d in position 6068: character maps to <undefined>
+ORDERS: 3421083 | Users: 206209
+Eval: {'prior': 3214874, 'train': 131209, 'test': 75000}
+PRIOR rows: 32434489 | Orders: 3214874 | Prods: 49677
+Reord: 0=13307953 1=19126536 Rate=59.0%
+Per order: min=1 max=145 avg=10.1 med=8.0
+TRAIN: 1384617 rows | Reord rate=59.9%
