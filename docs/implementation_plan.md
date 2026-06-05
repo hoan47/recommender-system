@@ -223,13 +223,16 @@ def load_data_for_model(model_name):
    - Edges:
      - `(product_A) — [co_purchase] → (product_B)` — **chỉ giữ cặp có SPMI > 0**, weight = SPMI value. Dùng SPMI thay vì co-occurrence count giúp lọc nhiễu, giảm số edges đáng kể.
      - `(product) — [belongs_to] → (department)` — weight = 1.0
-4. Học node2vec embeddings:
-   ```python
-   from node2vec import Node2Vec
-   # Default start: dimensions=128, walk_length=20, num_walks=200
-   node2vec = Node2Vec(graph, dimensions=128, walk_length=20, num_walks=200)
-   model = node2vec.fit(window=10, min_count=1)
-   ```
+4. Học node2vec embeddings (tự code, KHÔNG dùng thư viện node2vec/gensim):
+   - **Random Walks (node2vec strategy):**
+     - Với mỗi node, thực hiện `num_walks` lần random walk độ dài `walk_length`
+     - Transition probability: p=1 (return), q=1 (in-out), α_pq(t, x) × w_vx
+   - **Skip-Gram với Negative Sampling:**
+     - Input: các walks (sequences of node IDs)
+     - Context window = 10, negative samples = 5
+     - Loss = log σ(pos_dot) + Σ log σ(-neg_dot)
+     - Optimize bằng SGD, learning rate giảm dần
+   - **Chỉ dùng numpy + networkx**, không import `node2vec`, `gensim`, hay bất kỳ thư viện ML nào
 5. Cosine similarity giữa product embeddings → sparse matrix (chỉ product-product)
 6. Tune params trên **train** (in-sample, không dùng test):
    - **Grid search space:**

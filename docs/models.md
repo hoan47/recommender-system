@@ -36,10 +36,11 @@ Ví dụ:
   product_id=1 → "Chocolate Sandwich Cookies snacks cookies"
 ```
 
-**Thuật toán:**
-1. TF-IDF vectorize documents (ngram_range=(1,2), max_features=10,000)
-2. Cosine similarity giữa TF-IDF vectors
-3. Output: ma trận similarity (49,688 × 49,688)
+**Thuật toán (tự code, không dùng sklearn):**
+1. Tokenize + build vocabulary (unigram + bigram, top max_features=10,000 theo DF)
+2. TF (sublinear: 1 + log(tf)) × IDF (smooth) → L2 normalize
+3. Tự code cosine similarity: chunked dot product + norm → sparse top-K
+4. Output: ma trận similarity (49,688 × 49,688)
 
 **Output:** `models/tfidf_matrix.npz`, `models/item_similarity_cb.npz`, `models/tfidf_vectorizer.pkl`
 
@@ -101,7 +102,7 @@ Chọn k tốt nhất
   - `(product_A) — [co_purchase] → (product_B)` — **chỉ giữ cặp có SPMI > 0**, weight = SPMI value. Dùng SPMI thay vì co-occurrence count giúp lọc nhiễu, giảm số edges.
   - `(product) — [belongs_to] → (department)` — weight = 1.0, từ products.csv
 
-**Hướng xử lý (Global):** Dùng node2vec để học product embeddings, sau đó tính similarity bằng cosine giữa các embeddings. Tune params (walk_length, dimensions, num_walks) trên train.
+**Hướng xử lý (Global):** Tự code node2vec (random walks + skip-gram với negative sampling) để học product embeddings, sau đó tính similarity bằng cosine giữa các embeddings. Chỉ dùng numpy + networkx, không import node2vec/gensim. Tune params (walk_length, dimensions, num_walks) trên train.
 
 **Grid search space:**
 - `walk_length`: [10, 20, 30]
