@@ -1,5 +1,9 @@
 """
-Knowledge Graph (KG) model — Node2Vec embeddings.
+Knowledge Graph (KG) model — Node2Vec embeddings (TỰ CODE).
+
+Tự cài đặt toàn bộ pipeline: random walks (node2vec strategy) + skip-gram
+với negative sampling + cosine similarity. KHÔNG dùng node2vec, gensim,
+sklearn hay bất kỳ thư viện ML nào. Chỉ dùng numpy + networkx (đồ thị) + scipy.sparse.
 
 Builds a graph with:
   - Nodes: product (49,688) + department (21)
@@ -23,14 +27,13 @@ Outputs:
 
 import json
 from pathlib import Path
+from collections import defaultdict
 
 import numpy as np
 from scipy.sparse import csr_matrix, lil_matrix, save_npz, load_npz
-from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
 
 import networkx as nx
-from node2vec import Node2Vec
 
 # Project root
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -38,6 +41,10 @@ MODELS_DIR = PROJECT_ROOT / "models"
 
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
+
+# ============================================================================
+# PHASE 1: Graph Building
+# ============================================================================
 
 def build_graph(spmi_matrix, products_df, prior_df):
     """
@@ -74,7 +81,6 @@ def build_graph(spmi_matrix, products_df, prior_df):
 
     for pid in range(n_products):
         product_label = f"product_{pid}"
-        # Mark whether product exists in prior (0 = cold start)
         in_prior = 1 if pid in product_ids_in_prior else 0
         graph.add_node(product_label, type="product", in_prior=in_prior)
 
@@ -124,49 +130,368 @@ def build_graph(spmi_matrix, products_df, prior_df):
     return graph
 
 
-def train_node2vec(graph, dimensions=128, walk_length=20, num_walks=200,
-                   window=10, workers=4):
+# ============================================================================
+# PHASE 2: Node2Vec Random Walks (tự code)
+# ============================================================================
+
+def _precompute_transition_probs(graph, p=1.0, q=1.0):
     """
-    Train node2vec embeddings on the graph.
+    Precompute alias tables cho node2vec biased random walks.
+
+    Dùng alias method để sampling nhanh O(1) mỗi bước walk.
+    Mỗi node ánh xạ sang 2 mảng: alias_nodes và alias_probs.
+
+    Với node2vec, transition probability từ node v sang x phụ thuộc vào
+    node trước đó t (second-order):
+      π_vx = α_pq(t, x) × w_vx
+    với:
+      α(t, x) = 1/p nếu t == x (quay lui)
+      α(t, x) = 1   nếu có edge(t, x) (khoảng cách 1)
+      α(t, x) = 1/q nếu không có edge(t, x) (khoảng cách 2)
+
+    Ta precompute alias cho TẤT CẢ các cặp (t, v) có thể, vì transition
+    phụ thuộc vào node trước.
+
+    Để đơn giản và tiết kiệm bộ nhớ: dùng sampling trực tiếp từng bước
+    (không alias) — chấp nhận O(degree) mỗi bước. Với graph ~50K nodes,
+    degree trung bình thấp (~vài chục tới vài trăm) → acceptable.
 
     Parameters
     ----------
     graph : nx.Graph
-    dimensions : int
-        Embedding dimension.
-    walk_length : int
-        Length of each random walk.
-    num_walks : int
-        Number of walks per node.
-    window : int
-        Context window size for Word2Vec.
-    workers : int
-        Number of parallel workers.
+    p : float — return parameter
+    q : float — in-out parameter
 
     Returns
     -------
-    tuple: (model, embeddings_matrix)
-        model: trained Node2Vec model
+    graph (giữ nguyên, chỉ lưu tham số)
+    """
+    return p, q
+
+
+def _node2vec_walk(graph, start_node, walk_length, p, q):
+    """
+    Thực hiện một random walk bắt đầu từ start_node, dùng node2vec strategy.
+
+    Parameters
+    ----------
+    graph : nx.Graph
+    start_node : str
+    walk_length : int
+    p : float
+    q : float
+
+    Returns
+    -------
+    list of str (các node label trong walk)
+    """
+    walk = [start_node]
+
+    # Cần ít nhất 1 bước mới có "node trước"
+    if walk_length <= 1:
+        return walk
+
+    # Bước đầu tiên: uniform random từ neighbors (chưa có "node trước")
+    neighbors = list(graph.neighbors(start_node))
+    if not neighbors:
+        return walk
+    # Sample với trọng số = edge weight
+    weights = np.array([graph[start_node][n].get("weight", 1.0) for n in neighbors])
+    weights = weights / weights.sum()
+    first_step = np.random.choice(neighbors, p=weights)
+    walk.append(first_step)
+
+    # Các bước tiếp theo: biased random walk
+    for _ in range(2, walk_length):
+        t = walk[-2]  # node trước
+        v = walk[-1]  # node hiện tại
+        neighbors = list(graph.neighbors(v))
+        if not neighbors:
+            break
+
+        # Tính trọng số α_pq
+        probs = []
+        for x in neighbors:
+            w_vx = graph[v][x].get("weight", 1.0)
+            if x == t:
+                alpha = 1.0 / p
+            elif graph.has_edge(t, x):
+                alpha = 1.0
+            else:
+                alpha = 1.0 / q
+            probs.append(w_vx * alpha)
+
+        probs = np.array(probs)
+        probs = probs / probs.sum()
+        next_node = np.random.choice(neighbors, p=probs)
+        walk.append(next_node)
+
+    return walk
+
+
+def _generate_walks(graph, num_walks, walk_length, p=1.0, q=1.0, workers=1):
+    """
+    Sinh node2vec random walks cho tất cả các node.
+
+    Parameters
+    ----------
+    graph : nx.Graph
+    num_walks : int — số walk mỗi node
+    walk_length : int — độ dài mỗi walk
+    p : float
+    q : float
+    workers : int — không dùng (giữ tương thích interface)
+
+    Returns
+    -------
+    list of list of str
+    """
+    nodes = list(graph.nodes())
+    walks = []
+
+    for node in tqdm(nodes, desc="  Generating walks", unit="nodes"):
+        for _ in range(num_walks):
+            walk = _node2vec_walk(graph, node, walk_length, p, q)
+            walks.append(walk)
+
+    return walks
+
+
+# ============================================================================
+# PHASE 3: Skip-Gram với Negative Sampling (tự code)
+# ============================================================================
+
+def _build_node_index(nodes):
+    """
+    Xây dựng ánh xạ node label → index (0..N-1).
+
+    Parameters
+    ----------
+    nodes : list of str
+
+    Returns
+    -------
+    dict: {label: index}
+    dict: {index: label}
+    int: total nodes
+    """
+    node_to_idx = {}
+    idx_to_node = {}
+    for idx, node in enumerate(nodes):
+        node_to_idx[node] = idx
+        idx_to_node[idx] = node
+    return node_to_idx, idx_to_node, len(nodes)
+
+
+def _build_noise_distribution(n_nodes, walks, power=0.75):
+    """
+    Xây dựng noise distribution để negative sampling.
+    Dùng unigram distribution mũ power (như word2vec).
+
+    Parameters
+    ----------
+    n_nodes : int
+    walks : list of list of str
+    power : float — smoothing exponent (default 0.75)
+
+    Returns
+    -------
+    numpy array (n_nodes,) — probability distribution
+    """
+    freq = np.zeros(n_nodes, dtype=np.float64)
+
+    for walk in walks:
+        for node in walk:
+            # node là string label → tạm thời chưa có mapping
+            # freq sẽ được fill sau khi có node_to_idx
+            pass
+
+    # Vì walks đã được sinh với node labels, ta cần đếm sau khi có node_to_idx
+    # Hàm này sẽ được gọi lại trong train_node2vec với walks đã convert sang indices
+    return None  # Placeholder, sẽ xử lý trong train_node2vec
+
+
+def _skipgram_train(walks, n_nodes, dimensions, window, negative, epochs, lr):
+    """
+    Huấn luyện skip-gram với negative sampling cho tất cả walks.
+
+    Parameters
+    ----------
+    walks : list of list of int (các walks đã convert sang index)
+    n_nodes : int — tổng số node (bao gồm cả product + department)
+    dimensions : int — kích thước embedding
+    window : int — context window size
+    negative : int — số negative samples mỗi positive
+    epochs : int — số epoch training
+    lr : float — learning rate ban đầu
+
+    Returns
+    -------
+    numpy array (n_nodes × dimensions) — embedding matrix
+    """
+    # Khởi tạo embeddings ngẫu nhiên
+    # Dùng 2 ma trận: W_in (center) và W_out (context), giống word2vec
+    W_in = np.random.uniform(-0.5 / dimensions, 0.5 / dimensions, (n_nodes, dimensions)).astype(np.float32)
+    W_out = np.random.uniform(-0.5 / dimensions, 0.5 / dimensions, (n_nodes, dimensions)).astype(np.float32)
+
+    # Xây dựng noise distribution từ tần suất node trong walks
+    freq = np.zeros(n_nodes, dtype=np.float64)
+    for walk in walks:
+        for node in walk:
+            freq[node] += 1
+
+    # Unigram distribution ^ power
+    freq_pow = freq ** 0.75
+    noise_dist = freq_pow / freq_pow.sum()
+
+    # Đếm tổng số training pairs (để hiển thị progress)
+    total_pairs = 0
+    for walk in walks:
+        if len(walk) < 2:
+            continue
+        total_pairs += (len(walk) - 1) * min(window, len(walk) - 1) * 2  # ước lượng
+
+    print(f"  [Skip-Gram] Tổng nodes: {n_nodes}, dim={dimensions}, "
+          f"negative={negative}, epochs={epochs}")
+    print(f"  [Skip-Gram] ~{total_pairs:,} training pairs (ước lượng)")
+
+    # Training
+    total_steps = 0
+    for epoch in range(epochs):
+        epoch_loss = 0.0
+        pairs_count = 0
+
+        # Shuffle walks
+        walk_indices = np.random.permutation(len(walks))
+
+        for walk_idx in tqdm(walk_indices, desc=f"  Epoch {epoch+1}/{epochs}", unit="walks"):
+            walk = walks[walk_idx]
+            if len(walk) < 2:
+                continue
+
+            for center_pos in range(len(walk)):
+                center = walk[center_pos]
+
+                # Context window
+                left = max(0, center_pos - window)
+                right = min(len(walk), center_pos + window + 1)
+
+                for ctx_pos in range(left, right):
+                    if ctx_pos == center_pos:
+                        continue
+                    context = walk[ctx_pos]
+
+                    # ---- Positive sample ----
+                    # grad cho center: (σ - 1) * W_out[context]
+                    # grad cho context: (σ - 1) * W_in[center]
+                    dot = np.dot(W_in[center], W_out[context])
+                    sig = 1.0 / (1.0 + np.exp(-dot))  # sigmoid
+                    grad = sig - 1.0  # cho positive sample
+
+                    # Update
+                    W_in[center] -= lr * grad * W_out[context]
+                    W_out[context] -= lr * grad * W_in[center]
+
+                    # Loss: -log(sig)
+                    epoch_loss += -np.log(max(sig, 1e-15))
+
+                    # ---- Negative samples ----
+                    neg_samples = np.random.choice(
+                        n_nodes, size=negative, p=noise_dist, replace=False
+                    )
+
+                    for neg in neg_samples:
+                        if neg == center or neg == context:
+                            continue
+
+                        dot_neg = np.dot(W_in[center], W_out[neg])
+                        sig_neg = 1.0 / (1.0 + np.exp(-dot_neg))
+                        grad_neg = sig_neg  # cho negative: grap = σ - 0
+
+                        W_in[center] -= lr * grad_neg * W_out[neg]
+                        W_out[neg] -= lr * grad_neg * W_in[center]
+
+                        epoch_loss += -np.log(max(1.0 - sig_neg, 1e-15))
+
+                    pairs_count += 1
+                    total_steps += 1
+
+        avg_loss = epoch_loss / max(pairs_count, 1)
+        print(f"  Epoch {epoch+1}/{epochs} — avg loss: {avg_loss:.4f}, lr: {lr:.6f}")
+
+        # Giảm learning rate sau mỗi epoch
+        lr *= 0.95
+
+    # Trả về W_in làm embedding chính (dùng center embedding)
+    return W_in
+
+
+# ============================================================================
+# PHASE 4: Tích hợp — train_node2vec
+# ============================================================================
+
+def train_node2vec(graph, dimensions=128, walk_length=20, num_walks=200,
+                   window=10, workers=4, p=1.0, q=1.0, epochs=1, negative=5,
+                   lr=0.025):
+    """
+    Train node2vec embeddings on the graph (TỰ CODE).
+
+    Pipeline:
+      1. Sinh random walks với node2vec strategy
+      2. Ánh xạ node label → index
+      3. Skip-gram với negative sampling
+
+    Parameters
+    ----------
+    graph : nx.Graph
+    dimensions : int — Embedding dimension.
+    walk_length : int — Length of each random walk.
+    num_walks : int — Number of walks per node.
+    window : int — Context window size.
+    workers : int — Không dùng (giữ tương thích interface).
+    p : float — Return parameter.
+    q : float — In-out parameter.
+    epochs : int — Số epoch training skip-gram.
+    negative : int — Số negative samples mỗi positive.
+    lr : float — Learning rate.
+
+    Returns
+    -------
+    tuple: (model_dict, embeddings_matrix)
+        model_dict: dict chứa W_in (để tương thích với code cũ)
         embeddings_matrix: numpy array (n_products x dimensions)
             Only product nodes, indexed by product_id.
     """
     print(f"  Training node2vec: dim={dimensions}, walk_len={walk_length}, "
-          f"num_walks={num_walks}...")
+          f"num_walks={num_walks}, epochs={epochs}...")
 
-    # Initialize Node2Vec
-    node2vec = Node2Vec(
-        graph,
-        dimensions=dimensions,
-        walk_length=walk_length,
-        num_walks=num_walks,
-        workers=workers,
-        quiet=True,
+    # Step 1: Generate walks
+    print(f"  [1/3] Generating random walks...")
+    walks = _generate_walks(graph, num_walks, walk_length, p=p, q=q, workers=workers)
+    print(f"  Generated {len(walks):,} walks")
+
+    # Step 2: Map nodes to indices
+    print(f"  [2/3] Building node index...")
+    all_nodes = list(graph.nodes())
+    node_to_idx, idx_to_node, n_nodes = _build_node_index(all_nodes)
+
+    # Convert walks từ label → index
+    walks_idx = []
+    for walk in walks:
+        walk_idx = [node_to_idx[node] for node in walk if node in node_to_idx]
+        if len(walk_idx) > 1:
+            walks_idx.append(walk_idx)
+
+    print(f"  Converted {len(walks_idx):,} walks to indices")
+
+    # Step 3: Skip-gram training
+    print(f"  [3/3] Training skip-gram with negative sampling...")
+    W_in = _skipgram_train(
+        walks_idx, n_nodes, dimensions, window=window,
+        negative=negative, epochs=epochs, lr=lr
     )
 
-    # Train
-    model = node2vec.fit(window=window, min_count=1)
-
-    # Extract product embeddings
+    # Extract product embeddings (chỉ các node product_<id>)
     n_products = max(
         int(node.replace("product_", ""))
         for node in graph.nodes()
@@ -177,23 +502,33 @@ def train_node2vec(graph, dimensions=128, walk_length=20, num_walks=200,
 
     for pid in range(n_products):
         label = f"product_{pid}"
-        if label in model.wv:
-            embeddings[pid] = model.wv[label].astype(np.float32)
+        if label in node_to_idx:
+            idx = node_to_idx[label]
+            embeddings[pid] = W_in[idx].astype(np.float32)
 
     print(f"  Embeddings shape: {embeddings.shape}")
 
-    return model, embeddings
+    # Trả về model dict để tương thích với code cũ
+    model_dict = {"W_in": W_in, "node_to_idx": node_to_idx}
+    return model_dict, embeddings
 
 
-def compute_kg_similarity(embeddings, top_k=100):
+# ============================================================================
+# PHASE 5: Cosine Similarity (tự code)
+# ============================================================================
+
+def compute_kg_similarity(embeddings, top_k=100, chunk_size=1000):
     """
-    Compute cosine similarity between product embeddings.
+    Compute cosine similarity between product embeddings (TỰ CODE).
+
+    L2 normalize → chunked dot product → top-K.
 
     Parameters
     ----------
     embeddings : numpy array (n_products x dimensions)
     top_k : int
         Keep only top-K similar products per row.
+    chunk_size : int
 
     Returns
     -------
@@ -202,22 +537,20 @@ def compute_kg_similarity(embeddings, top_k=100):
     print("  Computing cosine similarity...")
     n = embeddings.shape[0]
 
-    # Normalize embeddings for cosine similarity
+    # L2 normalize
     norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
     norms[norms == 0] = 1  # Avoid division by zero for cold-start products
     embeddings_norm = embeddings / norms
 
-    # Compute similarity in chunks to manage memory
     sim_lil = lil_matrix((n, n), dtype=np.float32)
 
-    chunk_size = 1000
     for start in tqdm(range(0, n, chunk_size), desc="  Computing chunks"):
         end = min(start + chunk_size, n)
-        chunk = embeddings_norm[start:end]
-        sim_chunk = chunk @ embeddings_norm.T  # (chunk_size x n)
+        chunk = embeddings_norm[start:end]  # (chunk_size × dim)
+        sim_chunk = chunk @ embeddings_norm.T  # (chunk_size × n)
 
-        for i, row_idx in enumerate(range(start, end)):
-            row = sim_chunk[i]
+        for i_local, row_idx in enumerate(range(start, end)):
+            row = sim_chunk[i_local]
             # Set self-similarity to 0
             row[row_idx] = 0
             # Get top-K
@@ -230,7 +563,7 @@ def compute_kg_similarity(embeddings, top_k=100):
             # Keep only positive
             positive = top_values > 0
             if positive.any():
-                sim_lil[row_idx, top_indices[positive]] = top_values[positive]
+                sim_lil[row_idx, top_indices[positive]] = top_values[positive].astype(np.float32)
 
     sim_csr = sim_lil.tocsr()
     print(f"  KG similarity: {sim_csr.shape}, non-zero: {sim_csr.nnz:,}")
@@ -238,10 +571,13 @@ def compute_kg_similarity(embeddings, top_k=100):
     return sim_csr
 
 
+# ============================================================================
+# PHASE 6: Evaluation + Tuning (giữ nguyên logic, không dùng ML lib)
+# ============================================================================
+
 def evaluate_kg_in_sample(sim_matrix, train_gt_df, ks=(5, 10, 20)):
     """
     In-sample evaluation of KG similarity on train set.
-
     Same leave-one-out per product as SPMI evaluation.
 
     Parameters
@@ -383,6 +719,10 @@ def tune_kg_params(graph, train_gt_df,
 
     return best_params, best_embeddings, best_sim, all_results
 
+
+# ============================================================================
+# PHASE 7: Main Pipeline
+# ============================================================================
 
 def build_kg_model(spmi_matrix, products_df, prior_df, train_gt_df):
     """
