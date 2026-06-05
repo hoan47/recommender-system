@@ -27,7 +27,6 @@ Outputs:
 
 import json
 from pathlib import Path
-from collections import defaultdict
 
 import numpy as np
 from scipy.sparse import csr_matrix, lil_matrix, save_npz, load_npz
@@ -134,41 +133,6 @@ def build_graph(spmi_matrix, products_df, prior_df):
 # PHASE 2: Node2Vec Random Walks (tự code)
 # ============================================================================
 
-def _precompute_transition_probs(graph, p=1.0, q=1.0):
-    """
-    Precompute alias tables cho node2vec biased random walks.
-
-    Dùng alias method để sampling nhanh O(1) mỗi bước walk.
-    Mỗi node ánh xạ sang 2 mảng: alias_nodes và alias_probs.
-
-    Với node2vec, transition probability từ node v sang x phụ thuộc vào
-    node trước đó t (second-order):
-      π_vx = α_pq(t, x) × w_vx
-    với:
-      α(t, x) = 1/p nếu t == x (quay lui)
-      α(t, x) = 1   nếu có edge(t, x) (khoảng cách 1)
-      α(t, x) = 1/q nếu không có edge(t, x) (khoảng cách 2)
-
-    Ta precompute alias cho TẤT CẢ các cặp (t, v) có thể, vì transition
-    phụ thuộc vào node trước.
-
-    Để đơn giản và tiết kiệm bộ nhớ: dùng sampling trực tiếp từng bước
-    (không alias) — chấp nhận O(degree) mỗi bước. Với graph ~50K nodes,
-    degree trung bình thấp (~vài chục tới vài trăm) → acceptable.
-
-    Parameters
-    ----------
-    graph : nx.Graph
-    p : float — return parameter
-    q : float — in-out parameter
-
-    Returns
-    -------
-    graph (giữ nguyên, chỉ lưu tham số)
-    """
-    return p, q
-
-
 def _node2vec_walk(graph, start_node, walk_length, p, q):
     """
     Thực hiện một random walk bắt đầu từ start_node, dùng node2vec strategy.
@@ -229,7 +193,7 @@ def _node2vec_walk(graph, start_node, walk_length, p, q):
     return walk
 
 
-def _generate_walks(graph, num_walks, walk_length, p=1.0, q=1.0, workers=1):
+def _generate_walks(graph, num_walks, walk_length, p=1.0, q=1.0):
     """
     Sinh node2vec random walks cho tất cả các node.
 
@@ -240,7 +204,6 @@ def _generate_walks(graph, num_walks, walk_length, p=1.0, q=1.0, workers=1):
     walk_length : int — độ dài mỗi walk
     p : float
     q : float
-    workers : int — không dùng (giữ tương thích interface)
 
     Returns
     -------
@@ -281,34 +244,6 @@ def _build_node_index(nodes):
         node_to_idx[node] = idx
         idx_to_node[idx] = node
     return node_to_idx, idx_to_node, len(nodes)
-
-
-def _build_noise_distribution(n_nodes, walks, power=0.75):
-    """
-    Xây dựng noise distribution để negative sampling.
-    Dùng unigram distribution mũ power (như word2vec).
-
-    Parameters
-    ----------
-    n_nodes : int
-    walks : list of list of str
-    power : float — smoothing exponent (default 0.75)
-
-    Returns
-    -------
-    numpy array (n_nodes,) — probability distribution
-    """
-    freq = np.zeros(n_nodes, dtype=np.float64)
-
-    for walk in walks:
-        for node in walk:
-            # node là string label → tạm thời chưa có mapping
-            # freq sẽ được fill sau khi có node_to_idx
-            pass
-
-    # Vì walks đã được sinh với node labels, ta cần đếm sau khi có node_to_idx
-    # Hàm này sẽ được gọi lại trong train_node2vec với walks đã convert sang indices
-    return None  # Placeholder, sẽ xử lý trong train_node2vec
 
 
 def _skipgram_train(walks, n_nodes, dimensions, window, negative, epochs, lr):
@@ -431,7 +366,7 @@ def _skipgram_train(walks, n_nodes, dimensions, window, negative, epochs, lr):
 # ============================================================================
 
 def train_node2vec(graph, dimensions=128, walk_length=20, num_walks=200,
-                   window=10, workers=4, p=1.0, q=1.0, epochs=1, negative=5,
+                   window=10, p=1.0, q=1.0, epochs=1, negative=5,
                    lr=0.025):
     """
     Train node2vec embeddings on the graph (TỰ CODE).
@@ -448,7 +383,6 @@ def train_node2vec(graph, dimensions=128, walk_length=20, num_walks=200,
     walk_length : int — Length of each random walk.
     num_walks : int — Number of walks per node.
     window : int — Context window size.
-    workers : int — Không dùng (giữ tương thích interface).
     p : float — Return parameter.
     q : float — In-out parameter.
     epochs : int — Số epoch training skip-gram.
@@ -467,7 +401,7 @@ def train_node2vec(graph, dimensions=128, walk_length=20, num_walks=200,
 
     # Step 1: Generate walks
     print(f"  [1/3] Generating random walks...")
-    walks = _generate_walks(graph, num_walks, walk_length, p=p, q=q, workers=workers)
+    walks = _generate_walks(graph, num_walks, walk_length, p=p, q=q)
     print(f"  Generated {len(walks):,} walks")
 
     # Step 2: Map nodes to indices
