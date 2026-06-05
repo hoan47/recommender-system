@@ -18,10 +18,12 @@ Tập dữ liệu sử dụng là **Instacart Market Basket Analysis** — tập
 | `departments.csv` | 21 | Danh sách ngành hàng (department) |
 | `products.csv` | 49,688 | Danh sách sản phẩm |
 | `orders.csv` | 3,421,083 | Thông tin đơn hàng |
-| `order_products__prior.csv` | 32,434,489 | Lịch sử sản phẩm trong đơn (quá khứ) — **nguồn chính xây model** |
-| `order_products__train.csv` | 1,384,617 | Label cho huấn luyện |
+| `order_products__prior.csv` | 32,434,489 | Tương tác của prior orders — **nguồn chính xây model** |
+| `order_products__train.csv` | 1,384,617 | Ground truth cho **CẢ train (131K đơn) VÀ test (75K đơn)** |
 
-> **Ghi chú:** File `aisles.csv` (kệ hàng) không được sử dụng. Aisle là vị trí vật lý khác nhau giữa các cửa hàng trong cùng chuỗi, không phải phân loại sản phẩm mang tính toàn cục.
+> **Ghi chú quan trọng:**
+> - File `aisles.csv` (kệ hàng) không được sử dụng. Aisle là vị trí vật lý khác nhau giữa các cửa hàng trong cùng chuỗi, không phải phân loại sản phẩm mang tính toàn cục.
+> - **KHÔNG có file `order_products__test.csv` riêng.** Dataset Instacart chỉ cung cấp 2 file interaction: `order_products__prior.csv` và `order_products__train.csv`. Ground truth cho test nằm trong `order_products__train.csv` và được phân biệt qua cột `eval_set` trong `orders.csv`.
 
 ### 2.2. Schema từng file
 

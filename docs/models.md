@@ -57,7 +57,8 @@ Ví dụ:
 | File | Cột dùng | Mục đích |
 |------|----------|----------|
 | `order_products__prior.csv` | order_id, product_id | Đếm co-occurrence (32.4M records) |
-| `order_products__train.csv` | order_id, product_id | Tune threshold + đánh giá |
+| `order_products__train.csv` | order_id, product_id | Ground truth cho **CẢ train và test** (tách qua `orders.csv[eval_set]`) |
+| `orders.csv` | order_id, eval_set | Phân biệt train/test (eval_set='train'/'test') |
 | `products.csv` | product_id | Map tên sản phẩm |
 
 **Thuật toán:**
@@ -141,9 +142,7 @@ DATA FLOW:
                               │
                               └──► KG (graph → node2vec) ──────► kg_embeddings
       │
-  order_products__train.csv ──► TUNE params (shift k, α, β, threshold)
-      │
-  order_products__test.csv  ──► EVALUATE final metrics
+  order_products__train.csv + orders.csv ──► TUNE params (train) + EVALUATE (test)
 
 HYBRID:
   final_score = α * spmi + β * kg   (filtered by cb_sim)
