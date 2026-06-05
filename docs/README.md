@@ -83,8 +83,7 @@ python src/evaluation/evaluate.py           # So sánh tất cả models
 | `departments.csv` | 21 | Ngành hàng |
 | `orders.csv` | 3,421,083 | Thông tin đơn hàng (có cột eval_set) |
 | `order_products__prior.csv` | 32,434,489 | Lịch sử mua hàng — **XÂY MODEL** |
-| `order_products__train.csv` | 1,384,617 | **TUNE** hyperparameters |
-| `order_products__test.csv` | (trong train) | **EVAL** cuối cùng |
+| `order_products__train.csv` | 1,384,617 | **TUNE** hyperparameters + **EVAL** cuối cùng (test nằm trong đây, tách qua `orders.csv[eval_set='test']`) |
 
 > **File `aisles.csv` không được sử dụng.** Aisle là vị trí vật lý (kệ hàng), khác nhau giữa các cửa hàng trong cùng chuỗi, không phải phân loại toàn cục.
 

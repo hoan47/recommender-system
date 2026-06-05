@@ -17,7 +17,7 @@
 
 **Mục đích:** Tìm sản phẩm **GIỐNG nhau (substitute)** dựa trên nội dung mô tả.
 
-**Vai trò trong hệ thống:** Dùng để **LOẠI** sản phẩm tương tự khỏi danh sách gợi ý của các model khác (SPMI, KG). Không phải model gợi ý chính, chỉ là baseline để so sánh và làm bộ lọc.
+**Vai trò trong hệ thống:** Dùng để **LOẠI** sản phẩm tương tự khỏi danh sách gợi ý của các model khác (SPMI, KG). Không phải model gợi ý chính, chỉ là baseline để so sánh và làm bộ lọc. Ngoài ra, CB còn là fallback cho sản phẩm long-tail (freq < 5) — khi SPMI không đủ tin cậy.
 
 **Dữ liệu đầu vào:**
 | File | Cột dùng | Mục đích |
@@ -90,19 +90,25 @@ Chọn k tốt nhất
 **Dữ liệu đầu vào:**
 | File | Cột dùng | Mục đích |
 |------|----------|----------|
-| `order_products__prior.csv` | order_id, product_id | Edge co_purchase giữa các products |
+| `order_products__prior.csv` | order_id, product_id | Edge co_purchase giữa các products (qua SPMI) |
 | `products.csv` | product_id, department_id | Kết nối product → department |
 | `departments.csv` | department_id, department | Node department |
+| `models/spmi_matrix.npz` | (từ bước SPMI) | Lọc edges: chỉ giữ cặp có SPMI > 0 |
 
 **Cấu trúc đồ thị:**
 - **Nodes:** product (49,688) + department (21)
 - **Edges:**
-  - `(product_A) — [co_purchase] → (product_B)` — nếu SPMI > 0
-  - `(product) — [belongs_to] → (department)` — từ products.csv
+  - `(product_A) — [co_purchase] → (product_B)` — **chỉ giữ cặp có SPMI > 0**, weight = SPMI value. Dùng SPMI thay vì co-occurrence count giúp lọc nhiễu, giảm số edges.
+  - `(product) — [belongs_to] → (department)` — weight = 1.0, từ products.csv
 
-**Hướng xử lý (Global):** Dùng node2vec để học product embeddings (128-d), sau đó tính similarity bằng cosine giữa các embeddings.
+**Hướng xử lý (Global):** Dùng node2vec để học product embeddings, sau đó tính similarity bằng cosine giữa các embeddings. Tune params (walk_length, dimensions, num_walks) trên train.
 
-**Output:** `models/kg_embeddings.npy`, `models/kg_best_params.json`
+**Grid search space:**
+- `walk_length`: [10, 20, 30]
+- `dimensions`: [64, 128]
+- `num_walks`: [100, 200]
+
+**Output:** `models/kg_embeddings.npy`, `models/kg_best_params.json`, `models/kg_similarity.npz` (sparse cosine similarity)
 
 ---
 
