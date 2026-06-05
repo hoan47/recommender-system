@@ -1,8 +1,13 @@
-# 📊 Đánh giá tập dữ liệu — Instacart Market Basket Analysis
+# 📊 Đánh giá tập dữ liệu — Instacart Market Basket Analysis (Global / Item-Oriented)
 
 ## 1. Tổng quan
 
 Tập dữ liệu sử dụng là **Instacart Market Basket Analysis** — tập dữ liệu công khai chứa lịch sử đơn hàng của người dùng Instacart. Dữ liệu phản ánh hành vi mua sắm thực tế, phù hợp để xây dựng hệ thống gợi ý sản phẩm (recommender system).
+
+**Hướng tiếp cận: Global (Item-Oriented)**
+- Không xây dựng profile riêng cho từng user
+- Thay vào đó, xây dựng **ma trận quan hệ giữa các sản phẩm** dựa trên co-occurrence (SPMI), cấu trúc đồ thị (KG), và nội dung sản phẩm (CB)
+- Output là item-item similarity/scores — mọi user đều dùng chung một ma trận
 
 ## 2. Cấu trúc dữ liệu
 
@@ -10,20 +15,15 @@ Tập dữ liệu sử dụng là **Instacart Market Basket Analysis** — tập
 
 | File | Số dòng (không tính header) | Mô tả |
 |------|------------------------------|-------|
-| `aisles.csv` | 134 | Danh sách kệ hàng (aisle) |
 | `departments.csv` | 21 | Danh sách ngành hàng (department) |
 | `products.csv` | 49,688 | Danh sách sản phẩm |
 | `orders.csv` | 3,421,083 | Thông tin đơn hàng |
-| `order_products__prior.csv` | 32,434,489 | Lịch sử sản phẩm trong đơn (quá khứ) |
+| `order_products__prior.csv` | 32,434,489 | Lịch sử sản phẩm trong đơn (quá khứ) — **nguồn chính xây model** |
 | `order_products__train.csv` | 1,384,617 | Label cho huấn luyện |
 
-### 2.2. Schema từng file
+> **Ghi chú:** File `aisles.csv` (kệ hàng) không được sử dụng. Aisle là vị trí vật lý khác nhau giữa các cửa hàng trong cùng chuỗi, không phải phân loại sản phẩm mang tính toàn cục.
 
-**aisles.csv**
-| Column | Type | Mô tả |
-|--------|------|-------|
-| `aisle_id` | int | ID kệ hàng |
-| `aisle` | string | Tên kệ hàng |
+### 2.2. Schema từng file
 
 **departments.csv**
 | Column | Type | Mô tả |
@@ -36,7 +36,6 @@ Tập dữ liệu sử dụng là **Instacart Market Basket Analysis** — tập
 |--------|------|-------|
 | `product_id` | int | ID sản phẩm (PK) |
 | `product_name` | string | Tên sản phẩm |
-| `aisle_id` | int | FK → aisles |
 | `department_id` | int | FK → departments |
 
 **orders.csv**
@@ -60,7 +59,7 @@ Tập dữ liệu sử dụng là **Instacart Market Basket Analysis** — tập
 
 ## 3. Thống kê chính
 
-### 3.1. Người dùng & Đơn hàng
+### 3.1. Đơn hàng & eval_set
 
 | Chỉ số | Giá trị |
 |--------|---------|
@@ -70,11 +69,11 @@ Tập dữ liệu sử dụng là **Instacart Market Basket Analysis** — tập
 
 **Phân bố `eval_set`:**
 
-| eval_set | Số lượng | % |
-|----------|----------|---|
-| `prior` (lịch sử) | 3,214,874 | 94.0% |
-| `train` (huấn luyện) | 131,209 | 3.8% |
-| `test` (đánh giá) | 75,000 | 2.2% |
+| eval_set | Số lượng | % | Vai trò trong Global |
+|----------|----------|---|----------------------|
+| `prior` (lịch sử) | 3,214,874 | 94.0% | **Xây dựng model**: co-occurrence matrix, graph edges, TF-IDF |
+| `train` (huấn luyện) | 131,209 | 3.8% | **Tune hyperparameters**: threshold SPMI, params KG, weights Hybrid |
+| `test` (đánh giá) | 75,000 | 2.2% | **Đánh giá cuối**: báo cáo metrics (chỉ dùng 1 lần) |
 
 ### 3.2. Sản phẩm & Danh mục
 
@@ -82,7 +81,6 @@ Tập dữ liệu sử dụng là **Instacart Market Basket Analysis** — tập
 |--------|---------|
 | Tổng sản phẩm | **49,688** |
 | Số ngành hàng (department) | **21** |
-| Số kệ hàng (aisle) | **134** |
 | Sản phẩm xuất hiện trong prior | **49,677** / 49,688 |
 
 ### 3.3. Hành vi mua hàng
@@ -97,57 +95,78 @@ Tập dữ liệu sử dụng là **Instacart Market Basket Analysis** — tập
 | Tổng tương tác (prior) | **32,434,489** |
 | Tổng tương tác (train) | **1,384,617** |
 
-## 4. Nhận xét & Hệ quả cho Recommender System
+## 4. Nhận xét & Hệ quả cho Global Recommender System
 
-### 4.1. Dữ liệu đủ lớn & Representative
+### 4.1. Dữ liệu đủ lớn cho Item-Oriented
 
-- 206K users + 50K products + 32M interactions là kích thước chuẩn cho bài toán market basket.
-- 21 departments giúp phân tích cross-department recommendation.
-- Mỗi user có **ít nhất 4 đơn hàng** — đủ lịch sử cho personalized/sequential recommendation.
+- 32.4M interactions từ 3.2M đơn hàng cho phép tính **co-occurrence** và **PMI** chất lượng cao giữa 50K sản phẩm.
+- Mỗi cặp sản phẩm có đủ dữ liệu để ước lượng xác suất mua kèm (P(A∩B)) một cách đáng tin cậy.
+- 21 departments là nguồn phân loại sản phẩm ở mức logic (ngành hàng), phù hợp cho cả CB (TF-IDF) và KG (cấu trúc đồ thị).
 
-### 4.2. Sparsity (độ thưa)
+### 4.2. Sparsity của Item-Item Matrix
 
-- Mật độ ma trận user–item ≈ 0.3% (32M / 206K×50K × 100).
-- Cần xử lý sparsity: collaborative filtering cần similarity measures phù hợp, hoặc kết hợp Content-Based.
+- Ma trận co-occurrence item-item (50K×50K) có mật độ thưa: chỉ khoảng 1–2% cặp sản phẩm từng xuất hiện cùng nhau trong cùng đơn hàng.
+- Cần dùng **SPMI (Shifted Positive PMI)** để lọc nhiễu: các cặp xuất hiện cùng nhau do ngẫu nhiên (frequency thấp) sẽ bị shift về 0.
+- Với những cặp không xuất hiện cùng nhau (99% ma trận), dùng **Content-Based similarity** (TF-IDF) để fallback.
 
 ### 4.3. Imbalance reorder
 
-- ~59% reorder vs ~41% first-time purchase → model có thiên hướng predict "reorder" nhiều hơn.
-- Cần dùng metrics phù hợp như NDCG, MAP thay vì accuracy thuần túy.
-- Có thể cân nhắc weighted loss hoặc sampling strategies.
+- ~59% reorder vs ~41% first-time purchase — thể hiện hành vi mua lặp lại phổ biến.
+- Trong global SPMI, reorder không phải vấn đề vì co-occurrence đếm **mọi lần xuất hiện cùng nhau**, không phân biệt reorder hay không.
+- Tuy nhiên, nếu muốn ưu tiên sản phẩm mới (first-time), có thể dùng SPMI có trọng số theo `reordered=0`.
 
 ### 4.4. Long-tail products
 
-- Nhiều sản phẩm có tần suất xuất hiện thấp (long-tail).
-- **Content-Based filtering** hữu ích cho cold-start và long-tail items dựa trên TF-IDF từ tên sản phẩm, aisle, department.
-- **Hybrid approach** (kết hợp CB + CF + KG) như mô tả trong `docs/models.md` là hướng đi hợp lý.
+- Nhiều sản phẩm có tần suất xuất hiện thấp trong prior (long-tail).
+- Với các sản phẩm long-tail, co-occurrence với sản phẩm khác rất thấp → SPMI không đủ tin cậy.
+- **Content-Based filtering** (TF-IDF từ `product_name` + `department`) là giải pháp fallback cho long-tail items:
+  - Dựa trên nội dung tên sản phẩm (text) thay vì interaction count
+  - Không bị ảnh hưởng bởi sparsity của co-occurrence
 
 ### 4.5. Temporal patterns
 
-- `order_hour_of_day`, `order_dow`, `days_since_prior_order` cho phép phân tích hành vi theo thời gian.
-- Có thể xây dựng tính năng temporal features cho model.
+- Dữ liệu có `order_dow`, `order_hour_of_day`, `days_since_prior_order` — các thông tin về thời gian.
+- Trong global approach, temporal có thể dùng để:
+  - **Weight co-occurrence**: ưu tiên các cặp sản phẩm xuất hiện cùng nhau trong cùng khung giờ / ngày
+  - **Phân tích seasonal**: sản phẩm theo mùa (kem vào mùa hè, sô-cô-la nóng vào mùa đông)
+- Tuy nhiên, ở phiên bản đầu, temporal chưa được đưa vào model chính.
 
-### 4.6. Chia tập hợp lý
+### 4.6. Chia tập theo hướng Global
 
-- prior: dữ liệu lịch sử → dùng để xây dựng user profiles, item similarities, knowledge graph.
-- train: 131K đơn cuối của mỗi user → ground truth cho huấn luyện.
-- test: 75K đơn → đánh giá model.
+Khác với per-user (mỗi user có prior/train/test riêng), hướng Global dùng 3 tập như sau:
+
+| Tập | Số đơn | Vai trò trong pipeline |
+|-----|--------|------------------------|
+| **prior** (100%) | 3,214,874 | **Xây dựng toàn bộ model** — không có "train" model theo nghĩa supervised learning. Toàn bộ co-occurrence matrix, graph edges, TF-IDF vectors đều được tính từ prior. |
+| **train** (100%) | 131,209 | **Tune hyperparameters** — dùng ground truth từ train set để tìm threshold tối ưu cho SPMI (shift k), restart_prob cho KG, và trọng số α/β cho Hybrid. |
+| **test** (100%) | 75,000 | **Đánh giá cuối cùng** — chỉ chạy 1 lần duy nhất sau khi đã tune xong mọi tham số. Dùng metrics: Recall@K, NDCG@K, MAP@K. |
+
+**Cơ chế đánh giá cụ thể:**
+- Không phải "train model rồi predict test" như supervised learning thông thường
+- Model (SPMI / KG) được xây từ prior và không thay đổi
+- Với mỗi đơn trong test:
+  1. Lấy danh sách sản phẩm trong đơn đó
+  2. Với mỗi sản phẩm A, dùng SPMI/KG → top-N sản phẩm hay mua kèm với A
+  3. So sánh top-N với các sản phẩm còn lại trong đơn (ground truth)
+  4. Tính Recall@K, NDCG@K
 
 ### 4.7. Lưu ý kỹ thuật
 
 - File products.csv chứa ký tự đặc biệt (em dash, accented characters) → cần đọc với encoding `utf-8`.
 - Một số tên sản phẩm có chứa dấu phẩy trong ngoặc kép → cần dùng `csv.DictReader` thay vì split bằng dấu phẩy thủ công.
+- File `order_products__prior.csv` có 32.4M records → cần xử lý theo chunk để tránh tràn bộ nhớ.
+- Ma trận co-occurrence 50K×50K ở dạng dense là ~20GB → **bắt buộc dùng sparse matrix** (scipy.sparse).
 
 ## 5. Tóm tắt
 
 | Khía cạnh | Đánh giá |
 |-----------|----------|
-| ✅ Kích thước | Phù hợp, đủ lớn để train deep learning models |
+| ✅ Kích thước | Phù hợp, đủ lớn để xây item-item relationships |
 | ✅ Chất lượng | Dữ liệu sạch, có cấu trúc rõ ràng |
-| ✅ Đa dạng | 50K sản phẩm, 21 departments, 134 aisles |
-| ✅ Temporal | Có timestamp, thứ tự đơn hàng |
-| ✅ Split sẵn | prior / train / test rõ ràng |
-| ⚠️ Sparsity | Cần xử lý (dùng hybrid / item-based CF) |
-| ⚠️ Imbalance | 59% reorder — cần metric phù hợp |
+| ✅ Đa dạng | 50K sản phẩm, 21 departments |
+| ✅ Temporal | Có timestamp, có thể dùng để phân tích mùa vụ |
+| ✅ Split sẵn | prior / train / test — prior xây model, train tune params, test eval |
+| ⚠️ Sparsity | Item-item co-occurrence thưa — cần SPMI + CB fallback |
+| ⚠️ Long-tail | Sản phẩm ít xuất hiện → cần CB fallback dựa trên nội dung |
 
-Dataset này hoàn toàn phù hợp để xây dựng hệ thống gợi ý sản phẩm với 4 models đã định nghĩa: **Content-Based**, **Collaborative Filtering (SPMI)**, **Knowledge Graph (RWR)**, và **Hybrid**.
+Dataset này hoàn toàn phù hợp để xây dựng hệ thống gợi ý sản phẩm **global (item-oriented)** với 4 models đã định nghĩa: **Content-Based (CB)**, **Collaborative Filtering (SPMI)**, **Knowledge Graph (KG)**, và **Hybrid**.
