@@ -1,10 +1,10 @@
 """
-Centralized data loader for Instacart Market Basket Analysis dataset.
+Data loader tập trung cho dataset Instacart Market Basket Analysis.
 
-Provides a unified interface for loading all CSV files and splitting
-train/test ground truth based on orders.csv[eval_set].
+Cung cấp giao diện thống nhất để load tất cả file CSV và tách
+train/test ground truth dựa trên orders.csv[eval_set].
 
-All models (CB, SPMI, KG, Hybrid) use this module to load data consistently.
+Tất cả model (CB, SPMI, KG, Hybrid) dùng module này để load dữ liệu nhất quán.
 """
 
 import csv
@@ -13,19 +13,19 @@ from pathlib import Path
 
 import pandas as pd
 
-# Project root directory (relative to this file)
+# Thư mục gốc project (tính từ file này)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 
 
 def load_products():
     """
-    Load products.csv and join with departments.csv.
-    Aisles.csv is NOT used in this project.
+    Load products.csv và join với departments.csv.
+    File aisles.csv KHÔNG được dùng trong project này.
 
     Returns
     -------
-    pd.DataFrame with columns:
+    pd.DataFrame với các cột:
         product_id, product_name, department_id, department
     """
     products_path = DATA_DIR / "products.csv"
@@ -34,10 +34,10 @@ def load_products():
     products = pd.read_csv(products_path, encoding="utf-8")
     departments = pd.read_csv(departments_path, encoding="utf-8")
 
-    # Merge product with department name
+    # Merge product với tên department
     products = products.merge(departments, on="department_id", how="left")
 
-    # Fill missing department name (should not happen with 21 known departments)
+    # Điền department bị thiếu (không nên xảy ra với 21 department đã biết)
     products["department"] = products["department"].fillna("unknown department")
 
     return products[["product_id", "product_name", "department_id", "department"]]
@@ -45,16 +45,16 @@ def load_products():
 
 def load_orders(eval_set=None):
     """
-    Load orders.csv, optionally filter by eval_set.
+    Load orders.csv, tùy chọn lọc theo eval_set.
 
     Parameters
     ----------
-    eval_set : str or None
-        One of 'prior', 'train', 'test', or None (load all).
+    eval_set : str hoặc None
+        Một trong 'prior', 'train', 'test', hoặc None (load tất cả).
 
     Returns
     -------
-    pd.DataFrame with columns:
+    pd.DataFrame với các cột:
         order_id, user_id, eval_set, order_number, order_dow,
         order_hour_of_day, days_since_prior_order
     """
@@ -69,23 +69,22 @@ def load_orders(eval_set=None):
 
 def load_order_products(file_type="prior"):
     """
-    Load order_products__prior.csv or order_products__train.csv.
+    Load order_products__prior.csv hoặc order_products__train.csv.
 
     Parameters
     ----------
     file_type : str
-        'prior' or 'train'
+        'prior' hoặc 'train'
 
     Returns
     -------
-    pd.DataFrame with columns:
+    pd.DataFrame với các cột:
         order_id, product_id, add_to_cart_order, reordered
     """
     filename = f"order_products__{file_type}.csv"
     filepath = DATA_DIR / filename
 
-    # Use csv.DictReader for robust parsing (handles commas inside quotes)
-    # Read with pandas first for speed, then fallback if issues
+    # Dùng pandas để load nhanh
     df = pd.read_csv(filepath, encoding="utf-8")
 
     return df
@@ -93,31 +92,30 @@ def load_order_products(file_type="prior"):
 
 def load_train_test_split():
     """
-    Split ground truth from order_products__train.csv based on orders.csv[eval_set].
+    Tách ground truth từ order_products__train.csv dựa trên orders.csv[eval_set].
 
-    The dataset does NOT have a separate order_products__test.csv.
-    order_products__train.csv contains BOTH train (131,209 orders) and
-    test (75,000 orders) ground truth. We distinguish them using
-    orders.csv[eval_set].
+    Dataset KHÔNG có file order_products__test.csv riêng.
+    order_products__train.csv chứa CẢ ground truth train (131,209 đơn) và
+    test (75,000 đơn). Ta phân biệt chúng qua orders.csv[eval_set].
 
     Returns
     -------
     tuple: (train_gt_df, test_gt_df)
-        Each is a pd.DataFrame with columns:
+        Mỗi cái là pd.DataFrame với các cột:
             order_id, product_id, add_to_cart_order, reordered
     """
-    # Load orders to get eval_set mapping
+    # Load orders để lấy ánh xạ eval_set
     orders_path = DATA_DIR / "orders.csv"
     orders = pd.read_csv(orders_path, encoding="utf-8")
 
-    # Get order_id sets for train and test
+    # Lấy tập order_id cho train và test
     train_order_ids = set(orders[orders["eval_set"] == "train"]["order_id"])
     test_order_ids = set(orders[orders["eval_set"] == "test"]["order_id"])
 
-    # Load ALL order products from train file
+    # Load TẤT CẢ order products từ file train
     train_products = load_order_products("train")
 
-    # Split based on order_id
+    # Tách dựa trên order_id
     train_gt = train_products[train_products["order_id"].isin(train_order_ids)].copy()
     test_gt = train_products[train_products["order_id"].isin(test_order_ids)].copy()
 
@@ -126,15 +124,15 @@ def load_train_test_split():
 
 def load_prior_in_chunks(chunksize=500000):
     """
-    Generator that yields chunks of order_products__prior.csv.
+    Generator trả về từng chunk của order_products__prior.csv.
 
-    Used for chunk-based processing of 32.4M records without
-    loading everything into memory at once.
+    Dùng để xử lý 32.4M records theo chunk mà không cần load
+    toàn bộ vào RAM cùng lúc.
 
     Parameters
     ----------
     chunksize : int
-        Number of rows per chunk (default: 500,000).
+        Số dòng mỗi chunk (mặc định: 500,000).
 
     Yields
     ------
@@ -148,18 +146,18 @@ def load_prior_in_chunks(chunksize=500000):
 
 def load_data_for_model(model_name):
     """
-    Return data appropriate for each model.
+    Trả về dữ liệu phù hợp cho từng model.
 
     Parameters
     ----------
     model_name : str
-        One of 'cb', 'spmi', 'kg'.
-        Note: 'hybrid' is NOT supported here because it loads model outputs
-        from files created by CB, SPMI, KG.
+        Một trong 'cb', 'spmi', 'kg'.
+        Lưu ý: 'hybrid' KHÔNG được hỗ trợ ở đây vì nó load model outputs
+        từ file do CB, SPMI, KG tạo ra.
 
     Returns
     -------
-    Depends on model_name:
+    Tùy theo model_name:
         - 'cb': products_df
         - 'spmi': (prior_products_df, train_gt_df, test_gt_df)
         - 'kg': (prior_products_df, products_df)
@@ -181,38 +179,38 @@ def load_data_for_model(model_name):
 
     else:
         raise ValueError(
-            f"Unknown model_name: '{model_name}'. "
-            f"Valid options: 'cb', 'spmi', 'kg'. "
-            f"Note: 'hybrid' loads model outputs directly."
+            f"model_name không hợp lệ: '{model_name}'. "
+            f"Giá trị hợp lệ: 'cb', 'spmi', 'kg'. "
+            f"Lưu ý: 'hybrid' load model outputs trực tiếp."
         )
 
 
 def get_data_stats():
     """
-    Print summary statistics of the dataset.
-    Useful for verification after loading.
+    In thống kê tóm tắt của dataset.
+    Hữu ích để kiểm tra sau khi load.
     """
     orders = load_orders()
 
     print("=" * 50)
-    print("Dataset Statistics")
+    print("Thống kê Dataset")
     print("=" * 50)
 
-    # Orders distribution
+    # Phân bố orders
     for eval_set in ["prior", "train", "test"]:
         count = len(orders[orders["eval_set"] == eval_set])
         pct = 100 * count / len(orders)
-        print(f"  {eval_set:>6}: {count:>10,} orders ({pct:.1f}%)")
+        print(f"  {eval_set:>6}: {count:>10,} đơn ({pct:.1f}%)")
 
     # Products
     products = load_products()
-    print(f"\n  Total products: {len(products):,}")
-    print(f"  Total departments: {products['department_id'].nunique()}")
+    print(f"\n  Tổng sản phẩm: {len(products):,}")
+    print(f"  Tổng department: {products['department_id'].nunique()}")
 
     # Prior interactions
     prior = load_order_products("prior")
     print(f"\n  Prior interactions: {len(prior):,}")
-    print(f"  Unique products in prior: {prior['product_id'].nunique():,}")
+    print(f"  Sản phẩm unique trong prior: {prior['product_id'].nunique():,}")
 
     # Train/Test ground truth
     train_gt, test_gt = load_train_test_split()

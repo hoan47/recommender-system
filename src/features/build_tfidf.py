@@ -1,18 +1,18 @@
 """
 Content-Based (CB) model: TF-IDF + Cosine Similarity.
 
-Builds item-item similarity matrix based on product name and department text.
-Used as:
-  - Baseline model for comparison
-  - Filter to remove substitute products from SPMI/KG recommendations
-  - Fallback for long-tail products with insufficient co-occurrence data
+Xây dựng ma trận item-item similarity dựa trên tên sản phẩm và department.
+Được dùng làm:
+  - Baseline model để so sánh
+  - Bộ lọc loại bỏ sản phẩm thay thế (substitute) khỏi SPMI/KG recommendations
+  - Fallback cho sản phẩm long-tail có ít dữ liệu co-occurrence
 
-Depends on: src.utils.data_loader
+Phụ thuộc: src.utils.data_loader
 
 Outputs:
-  - models/tfidf_matrix.npz        - Raw TF-IDF sparse matrix
-  - models/item_similarity_cb.npz  - Cosine similarity sparse matrix
-  - models/tfidf_vectorizer.pkl    - Fitted TfidfVectorizer
+  - models/tfidf_matrix.npz        - Ma trận TF-IDF sparse gốc
+  - models/item_similarity_cb.npz  - Ma trận cosine similarity sparse
+  - models/tfidf_vectorizer.pkl    - TfidfVectorizer đã fit
 """
 
 import pickle
@@ -23,32 +23,34 @@ from scipy.sparse import csr_matrix, save_npz
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Project root
+# Thư mục gốc project
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 MODELS_DIR = PROJECT_ROOT / "models"
 
-# Make models directory if it doesn't exist
+# Tạo thư mục models nếu chưa tồn tại
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def build_documents(products_df):
     """
-    Create text documents for TF-IDF from product metadata.
+    Tạo text documents cho TF-IDF từ metadata sản phẩm.
 
-    Each document = product_name + " " + department.
-    Handles missing/NaN values gracefully.
+    Mỗi document = product_name + " " + department.
+    Xử lý giá trị missing/NaN an toàn.
 
     Parameters
     ----------
     products_df : pd.DataFrame
-        With columns: product_id, product_name, department
+        Với các cột: product_id, product_name, department
 
     Returns
     -------
     tuple: (documents, product_ids)
-        documents: list of strings
-        product_ids: numpy array aligned with documents
+        documents: list các string
+        product_ids: numpy array thẳng hàng với documents
     """
+    import pandas as pd
+
     documents = []
     product_ids = []
 
@@ -56,13 +58,13 @@ def build_documents(products_df):
         product_name = row.get("product_name", "")
         department = row.get("department", "")
 
-        # Handle missing / NaN values
+        # Xử lý giá trị missing / NaN
         if pd.isna(product_name) or str(product_name).strip() == "":
             product_name = "unknown product"
         if pd.isna(department) or str(department).strip() == "":
             department = "unknown department"
 
-        # Build document
+        # Tạo document
         doc = f"{product_name} {department}"
         documents.append(doc)
         product_ids.append(row["product_id"])
@@ -72,20 +74,20 @@ def build_documents(products_df):
 
 def build_tfidf(documents, max_features=10000):
     """
-    Build TF-IDF matrix from text documents.
+    Xây dựng ma trận TF-IDF từ text documents.
 
     Parameters
     ----------
     documents : list of str
-        Text documents for each product.
+        Text documents cho mỗi sản phẩm.
     max_features : int
-        Maximum number of TF-IDF features (vocabulary size).
+        Số lượng TF-IDF features tối đa (kích thước vocabulary).
 
     Returns
     -------
     tuple: (tfidf_matrix, vectorizer)
         tfidf_matrix: scipy.sparse.csr_matrix (n_products x max_features)
-        vectorizer: fitted TfidfVectorizer
+        vectorizer: TfidfVectorizer đã fit
     """
     vectorizer = TfidfVectorizer(
         ngram_range=(1, 2),
@@ -96,65 +98,65 @@ def build_tfidf(documents, max_features=10000):
 
     tfidf_matrix = vectorizer.fit_transform(documents)
     print(f"  TF-IDF matrix shape: {tfidf_matrix.shape}")
-    print(f"  Vocabulary size: {len(vectorizer.vocabulary_)}")
+    print(f"  Kích thước vocabulary: {len(vectorizer.vocabulary_)}")
 
     return tfidf_matrix, vectorizer
 
 
 def build_similarity(tfidf_matrix, top_k=None, threshold=None):
     """
-    Compute cosine similarity and optionally sparsify.
+    Tính cosine similarity và tùy chọn sparsify.
 
     Parameters
     ----------
     tfidf_matrix : scipy.sparse.csr_matrix
         TF-IDF vectors (n_products x n_features).
-    top_k : int or None
-        If set, keep only top-K most similar items for each product.
-    threshold : float or None
-        If set, keep only similarities above this threshold.
+    top_k : int hoặc None
+        Nếu set, chỉ giữ top-K sản phẩm tương tự nhất cho mỗi sản phẩm.
+    threshold : float hoặc None
+        Nếu set, chỉ giữ similarity trên ngưỡng này.
 
     Returns
     -------
     scipy.sparse.csr_matrix
         Cosine similarity (n_products x n_products), sparse format.
     """
-    print("  Computing cosine similarity...")
-    # cosine_similarity on sparse input returns dense array
-    # We compute row by row and keep sparse for memory efficiency
+    print("  Đang tính cosine similarity...")
+    # cosine_similarity trên sparse input trả về dense array
+    # Ta tính từng dòng và giữ sparse để tiết kiệm RAM
     n = tfidf_matrix.shape[0]
     sim_matrix = cosine_similarity(tfidf_matrix, dense_output=False)
 
-    # Ensure it's csr format
+    # Đảm bảo là CSR format
     if not isinstance(sim_matrix, csr_matrix):
         sim_matrix = sim_matrix.tocsr()
 
-    # Set diagonal to 0 (a product is trivially similar to itself)
+    # Gán đường chéo về 0 (sản phẩm luôn giống chính nó)
     sim_matrix.setdiag(0)
     sim_matrix.eliminate_zeros()
 
-    # Apply threshold if specified
+    # Áp threshold nếu có
     if threshold is not None:
-        print(f"  Applying threshold > {threshold}...")
+        print(f"  Đang lọc similarity > {threshold}...")
         sim_matrix.data[sim_matrix.data <= threshold] = 0
         sim_matrix.eliminate_zeros()
 
-    # Keep top-K per row if specified
+    # Giữ top-K mỗi dòng nếu có
     if top_k is not None:
-        print(f"  Keeping top-{top_k} per product...")
+        print(f"  Đang giữ top-{top_k} mỗi sản phẩm...")
         sim_matrix = _keep_topk_per_row(sim_matrix, top_k)
 
     print(f"  Similarity matrix shape: {sim_matrix.shape}")
     print(f"  Non-zero entries: {sim_matrix.nnz:,}")
-    print(f"  Sparsity: {100 * sim_matrix.nnz / (sim_matrix.shape[0] ** 2):.2f}%")
+    print(f"  Độ sparsity: {100 * sim_matrix.nnz / (sim_matrix.shape[0] ** 2):.2f}%")
 
     return sim_matrix
 
 
 def _keep_topk_per_row(sparse_matrix, k):
     """
-    Keep only top-K values per row in a sparse CSR matrix.
-    Significantly reduces matrix size for large K.
+    Chỉ giữ top-K giá trị mỗi dòng trong sparse CSR matrix.
+    Giảm đáng kể kích thước ma trận khi K lớn.
 
     Parameters
     ----------
@@ -163,7 +165,7 @@ def _keep_topk_per_row(sparse_matrix, k):
 
     Returns
     -------
-    csr_matrix with at most k non-zero per row
+    csr_matrix với tối đa k non-zero mỗi dòng
     """
     data = []
     indices = []
@@ -175,7 +177,7 @@ def _keep_topk_per_row(sparse_matrix, k):
             indptr.append(indptr[-1])
             continue
 
-        # Get indices of top-K values in this row
+        # Lấy index của top-K giá trị trong dòng này
         row_data = row.data
         row_indices = row.indices
 
@@ -183,7 +185,7 @@ def _keep_topk_per_row(sparse_matrix, k):
             top_indices = np.arange(row.nnz)
         else:
             top_indices = np.argpartition(row_data, -k)[-k:]
-            # Sort descending by value
+            # Sắp xếp giảm dần theo giá trị
             top_indices = top_indices[np.argsort(row_data[top_indices])[::-1]]
 
         data.append(row_data[top_indices])
@@ -198,36 +200,36 @@ def _keep_topk_per_row(sparse_matrix, k):
 
 def build_cb_model(products_df, max_features=10000, top_k=100):
     """
-    Full pipeline: build TF-IDF vectors → cosine similarity → save.
+    Pipeline đầy đủ: tạo TF-IDF vectors → cosine similarity → lưu.
 
     Parameters
     ----------
     products_df : pd.DataFrame
-        Products data from data_loader.load_products().
+        Dữ liệu sản phẩm từ data_loader.load_products().
     max_features : int
-        TF-IDF vocabulary size.
+        Kích thước vocabulary TF-IDF.
     top_k : int
-        Keep top-K similar items per product (reduces storage).
+        Giữ top-K similar items mỗi sản phẩm (giảm dung lượng lưu trữ).
 
     Returns
     -------
     tuple: (tfidf_matrix, similarity_matrix, vectorizer)
     """
     print("=" * 50)
-    print("Building Content-Based (CB) Model")
+    print("Xây dựng Content-Based (CB) Model")
     print("=" * 50)
 
-    # Step 1: Build documents
-    print("\n[1/3] Building text documents...")
+    # Bước 1: Tạo documents
+    print("\n[1/3] Đang tạo text documents...")
     documents, product_ids = build_documents(products_df)
-    print(f"  Created {len(documents)} documents")
+    print(f"  Đã tạo {len(documents)} documents")
 
-    # Step 2: TF-IDF vectorize
+    # Bước 2: TF-IDF vectorize
     print("\n[2/3] TF-IDF vectorization...")
     tfidf_matrix, vectorizer = build_tfidf(documents, max_features=max_features)
 
-    # Step 3: Cosine similarity
-    print("\n[3/3] Computing similarity...")
+    # Bước 3: Cosine similarity
+    print("\n[3/3] Đang tính similarity...")
     sim_matrix = build_similarity(tfidf_matrix, top_k=top_k, threshold=None)
 
     return tfidf_matrix, sim_matrix, vectorizer
@@ -235,7 +237,7 @@ def build_cb_model(products_df, max_features=10000, top_k=100):
 
 def save_model(tfidf_matrix, sim_matrix, vectorizer):
     """
-    Save CB model outputs to models/ directory.
+    Lưu CB model outputs vào thư mục models/.
 
     Parameters
     ----------
@@ -243,38 +245,36 @@ def save_model(tfidf_matrix, sim_matrix, vectorizer):
     sim_matrix : csr_matrix
     vectorizer : TfidfVectorizer
     """
-    import pandas as pd
+    print("\nĐang lưu CB model outputs...")
 
-    print("\nSaving CB model outputs...")
-
-    # Save sparse matrices
+    # Lưu sparse matrices
     save_npz(MODELS_DIR / "tfidf_matrix.npz", tfidf_matrix)
-    print(f"  Saved: models/tfidf_matrix.npz")
+    print(f"  Đã lưu: models/tfidf_matrix.npz")
 
     save_npz(MODELS_DIR / "item_similarity_cb.npz", sim_matrix)
-    print(f"  Saved: models/item_similarity_cb.npz")
+    print(f"  Đã lưu: models/item_similarity_cb.npz")
 
-    # Save vectorizer
+    # Lưu vectorizer
     with open(MODELS_DIR / "tfidf_vectorizer.pkl", "wb") as f:
         pickle.dump(vectorizer, f)
-    print(f"  Saved: models/tfidf_vectorizer.pkl")
+    print(f"  Đã lưu: models/tfidf_vectorizer.pkl")
 
-    print("\nCB model complete!")
+    print("\nCB model hoàn tất!")
 
 
 if __name__ == "__main__":
-    # Import here to avoid circular import issues at module level
+    # Import ở đây để tránh circular import ở module level
     import sys
     sys.path.insert(0, str(PROJECT_ROOT))
     from src.utils.data_loader import load_products
 
-    # Load data
+    # Load dữ liệu
     products_df = load_products()
 
-    # Build model
+    # Xây dựng model
     tfidf_matrix, sim_matrix, vectorizer = build_cb_model(
         products_df, max_features=10000, top_k=100
     )
 
-    # Save
+    # Lưu
     save_model(tfidf_matrix, sim_matrix, vectorizer)
