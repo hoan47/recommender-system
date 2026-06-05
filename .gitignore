@@ -3,6 +3,10 @@ data/*.csv
 data/*.json
 data/*.sql
 
+# Models & Results
+models/
+results/
+
 # Python
 __pycache__/
 *.pyc
