@@ -393,7 +393,7 @@ Với mỗi order O trong test set:
 
 ---
 
-## ✅ Checklist hoàn thành
+## ✅ Checklist hoàn thành (Sau mỗi task phải cập nhật lại progress.md dự án hiện tại đã có gì)
 
 - [ ] Tạo cấu trúc thư mục `src/` + `__init__.py` (utils, features, evaluation)
 - [ ] Tạo thư mục `models/`, `results/` (nếu chưa có)
