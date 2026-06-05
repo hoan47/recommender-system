@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import gc, os, psutil
-from config import (PATH_PRIOR, PATH_TRAIN, PATH_PRODUCTS,
+from config import (PATH_TRAIN, PATH_TEST, PATH_PRODUCTS,
                     PATH_DEPARTMENTS, MIN_FREQ, MAX_CASES)
 
 
@@ -12,18 +12,19 @@ def log(msg):
     print(f"  [RAM {ram_mb():>6.0f} MB]  {msg}")
 
 
-prior_f        = None
-frequent_items = None
-test_cases     = None
-products       = None
-dept_name      = None
-dept_ids       = None
-prod_dept_map  = None
-name_map       = None
+train_data      = None
+test_data       = None
+frequent_items  = None
+test_cases      = None
+products        = None
+dept_name       = None
+dept_ids        = None
+prod_dept_map   = None
+name_map        = None
 
 
 def load_all():
-    global prior_f, frequent_items, test_cases
+    global train_data, test_data, frequent_items, test_cases
     global products, dept_name, dept_ids, prod_dept_map, name_map
     global user_history, user_dept_pref
 
@@ -31,7 +32,7 @@ def load_all():
     print("LOAD -- Reading CSV files ...")
     print("=" * 65)
 
-    prior       = pd.read_csv(PATH_PRIOR)
+    prior       = pd.read_csv(PATH_TRAIN)
     products    = pd.read_csv(PATH_PRODUCTS)
     departments = pd.read_csv(PATH_DEPARTMENTS)
 
@@ -55,16 +56,22 @@ def load_all():
 
     prior_cols = ['order_id', 'product_id', 'reordered', 'add_to_cart_order']
 
-    mask2   = prior_clean['product_id'].isin(frequent_items)
-    prior_f_all = prior_clean.loc[mask2, prior_cols].copy()
-    mask3   = prior_f_all.groupby('order_id', sort=False)['product_id'].transform('count') > 1
-    prior_f = prior_f_all[mask3].reset_index(drop=True)
+    mask2           = prior_clean['product_id'].isin(frequent_items)
+    prior_f_all     = prior_clean.loc[mask2, prior_cols].copy()
+    mask3           = prior_f_all.groupby('order_id', sort=False)['product_id'].transform('count') > 1
+    train_data      = prior_f_all[mask3].reset_index(drop=True)
     del prior_clean, prior_f_all, mask2, mask3; gc.collect()
-    log(f"Frequent items: {len(frequent_items):,} | prior_f: {len(prior_f):,}")
+    log(f"Frequent items: {len(frequent_items):,} | train_data: {len(train_data):,}")
 
     prod_dept_map = {int(k): int(v)
                      for k, v in products.set_index('product_id')['department_id'].items()}
     name_map = products.set_index('product_id')['product_name_vi'].to_dict()
+
+    # Load test data
+    test = pd.read_csv(PATH_TEST)
+    _cast_tx(test)
+    test_data = test.reset_index(drop=True)
+    log(f"Test data: {len(test_data):,} rows")
 
 
 def _cast_tx(df: pd.DataFrame):

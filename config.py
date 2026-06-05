@@ -5,8 +5,8 @@ import os
 
 # ── Duong dan ─────────────────────────────────────────────────────────────────
 DATA_DIR         = r"C:\Users\b2h16\OneDrive\Máy tính\recommender-system\data"
-PATH_PRIOR       = os.path.join(DATA_DIR, "order_products_train.csv")
-PATH_TRAIN       = os.path.join(DATA_DIR, "order_products_test.csv")
+PATH_TRAIN       = os.path.join(DATA_DIR, "order_products_train.csv")
+PATH_TEST       = os.path.join(DATA_DIR, "order_products_test.csv")
 PATH_PRODUCTS    = os.path.join(DATA_DIR, "products.csv")
 PATH_DEPARTMENTS = os.path.join(DATA_DIR, "departments.csv")
 PATH_OUTPUT_CSV  = os.path.join(DATA_DIR, "evaluation_results.csv")
@@ -18,7 +18,6 @@ RAM_SCALE = 1.0
 # 50k SP voi 3M don -> SP mua >= 50 lan con ~26k SP (qua it)
 # Giam xuong 20 -> ~40k SP, tang kha nang hit trong evaluation
 MIN_FREQ  = 50
-MAX_CASES = int(RAM_SCALE * 2000)
 
 # ── Department direction ──────────────────────────────────────────────────────
 MIN_CONF        = 30.0
