@@ -4,6 +4,7 @@
 ## 1. Nguyên tắc chung
 - KHÔNG sửa logic code nếu không được yêu cầu
 - LUÔN kiểm tra syntax trước và sau khi thay đổi
+- **KHÔNG tự chạy command** — chỉ viết script/code và paste vào execute_command để user tự chạy
 
 ## 2. File dữ liệu
 - KHÔNG commit/push các file dữ liệu gốc (csv, json, sql...) lên git
