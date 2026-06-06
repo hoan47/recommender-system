@@ -28,6 +28,8 @@ recommender-system/
 │   ├── models.md                 # Kiến trúc models
 │   └── implementation_plan.md    # Kế hoạch implement
 ├── src/                          # Source code
+│   ├── config/                    # Cấu hình bổ trợ
+│   │   └── stopwords.txt          # Stop words cho TF-IDF
 │   ├── features/
 │   │   ├── build_tfidf.py        # CB
 │   │   ├── build_spmi.py         # SPMI

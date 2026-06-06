@@ -19,6 +19,7 @@ Cập nhật lần cuối: 06/05/2026 23:02 (Asia/Saigon)
 
 | File | Trạng thái | Mô tả |
 |------|-----------|-------|
+| `src/config/stopwords.txt` | ✅ Đã tạo | 318 stop words, load từ src/config.py |
 | `src/utils/data_loader.py` | ✅ Đã tạo | ~170 dòng, load 5 file CSV, tách train/test |
 | `src/features/build_tfidf.py` | ✅ Đã tạo | ~330 dòng, TF-IDF + cosine similarity (numpy+scipy) |
 | `src/features/build_spmi.py` | ✅ Đã tạo | ~370 dòng, co-occurrence → SPMI → tune k |

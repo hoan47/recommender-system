@@ -21,5 +21,9 @@
 - KHÔNG có file `order_products__test.csv` — ground truth test nằm trong `order_products__train.csv`, phân biệt qua `orders.csv[eval_set]`
 - File prior 32.4M records → xử lý chunk-based
 
-## 4. Hỏi user khi không chắc chắn
+## 4. Cập nhật docs khi thay đổi cấu trúc
+- Khi thêm/xóa/di chuyển file hoặc thư mục: phải cập nhật `docs/README.md` (sơ đồ cấu trúc) và `docs/progress.md` (bảng hiện trạng file)
+- Nếu thay đổi ảnh hưởng đến data flow/kiến trúc: cập nhật `docs/models.md` và `docs/implementation_plan.md`
+
+## 5. Hỏi user khi không chắc chắn
 - Khi không chắc chắn về điều gì → hỏi lại user trước khi làm
