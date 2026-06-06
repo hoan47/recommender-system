@@ -24,6 +24,7 @@ Outputs:
   - models/kg_similarity.npz        - Cosine similarity (product x product)
 """
 
+import gc
 import json
 from pathlib import Path
 
@@ -441,8 +442,11 @@ def train_node2vec(graph, dimensions=128, walk_length=20, num_walks=200,
 
     print(f"  Embeddings shape: {embeddings.shape}")
 
+    # Giải phóng các biến trung gian lớn
+    del walks, walks_idx, node_to_idx; gc.collect()
+
     # Trả về model dict để tương thích với code cũ
-    model_dict = {"W_in": W_in, "node_to_idx": node_to_idx}
+    model_dict = {"W_in": W_in, "node_to_idx": {}}
     return model_dict, embeddings
 
 

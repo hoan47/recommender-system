@@ -22,6 +22,7 @@ Outputs:
   - models/tfidf_vocab.json        - Vocabulary đã xây dựng
 """
 
+import gc
 import json
 import sys
 from pathlib import Path
@@ -44,6 +45,9 @@ from src.config import (
     TFIDF_VOCAB_FILE,
 )
 
+# =============================================================================
+#  Tokenization & Vocabulary
+# =============================================================================
 
 def _tokenize(text):
     """
@@ -58,7 +62,7 @@ def _tokenize(text):
     list of str
     """
     # Lowercase + bỏ ký tự đặc biệt, chỉ giữ chữ cái và số
-    text = text.lower()
+    text   = text.lower()
     tokens = re.findall(r"[a-z0-9]+", text)
     return [t for t in tokens if t not in ENGLISH_STOP_WORDS and len(t) > 1]
 
@@ -117,11 +121,17 @@ def build_vocabulary(documents, max_features=10000):
 
     # Bước 2: Chọn top max_features theo DF
     top_terms = [term for term, _ in df_counter.most_common(max_features)]
-    vocab = {term: idx for idx, term in enumerate(top_terms)}
+    vocab     = {term: idx for idx, term in enumerate(top_terms)}
+
+    del df_counter, top_terms; gc.collect()
 
     print(f"  [Vocab] Kích thước vocabulary: {len(vocab):,}")
     return vocab
 
+
+# =============================================================================
+#  TF-IDF Computation
+# =============================================================================
 
 def compute_tfidf(documents, vocab, n_docs):
     """
@@ -147,7 +157,7 @@ def compute_tfidf(documents, vocab, n_docs):
     print(f"  [TF-IDF] Đang xây dựng ma trận TF ({n_docs} docs × {vocab_size} terms)...")
 
     # Bước 1: Đếm DF cho tất cả terms trong vocab
-    
+
     # Mảng chứa số lượng sản phẩm có chứa từ phổ biến nhất (DF) cho mỗi term trong vocab
     df_array = np.zeros(vocab_size, dtype=np.float64)
 
@@ -157,9 +167,9 @@ def compute_tfidf(documents, vocab, n_docs):
     for doc_idx, doc in enumerate(documents):
         tokens = _tokenize(doc)
         unigrams = _generate_ngrams(tokens, 1)
-        bigrams = _generate_ngrams(tokens, 2)
+        bigrams  = _generate_ngrams(tokens, 2)
         all_terms = unigrams + bigrams
-        
+
         # Đếm term frequency trong document này
         tf_counter = Counter()
         for term in all_terms:
@@ -195,6 +205,8 @@ def compute_tfidf(documents, vocab, n_docs):
             col = row.indices[j]
             tfidf_lil[doc_idx, col] = row.data[j] * idf[col]
 
+    del tf_lil; gc.collect()
+
     tfidf_csr = tfidf_lil.tocsr()
     print(f"  [TF-IDF] TF-IDF matrix shape: {tfidf_csr.shape}")
     print(f"  [TF-IDF] Non-zero entries: {tfidf_csr.nnz:,}")
@@ -205,6 +217,10 @@ def compute_tfidf(documents, vocab, n_docs):
 
     return tfidf_csr, df_array
 
+
+# =============================================================================
+#  Normalization & Similarity
+# =============================================================================
 
 def _l2_normalize_rows(sparse_matrix):
     """
@@ -234,6 +250,10 @@ def _l2_normalize_rows(sparse_matrix):
     return normalized.tocsr()
 
 
+# =============================================================================
+#  Document Building
+# =============================================================================
+
 def build_documents(products_df):
     """
     Tạo text documents cho TF-IDF từ metadata sản phẩm.
@@ -252,7 +272,7 @@ def build_documents(products_df):
         documents: list các string
         product_ids: numpy array thẳng hàng với documents
     """
-    documents = []
+    documents   = []
     product_ids = []
 
     for _, row in products_df.iterrows():
@@ -267,7 +287,7 @@ def build_similarity(tfidf_matrix, top_k=CB_TOP_K, chunk_size=CB_CHUNK_SIZE):
     """
     Tính cosine similarity = chunked dot product giữa các dòng đã L2-normalize.
 
-    Mỗi dòng đã được chuẩn hóa L2 (||row|| = 1). Khi đó mẫu số của công thức Cosine Similarity 
+    Mỗi dòng đã được chuẩn hóa L2 (||row|| = 1). Khi đó mẫu số của công thức Cosine Similarity
     bằng 1, nên Cosine Similarity(row_i, row_j) = dot(row_i, row_j).
 
     Dùng chunked computation: chunk @ tfidf_matrix.T → chỉ giữ top-K mỗi dòng.
@@ -306,13 +326,13 @@ def build_similarity(tfidf_matrix, top_k=CB_TOP_K, chunk_size=CB_CHUNK_SIZE):
                 continue
 
             # row_data là giá trị tính toán
-            row_data = row.data
+            row_data    = row.data
             # row_indices là sản phẩm tương ứng
             row_indices = row.indices
 
             # Bỏ self-similarity
-            mask = row_indices != row_idx
-            row_data = row_data[mask]
+            mask        = row_indices != row_idx
+            row_data    = row_data[mask]
             row_indices = row_indices[mask]
 
             if len(row_data) == 0:
@@ -328,16 +348,25 @@ def build_similarity(tfidf_matrix, top_k=CB_TOP_K, chunk_size=CB_CHUNK_SIZE):
 
             sim_lil[row_idx, row_indices[top_indices]] = row_data[top_indices].astype(np.float32)
 
+        del sim_chunk, chunk_csr; gc.collect()
+
         pct = 100 * end / n
         print(f"    ... {pct:.0f}% ({end:,}/{n:,})")
 
     sim_csr = sim_lil.tocsr()
+
+    del sim_lil; gc.collect()
+
     print(f"  [Similarity] Shape: {sim_csr.shape}")
     print(f"  [Similarity] Non-zero entries: {sim_csr.nnz:,}")
     print(f"  [Similarity] Độ sparsity: {100 * sim_csr.nnz / (n ** 2):.2f}%")
 
     return sim_csr
 
+
+# =============================================================================
+#  Pipeline chính
+# =============================================================================
 
 def build_cb_model(products_df, max_features=CB_MAX_FEATURES, top_k=CB_TOP_K):
     """
@@ -368,37 +397,39 @@ def build_cb_model(products_df, max_features=CB_MAX_FEATURES, top_k=CB_TOP_K):
 
     # Bước 2: Xây dựng vocabulary + TF-IDF
     print("\n[2/3] TF-IDF vectorization...")
-    vocab = build_vocabulary(documents, max_features=max_features)
+    vocab         = build_vocabulary(documents, max_features=max_features)
     tfidf_matrix, df_array = compute_tfidf(documents, vocab, n_docs)
 
     # In một vài term top IDF
-    idf = np.log((1.0 + n_docs) / (1.0 + df_array)) + 1.0
+    idf         = np.log((1.0 + n_docs) / (1.0 + df_array)) + 1.0
     idx_to_term = {v: k for k, v in vocab.items()}
-    
+
     # Sắp xếp chỉ số từ thấp đến cao theo điểm IDF
-    sorted_idx = np.argsort(idf)
+    sorted_idx  = np.argsort(idf)
 
     print(f"   [KIỂM TRA DỮ LIỆU] IN CÁC GIÁ TRỊ IDF KHÁC NHAU ĐỂ SO SÁNH:")
-    
+
     # 1. In Top 5 từ ĐẠI TRÀ NHẤT (IDF thấp nhất)
     print(f"\n🔹 TOP 5 TỪ ĐẠI TRÀ NHẤT (Xuất hiện quá nhiều, điểm IDF thấp nhất):")
-    top_frequent_idx = sorted_idx[:5] # Lấy 5 thằng đầu tiên
+    top_frequent_idx = sorted_idx[:5]  # Lấy 5 thằng đầu tiên
     for idx in top_frequent_idx:
         print(f"    {idx_to_term[idx]:30s}  DF={df_array[idx]:6.0f}  IDF={idf[idx]:.2f}  (Rất loãng)")
 
     # 2. In Top 5 từ TẦM TRUNG (Nằm ở giữa danh sách)
     print(f"\n🔹 TOP 5 TỪ TẦM TRUNG (Từ khóa vừa phải, tỷ lệ gợi ý lý tưởng):")
-    mid_start = len(sorted_idx) // 2
-    top_mid_idx = sorted_idx[mid_start : mid_start + 5] # Lấy 5 thằng ở giữa
+    mid_start   = len(sorted_idx) // 2
+    top_mid_idx = sorted_idx[mid_start : mid_start + 5]  # Lấy 5 thằng ở giữa
     for idx in top_mid_idx:
         print(f"    {idx_to_term[idx]:30s}  DF={df_array[idx]:6.0f}  IDF={idf[idx]:.2f}  (Lý tưởng)")
 
     # 3. In Top 5 từ ĐỘC LẠ NHẤT (IDF cao nhất)
     print(f"\n🔹 TOP 5 TỪ ĐỘC LẠ NHẤT (Xuất hiện cực ít, điểm IDF cao nhất):")
-    top_rare_idx = sorted_idx[::-1][:5] # Đảo ngược lấy 5 thằng cuối
+    top_rare_idx = sorted_idx[::-1][:5]  # Đảo ngược lấy 5 thằng cuối
     for idx in top_rare_idx:
         print(f"    {idx_to_term[idx]:30s}  DF={df_array[idx]:6.0f}  IDF={idf[idx]:.2f}  (Hàng hiếm)")
-    print(f"\n" + "="*70)
+    print(f"\n" + "=" * 70)
+
+    del documents, df_array, idf; gc.collect()
 
     # Bước 3: Cosine similarity
     print("\n[3/3] Đang tính cosine similarity...")
@@ -406,6 +437,10 @@ def build_cb_model(products_df, max_features=CB_MAX_FEATURES, top_k=CB_TOP_K):
 
     return tfidf_matrix, sim_matrix, vocab
 
+
+# =============================================================================
+#  Lưu model
+# =============================================================================
 
 def save_model(tfidf_matrix, sim_matrix, vocab):
     """

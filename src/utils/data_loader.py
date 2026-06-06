@@ -8,12 +8,56 @@ Tất cả model (CB, SPMI, KG, Hybrid) dùng module này để tải dữ liệ
 """
 
 import csv
+import gc
 import os
 
+import numpy as np
 import pandas as pd
+import psutil
 
 from src.config import DATA_DIR, DATA_ENCODING
 
+# =============================================================================
+#  RAM Monitor & Log
+# =============================================================================
+
+def ram_mb():
+    """Trả về mức RAM hiện tại (MB) của tiến trình."""
+    return psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2
+
+
+def log(msg):
+    """In log kèm thông tin RAM hiện tại."""
+    print(f"  [RAM {ram_mb():>6.0f} MB]  {msg}")
+
+
+# =============================================================================
+#  Ép kiểu dữ liệu (Downcasting)
+# =============================================================================
+
+def _cast_tx(df: pd.DataFrame):
+    """Ép các cột số sang dtype nhỏ nhất để tiết kiệm bộ nhớ.
+
+    Tham số
+    ----------
+    df : pd.DataFrame
+        DataFrame vừa load từ CSV, được sửa trực tiếp (in-place).
+    """
+    casts = {
+        'order_id':          np.int32,
+        'product_id':        np.int32,
+        'user_id':           np.int32,
+        'add_to_cart_order': np.int8,
+        'reordered':         np.int8,
+    }
+    for col, dtype in casts.items():
+        if col in df.columns:
+            df[col] = df[col].astype(dtype)
+
+
+# =============================================================================
+#  Hàm tải dữ liệu
+# =============================================================================
 
 def load_products():
     """
@@ -25,18 +69,25 @@ def load_products():
     pd.DataFrame với các cột:
         product_id, product_name, department_id, department
     """
-    products_path = DATA_DIR / "products.csv"
+    products_path    = DATA_DIR / "products.csv"
     departments_path = DATA_DIR / "departments.csv"
 
-    products = pd.read_csv(products_path, encoding="utf-8")
+    products    = pd.read_csv(products_path, encoding="utf-8")
     departments = pd.read_csv(departments_path, encoding="utf-8")
+
+    _cast_tx(products)
+    _cast_tx(departments)
+
+    log(f"products: {len(products):,} | departments: {len(departments):,}")
 
     # Merge product với tên department
     products = products.merge(departments, on="department_id", how="left")
 
     # Xử lý missing values tập trung cho tất cả model
     products["product_name"] = products["product_name"].fillna("unknown product")
-    products["department"] = products["department"].fillna("unknown department")
+    products["department"]   = products["department"].fillna("unknown department")
+
+    del departments; gc.collect()
 
     return products[["product_id", "product_name", "department_id", "department"]]
 
@@ -59,8 +110,12 @@ def load_orders(eval_set=None):
     orders_path = DATA_DIR / "orders.csv"
     orders = pd.read_csv(orders_path, encoding="utf-8")
 
+    _cast_tx(orders)
+
     if eval_set is not None:
         orders = orders[orders["eval_set"] == eval_set].copy()
+
+    log(f"orders: {len(orders):,} (eval_set={eval_set})")
 
     return orders.reset_index(drop=True)
 
@@ -85,6 +140,10 @@ def load_order_products(file_type="prior"):
     # Dùng pandas để tải nhanh
     df = pd.read_csv(filepath, encoding="utf-8")
 
+    _cast_tx(df)
+
+    log(f"order_products__{file_type}: {len(df):,} records")
+
     return df
 
 
@@ -106,16 +165,24 @@ def load_train_test_split():
     orders_path = DATA_DIR / "orders.csv"
     orders = pd.read_csv(orders_path, encoding="utf-8")
 
+    _cast_tx(orders)
+
     # Lấy tập order_id cho train và test
     train_order_ids = set(orders[orders["eval_set"] == "train"]["order_id"])
-    test_order_ids = set(orders[orders["eval_set"] == "test"]["order_id"])
+    test_order_ids  = set(orders[orders["eval_set"] == "test"]["order_id"])
+
+    del orders; gc.collect()
 
     # Tải TẤT CẢ order products từ file train
     train_products = load_order_products("train")
 
     # Tách dựa trên order_id
     train_gt = train_products[train_products["order_id"].isin(train_order_ids)].copy()
-    test_gt = train_products[train_products["order_id"].isin(test_order_ids)].copy()
+    test_gt  = train_products[train_products["order_id"].isin(test_order_ids)].copy()
+
+    del train_products, train_order_ids, test_order_ids; gc.collect()
+
+    log(f"train_gt: {len(train_gt):,} | test_gt: {len(test_gt):,}")
 
     return train_gt.reset_index(drop=True), test_gt.reset_index(drop=True)
 
@@ -139,8 +206,13 @@ def load_prior_in_chunks(chunksize=500000):
     filepath = DATA_DIR / "order_products__prior.csv"
     reader = pd.read_csv(filepath, encoding="utf-8", chunksize=chunksize)
     for chunk in reader:
+        _cast_tx(chunk)
         yield chunk
 
+
+# =============================================================================
+#  Hàm load dữ liệu cho từng model
+# =============================================================================
 
 def load_data_for_model(model_name):
     """
@@ -182,6 +254,10 @@ def load_data_for_model(model_name):
             f"Lưu ý: 'hybrid' tải model outputs trực tiếp."
         )
 
+
+# =============================================================================
+#  Thống kê dataset
+# =============================================================================
 
 def get_data_stats():
     """

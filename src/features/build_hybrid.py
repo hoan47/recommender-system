@@ -25,6 +25,7 @@ Outputs:
   - models/hybrid_matrix.npz        - (Tuỳ chọn) Ma trận hybrid score cuối cùng
 """
 
+import gc
 import json
 from pathlib import Path
 
