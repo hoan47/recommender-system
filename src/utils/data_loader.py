@@ -9,13 +9,10 @@ Tất cả model (CB, SPMI, KG, Hybrid) dùng module này để tải dữ liệ
 
 import csv
 import os
-from pathlib import Path
 
 import pandas as pd
 
-# Thư mục gốc dự án (tính từ file này)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
+from src.config import DATA_DIR, DATA_ENCODING
 
 
 def load_products():

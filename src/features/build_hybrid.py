@@ -26,17 +26,21 @@ Outputs:
 """
 
 import json
-from pathlib import Path
 
 import numpy as np
 from scipy.sparse import lil_matrix, save_npz, load_npz
 from tqdm import tqdm
 
-# Thư mục gốc dự án
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-MODELS_DIR = PROJECT_ROOT / "models"
-
-MODELS_DIR.mkdir(parents=True, exist_ok=True)
+from src.config import (
+    MODELS_DIR,
+    HYBRID_ALPHAS,
+    HYBRID_BETAS,
+    HYBRID_CB_THRESHOLDS,
+    HYBRID_EVAL_KS,
+    HYBRID_BEST_PARAMS_FILE,
+    HYBRID_GRID_RESULTS_FILE,
+    HYBRID_MATRIX_FILE,
+)
 
 
 def normalize_sparse(matrix):
@@ -142,7 +146,7 @@ def compute_hybrid_score(spmi_norm, kg_sim, cb_sim, alpha, beta, cb_threshold):
     return hybrid_csr
 
 
-def evaluate_hybrid_in_sample(hybrid_matrix, train_gt_df, ks=(5, 10, 20)):
+def evaluate_hybrid_in_sample(hybrid_matrix, train_gt_df, ks=HYBRID_EVAL_KS):
     """
     Đánh giá in-sample hybrid trên tập train.
 
@@ -235,9 +239,9 @@ def grid_search_hybrid(spmi_norm, kg_sim, cb_sim, train_gt_df):
     print("Grid Search: Hybrid Parameters")
     print("=" * 50)
 
-    alphas = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
-    betas = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
-    cb_thresholds = [0.7, 0.8, 0.9]
+    alphas = HYBRID_ALPHAS
+    betas = HYBRID_BETAS
+    cb_thresholds = HYBRID_CB_THRESHOLDS
 
     best_score = -1
     best_params = None
@@ -358,25 +362,23 @@ def save_model(best_params, hybrid_matrix, grid_results):
         "best_recall_at_5": grid_results[-1]["metrics"].get("recall@5", 0),
     }
 
-    with open(MODELS_DIR / "hybrid_best_params.json", "w", encoding="utf-8") as f:
+    with open(MODELS_DIR / HYBRID_BEST_PARAMS_FILE, "w", encoding="utf-8") as f:
         json.dump(output, f, indent=2)
-    print(f"  Đã lưu: models/hybrid_best_params.json")
+    print(f"  Đã lưu: models/{HYBRID_BEST_PARAMS_FILE}")
 
     # Lưu toàn bộ grid results
-    with open(MODELS_DIR / "hybrid_grid_results.json", "w", encoding="utf-8") as f:
+    with open(MODELS_DIR / HYBRID_GRID_RESULTS_FILE, "w", encoding="utf-8") as f:
         json.dump(grid_results, f, indent=2)
-    print(f"  Đã lưu: models/hybrid_grid_results.json")
+    print(f"  Đã lưu: models/{HYBRID_GRID_RESULTS_FILE}")
 
     # Lưu best hybrid matrix
-    save_npz(MODELS_DIR / "hybrid_matrix.npz", hybrid_matrix)
-    print(f"  Đã lưu: models/hybrid_matrix.npz")
+    save_npz(MODELS_DIR / HYBRID_MATRIX_FILE, hybrid_matrix)
+    print(f"  Đã lưu: models/{HYBRID_MATRIX_FILE}")
 
     print("\nHybrid model hoàn tất!")
 
 
 if __name__ == "__main__":
-    import sys
-    sys.path.insert(0, str(PROJECT_ROOT))
     from src.utils.data_loader import load_train_test_split
 
     # Tải train ground truth

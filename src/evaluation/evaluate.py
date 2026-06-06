@@ -23,18 +23,22 @@ Output:
 """
 
 import json
-from pathlib import Path
 
 import numpy as np
 from scipy.sparse import csr_matrix, load_npz
 from tqdm import tqdm
 
-# Thư mục gốc dự án
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-RESULTS_DIR = PROJECT_ROOT / "results"
-MODELS_DIR = PROJECT_ROOT / "models"
-
-RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+from src.config import (
+    MODELS_DIR,
+    RESULTS_DIR,
+    EVAL_KS,
+    METRICS_FILE,
+    SUMMARY_FILE,
+    CB_SIMILARITY_FILE,
+    SPMI_MATRIX_FILE,
+    KG_SIMILARITY_FILE,
+    HYBRID_MATRIX_FILE,
+)
 
 
 def recall_at_k(recommended, ground_truth, k):
@@ -292,7 +296,7 @@ def compare_models(test_gt_df):
     models = {}
 
     # Tải CB
-    cb_path = MODELS_DIR / "item_similarity_cb.npz"
+    cb_path = MODELS_DIR / CB_SIMILARITY_FILE
     if cb_path.exists():
         print("\nĐang tải CB model...")
         models["CB"] = load_npz(cb_path)
@@ -300,7 +304,7 @@ def compare_models(test_gt_df):
         print("\n⚠️  Không tìm thấy CB model, bỏ qua.")
 
     # Tải SPMI
-    spmi_path = MODELS_DIR / "spmi_matrix.npz"
+    spmi_path = MODELS_DIR / SPMI_MATRIX_FILE
     if spmi_path.exists():
         print("Đang tải SPMI model...")
         models["SPMI"] = load_npz(spmi_path)
@@ -308,7 +312,7 @@ def compare_models(test_gt_df):
         print("⚠️  Không tìm thấy SPMI model, bỏ qua.")
 
     # Tải KG
-    kg_path = MODELS_DIR / "kg_similarity.npz"
+    kg_path = MODELS_DIR / KG_SIMILARITY_FILE
     if kg_path.exists():
         print("Đang tải KG model...")
         models["KG"] = load_npz(kg_path)
@@ -316,7 +320,7 @@ def compare_models(test_gt_df):
         print("⚠️  Không tìm thấy KG model, bỏ qua.")
 
     # Tải Hybrid
-    hybrid_path = MODELS_DIR / "hybrid_matrix.npz"
+    hybrid_path = MODELS_DIR / HYBRID_MATRIX_FILE
     if hybrid_path.exists():
         print("Đang tải Hybrid model...")
         models["Hybrid"] = load_npz(hybrid_path)
@@ -367,7 +371,7 @@ def save_results(all_results):
     ----------
     all_results : dict
     """
-    output_path = RESULTS_DIR / "metrics.json"
+    output_path = RESULTS_DIR / METRICS_FILE
 
     # Format cho dễ đọc
     output = {
@@ -391,7 +395,7 @@ def generate_summary_table(all_results):
     ----------
     all_results : dict
     """
-    output_path = RESULTS_DIR / "summary.md"
+    output_path = RESULTS_DIR / SUMMARY_FILE
 
     lines = []
     lines.append("# 📊 So sánh tất cả models — Test Set (75,000 đơn)")
@@ -438,8 +442,6 @@ def generate_summary_table(all_results):
 
 
 if __name__ == "__main__":
-    import sys
-    sys.path.insert(0, str(PROJECT_ROOT))
     from src.utils.data_loader import load_train_test_split
 
     # Tải test ground truth

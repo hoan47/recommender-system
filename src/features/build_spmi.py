@@ -30,17 +30,20 @@ Outputs:
 """
 
 import json
-from pathlib import Path
 
 import numpy as np
-from scipy.sparse import lil_matrix, csr_matrix, save_npz, load_npz
+from scipy.sparse import lil_matrix, csr_matrix, save_npz
 from tqdm import tqdm
 
-# Thư mục gốc dự án
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-MODELS_DIR = PROJECT_ROOT / "models"
-
-MODELS_DIR.mkdir(parents=True, exist_ok=True)
+from src.config import (
+    MODELS_DIR,
+    SPMI_K_VALUES,
+    SPMI_TOTAL_PRIOR_ORDERS,
+    SPMI_EVAL_KS,
+    COOC_MATRIX_FILE,
+    SPMI_MATRIX_FILE,
+    SPMI_BEST_K_FILE,
+)
 
 
 def count_cooccurrence(prior_df, n_products=None):
@@ -193,7 +196,7 @@ def compute_spmi(cooc_matrix, order_freqs, total_orders, k=1):
     return spmi_csr
 
 
-def evaluate_in_sample(spmi_matrix, train_gt_df, ks=(5, 10, 20)):
+def evaluate_in_sample(spmi_matrix, train_gt_df, ks=SPMI_EVAL_KS):
     """
     Đánh giá in-sample trên tập train dùng leave-one-out mỗi sản phẩm.
 
@@ -274,7 +277,7 @@ def evaluate_in_sample(spmi_matrix, train_gt_df, ks=(5, 10, 20)):
 
 
 def tune_spmi_k(cooc_matrix, order_freqs, total_orders, train_gt_df,
-                k_values=(1, 2, 3, 5, 10)):
+                k_values=SPMI_K_VALUES):
     """
     Tune tham số shift k của SPMI trên tập train.
 
@@ -319,8 +322,8 @@ def tune_spmi_k(cooc_matrix, order_freqs, total_orders, train_gt_df,
     return best_k, best_spmi, all_results
 
 
-def build_spmi_model(prior_df, train_gt_df, total_prior_orders=3214874,
-                     k_values=(1, 2, 3, 5, 10)):
+def build_spmi_model(prior_df, train_gt_df, total_prior_orders=SPMI_TOTAL_PRIOR_ORDERS,
+                     k_values=SPMI_K_VALUES):
     """
     Pipeline SPMI đầy đủ: co-occurrence → PMI → tune k → lưu.
 
@@ -375,11 +378,11 @@ def save_model(cooc_matrix, spmi_matrix, best_k, tuning_results):
     """
     print("\nĐang lưu SPMI model outputs...")
 
-    save_npz(MODELS_DIR / "cooc_matrix.npz", cooc_matrix)
-    print(f"  Đã lưu: models/cooc_matrix.npz")
+    save_npz(MODELS_DIR / COOC_MATRIX_FILE, cooc_matrix)
+    print(f"  Đã lưu: models/{COOC_MATRIX_FILE}")
 
-    save_npz(MODELS_DIR / "spmi_matrix.npz", spmi_matrix)
-    print(f"  Đã lưu: models/spmi_matrix.npz")
+    save_npz(MODELS_DIR / SPMI_MATRIX_FILE, spmi_matrix)
+    print(f"  Đã lưu: models/{SPMI_MATRIX_FILE}")
 
     output = {
         "best_k": best_k,
@@ -387,16 +390,14 @@ def save_model(cooc_matrix, spmi_matrix, best_k, tuning_results):
             str(k): metrics for k, metrics in tuning_results.items()
         },
     }
-    with open(MODELS_DIR / "spmi_best_k.json", "w", encoding="utf-8") as f:
+    with open(MODELS_DIR / SPMI_BEST_K_FILE, "w", encoding="utf-8") as f:
         json.dump(output, f, indent=2)
-    print(f"  Đã lưu: models/spmi_best_k.json")
+    print(f"  Đã lưu: models/{SPMI_BEST_K_FILE}")
 
     print("\nSPMI model hoàn tất!")
 
 
 if __name__ == "__main__":
-    import sys
-    sys.path.insert(0, str(PROJECT_ROOT))
     from src.utils.data_loader import load_order_products, load_train_test_split
 
     # Tải dữ liệu

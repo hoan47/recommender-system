@@ -24,26 +24,21 @@ Outputs:
 
 import json
 import re
-from pathlib import Path
 from collections import Counter
 
 import numpy as np
 from scipy.sparse import csr_matrix, lil_matrix, save_npz
 
-# Thư mục gốc dự án
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-MODELS_DIR = PROJECT_ROOT / "models"
-
-# Tạo thư mục models nếu chưa tồn tại
-MODELS_DIR.mkdir(parents=True, exist_ok=True)
-
-# Stop words tiếng Anh cơ bản (dùng chung như sklearn)
-ENGLISH_STOP_WORDS = frozenset({
-    "a", "an", "and", "are", "as", "at", "be", "but", "by", "for",
-    "if", "in", "into", "is", "it", "no", "not", "of", "on", "or",
-    "such", "that", "the", "their", "then", "there", "these", "they",
-    "this", "to", "was", "will", "with",
-})
+from src.config import (
+    MODELS_DIR,
+    ENGLISH_STOP_WORDS,
+    CB_MAX_FEATURES,
+    CB_TOP_K,
+    CB_CHUNK_SIZE,
+    TFIDF_MATRIX_FILE,
+    CB_SIMILARITY_FILE,
+    TFIDF_VOCAB_FILE,
+)
 
 
 def _tokenize(text):
@@ -270,7 +265,7 @@ def build_documents(products_df):
     return documents, np.array(product_ids)
 
 
-def build_similarity(tfidf_matrix, top_k=100, chunk_size=1000):
+def build_similarity(tfidf_matrix, top_k=CB_TOP_K, chunk_size=CB_CHUNK_SIZE):
     """
     Tính cosine similarity = chunked dot product giữa các dòng đã L2-normalize.
 
@@ -348,7 +343,7 @@ def build_similarity(tfidf_matrix, top_k=100, chunk_size=1000):
     return sim_csr
 
 
-def build_cb_model(products_df, max_features=10000, top_k=100):
+def build_cb_model(products_df, max_features=CB_MAX_FEATURES, top_k=CB_TOP_K):
     """
     Pipeline đầy đủ: tạo documents → vocabulary → TF-IDF → cosine similarity → lưu.
 
@@ -390,7 +385,7 @@ def build_cb_model(products_df, max_features=10000, top_k=100):
 
     # Bước 3: Cosine similarity
     print("\n[3/3] Đang tính cosine similarity...")
-    sim_matrix = build_similarity(tfidf_matrix, top_k=top_k)
+    sim_matrix = build_similarity(tfidf_matrix, top_k=top_k, chunk_size=CB_CHUNK_SIZE)
 
     return tfidf_matrix, sim_matrix, vocab
 
@@ -408,24 +403,21 @@ def save_model(tfidf_matrix, sim_matrix, vocab):
     print("\nĐang lưu CB model outputs...")
 
     # Lưu sparse matrices
-    save_npz(MODELS_DIR / "tfidf_matrix.npz", tfidf_matrix)
-    print(f"  Đã lưu: models/tfidf_matrix.npz")
+    save_npz(MODELS_DIR / TFIDF_MATRIX_FILE, tfidf_matrix)
+    print(f"  Đã lưu: models/{TFIDF_MATRIX_FILE}")
 
-    save_npz(MODELS_DIR / "item_similarity_cb.npz", sim_matrix)
-    print(f"  Đã lưu: models/item_similarity_cb.npz")
+    save_npz(MODELS_DIR / CB_SIMILARITY_FILE, sim_matrix)
+    print(f"  Đã lưu: models/{CB_SIMILARITY_FILE}")
 
     # Lưu vocabulary (thay vì pickle vectorizer)
-    with open(MODELS_DIR / "tfidf_vocab.json", "w", encoding="utf-8") as f:
+    with open(MODELS_DIR / TFIDF_VOCAB_FILE, "w", encoding="utf-8") as f:
         json.dump(vocab, f, ensure_ascii=False)
-    print(f"  Đã lưu: models/tfidf_vocab.json")
+    print(f"  Đã lưu: models/{TFIDF_VOCAB_FILE}")
 
     print("\nCB model hoàn tất!")
 
 
 if __name__ == "__main__":
-    # Import ở đây để tránh circular import ở module level
-    import sys
-    sys.path.insert(0, str(PROJECT_ROOT))
     from src.utils.data_loader import load_products
 
     # Tải dữ liệu
@@ -433,7 +425,7 @@ if __name__ == "__main__":
 
     # Xây dựng model
     tfidf_matrix, sim_matrix, vocab = build_cb_model(
-        products_df, max_features=10000, top_k=100
+        products_df, max_features=CB_MAX_FEATURES, top_k=CB_TOP_K
     )
 
     # Lưu
