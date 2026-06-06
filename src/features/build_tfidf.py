@@ -229,7 +229,7 @@ def build_documents(products_df):
     Tạo text documents cho TF-IDF từ metadata sản phẩm.
 
     Mỗi document = product_name + " " + department.
-    Xử lý giá trị missing/NaN an toàn.
+    Data loader đã xử lý missing values, không cần check ở đây.
 
     Tham số
     ----------
@@ -242,23 +242,11 @@ def build_documents(products_df):
         documents: list các string
         product_ids: numpy array thẳng hàng với documents
     """
-    import pandas as pd
-
     documents = []
     product_ids = []
 
     for _, row in products_df.iterrows():
-        product_name = row.get("product_name", "")
-        department = row.get("department", "")
-
-        # Xử lý giá trị missing / NaN
-        if pd.isna(product_name) or str(product_name).strip() == "":
-            product_name = "unknown product"
-        if pd.isna(department) or str(department).strip() == "":
-            department = "unknown department"
-
-        # Tạo document
-        doc = f"{product_name} {department}"
+        doc = f"{row['product_name']} {row['department']}"
         documents.append(doc)
         product_ids.append(row["product_id"])
 

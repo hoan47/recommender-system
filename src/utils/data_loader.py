@@ -34,7 +34,8 @@ def load_products():
     # Merge product với tên department
     products = products.merge(departments, on="department_id", how="left")
 
-    # Điền department bị thiếu (không nên xảy ra với 21 department đã biết)
+    # Xử lý missing values tập trung cho tất cả model
+    products["product_name"] = products["product_name"].fillna("unknown product")
     products["department"] = products["department"].fillna("unknown department")
 
     return products[["product_id", "product_name", "department_id", "department"]]
