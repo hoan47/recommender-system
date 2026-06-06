@@ -260,7 +260,7 @@ def _skipgram_train(walks_flat, walk_lengths, walk_offsets, n_nodes, dim,
                             W_in[center, k] -= grad_w_in
                             W_out[neg, k] -= grad_w_out
         
-        print(f"    Epoch {epoch+1}/{epochs} loss={total_loss:.4f}")
+        print("    Epoch %d/%d loss=%.4f" % (epoch + 1, epochs, total_loss))
     
     return W_in
 
