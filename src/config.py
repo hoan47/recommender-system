@@ -36,6 +36,7 @@ PRIOR_CHUNK_SIZE = 500000
 
 CB_MAX_FEATURES = 10000
 CB_TOP_K = 100
+# 50K sản phẩm nên chia nhỏ thành chunk nhỏ để tính similarity
 CB_CHUNK_SIZE = 1000
 
 # Load stop words từ file thay vì định nghĩa inline (giữ cho config.py gọn)

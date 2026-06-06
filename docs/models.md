@@ -64,7 +64,14 @@ Ví dụ:
 
 **Thuật toán:**
 1. Đếm co-occurrence từ prior (chunk-based, tránh tràn bộ nhớ)
-2. Tính PMI: `PMI(A,B) = log(P(A,B) / (P(A) * P(B)))`
+2. Tính PMI: `PMI(A,B) = log(P(A,B) / (P(A) * P(B)))` 
+- Trong đó:
+    P(A, B) là xác suất cả hai sản phẩm $A$ và $B$ cùng xuất hiện trong một đơn hàng
+    P(A) Xác suất tìm thấy sản phẩm A trong một đơn hàng ngẫu nhiên, P(B) tương tự
+    PMI = 0: A và B độc lập. Không liên quan tới nhau.
+    PMI > 0: A và B có mối quan hệ tương hỗ mạnh mẽ (sản phẩm mua kèm thực sự).
+    PMI < 0: A và B "nói không" với nhau. Người mua A thường sẽ chủ động không mua B.
+
 3. Tính SPMI: `SPMI(A,B) = max(PMI(A,B) - log(k), 0)` với k là threshold
 4. Chỉ giữ spmi > 0 → sparse matrix
 

@@ -25,6 +25,7 @@ Outputs:
 """
 
 import json
+from pathlib import Path
 
 import numpy as np
 from scipy.sparse import csr_matrix, lil_matrix, save_npz, load_npz
@@ -32,25 +33,11 @@ from tqdm import tqdm
 
 import networkx as nx
 
-from src.config import (
-    MODELS_DIR,
-    KG_WALK_LENGTHS,
-    KG_DIMENSIONS_LIST,
-    KG_NUM_WALKS_LIST,
-    KG_WINDOW,
-    KG_P,
-    KG_Q,
-    KG_EPOCHS,
-    KG_NEGATIVE,
-    KG_LR,
-    KG_TOP_K,
-    KG_CHUNK_SIZE,
-    KG_EVAL_KS,
-    KG_EMBEDDINGS_FILE,
-    KG_BEST_PARAMS_FILE,
-    KG_SIMILARITY_FILE,
-    KG_TUNING_RESULTS_FILE,
-)
+# Thư mục gốc dự án
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+MODELS_DIR = PROJECT_ROOT / "models"
+
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ============================================================================
@@ -378,8 +365,8 @@ def _skipgram_train(walks, n_nodes, dimensions, window, negative, epochs, lr):
 # ============================================================================
 
 def train_node2vec(graph, dimensions=128, walk_length=20, num_walks=200,
-                   window=KG_WINDOW, p=KG_P, q=KG_Q, epochs=KG_EPOCHS, negative=KG_NEGATIVE,
-                   lr=KG_LR):
+                   window=10, p=1.0, q=1.0, epochs=1, negative=5,
+                   lr=0.025):
     """
     Huấn luyện node2vec embeddings trên đồ thị.
 
@@ -463,7 +450,7 @@ def train_node2vec(graph, dimensions=128, walk_length=20, num_walks=200,
 # PHASE 5: Cosine Similarity
 # ============================================================================
 
-def compute_kg_similarity(embeddings, top_k=KG_TOP_K, chunk_size=KG_CHUNK_SIZE):
+def compute_kg_similarity(embeddings, top_k=100, chunk_size=1000):
     """
     Tính cosine similarity giữa các product embeddings.
 
@@ -521,7 +508,7 @@ def compute_kg_similarity(embeddings, top_k=KG_TOP_K, chunk_size=KG_CHUNK_SIZE):
 # PHASE 6: Đánh giá + Tuning
 # ============================================================================
 
-def evaluate_kg_in_sample(sim_matrix, train_gt_df, ks=KG_EVAL_KS):
+def evaluate_kg_in_sample(sim_matrix, train_gt_df, ks=(5, 10, 20)):
     """
     Đánh giá in-sample KG similarity trên tập train.
     Cùng giao thức leave-one-out mỗi sản phẩm như SPMI evaluation.
@@ -588,9 +575,9 @@ def evaluate_kg_in_sample(sim_matrix, train_gt_df, ks=KG_EVAL_KS):
 
 
 def tune_kg_params(graph, train_gt_df,
-                   walk_lengths=KG_WALK_LENGTHS,
-                   dimensions_list=KG_DIMENSIONS_LIST,
-                   num_walks_list=KG_NUM_WALKS_LIST):
+                   walk_lengths=(10, 20, 30),
+                   dimensions_list=(64, 128),
+                   num_walks_list=(100, 200)):
     """
     Grid search node2vec hyperparameters trên tập train.
 
@@ -635,7 +622,7 @@ def tune_kg_params(graph, train_gt_df,
                 )
 
                 # Tính similarity
-                sim = compute_kg_similarity(embeddings, top_k=KG_TOP_K)
+                sim = compute_kg_similarity(embeddings, top_k=100)
 
                 # Đánh giá trên train
                 metrics = evaluate_kg_in_sample(sim, train_gt_df)
@@ -718,25 +705,27 @@ def save_model(best_params, embeddings, sim_matrix, tuning_results):
     """
     print("\nĐang lưu KG model outputs...")
 
-    np.save(MODELS_DIR / KG_EMBEDDINGS_FILE, embeddings)
-    print(f"  Đã lưu: models/{KG_EMBEDDINGS_FILE}")
+    np.save(MODELS_DIR / "kg_embeddings.npy", embeddings)
+    print(f"  Đã lưu: models/kg_embeddings.npy")
 
-    with open(MODELS_DIR / KG_BEST_PARAMS_FILE, "w", encoding="utf-8") as f:
+    with open(MODELS_DIR / "kg_best_params.json", "w", encoding="utf-8") as f:
         json.dump(best_params, f, indent=2)
-    print(f"  Đã lưu: models/{KG_BEST_PARAMS_FILE}")
+    print(f"  Đã lưu: models/kg_best_params.json")
 
-    save_npz(MODELS_DIR / KG_SIMILARITY_FILE, sim_matrix)
-    print(f"  Đã lưu: models/{KG_SIMILARITY_FILE}")
+    save_npz(MODELS_DIR / "kg_similarity.npz", sim_matrix)
+    print(f"  Đã lưu: models/kg_similarity.npz")
 
     # Lưu thêm tuning results để tham khảo
-    with open(MODELS_DIR / KG_TUNING_RESULTS_FILE, "w", encoding="utf-8") as f:
+    with open(MODELS_DIR / "kg_tuning_results.json", "w", encoding="utf-8") as f:
         json.dump(tuning_results, f, indent=2)
-    print(f"  Đã lưu: models/{KG_TUNING_RESULTS_FILE}")
+    print(f"  Đã lưu: models/kg_tuning_results.json")
 
     print("\nKG model hoàn tất!")
 
 
 if __name__ == "__main__":
+    import sys
+    sys.path.insert(0, str(PROJECT_ROOT))
     from src.utils.data_loader import load_products, load_order_products, load_train_test_split
 
     # Tải dữ liệu
