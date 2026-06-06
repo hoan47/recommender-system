@@ -1,11 +1,10 @@
 """
-Content-Based (CB) model: TF-IDF + Cosine Similarity (TỰ CODE).
+Content-Based (CB) model: TF-IDF + Cosine Similarity.
 
-Tự cài đặt toàn bộ pipeline TF-IDF và cosine similarity, KHÔNG dùng sklearn
-hay bất kỳ thư viện ML nào. Chỉ dùng numpy + scipy.sparse.
+Pipeline TF-IDF và cosine similarity, dùng numpy + scipy.sparse.
 
 Pipeline:
-  1. Tokenize + build vocabulary (unigram + bigram, top max_features theo DF)
+  1. Tokenize + xây dựng vocabulary (unigram + bigram, top max_features theo DF)
   2. TF (sublinear: 1 + log(tf)) × IDF (smooth) → L2 normalize
   3. Cosine similarity = chunked dot product giữa các dòng đã L2-normalize
 
@@ -20,7 +19,7 @@ Phụ thuộc: src.utils.data_loader
 Outputs:
   - models/tfidf_matrix.npz        - Ma trận TF-IDF sparse gốc
   - models/item_similarity_cb.npz  - Ma trận cosine similarity sparse
-  - models/tfidf_vocab.json        - Vocabulary đã build
+  - models/tfidf_vocab.json        - Vocabulary đã xây dựng
 """
 
 import json
@@ -31,7 +30,7 @@ from collections import Counter
 import numpy as np
 from scipy.sparse import csr_matrix, lil_matrix, save_npz
 
-# Thư mục gốc project
+# Thư mục gốc dự án
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 MODELS_DIR = PROJECT_ROOT / "models"
 
@@ -51,11 +50,11 @@ def _tokenize(text):
     """
     Tách text thành các token, bỏ stop words, lowercase.
 
-    Parameters
+    Tham số
     ----------
     text : str
 
-    Returns
+    Trả về
     -------
     list of str
     """
@@ -69,12 +68,12 @@ def _generate_ngrams(tokens, n):
     """
     Tạo n-grams từ list tokens.
 
-    Parameters
+    Tham số
     ----------
     tokens : list of str
     n : int (1 = unigram, 2 = bigram)
 
-    Returns
+    Trả về
     -------
     list of str (các n-gram nối bằng "_")
     """
@@ -88,13 +87,13 @@ def build_vocabulary(documents, max_features=10000):
     Xây dựng vocabulary từ các documents.
     Dùng unigram + bigram, chọn top max_features terms theo document frequency.
 
-    Parameters
+    Tham số
     ----------
     documents : list of str
     max_features : int
         Số lượng terms tối đa trong vocabulary.
 
-    Returns
+    Trả về
     -------
     dict: {term: index} — ánh xạ term → cột trong ma trận TF
     """
@@ -130,14 +129,14 @@ def compute_tfidf(documents, vocab, n_docs):
     IDF: idf(t) = log((1 + N) / (1 + df(t))) + 1  (smooth idf)
     Chuẩn hóa: L2 normalize mỗi dòng
 
-    Parameters
+    Tham số
     ----------
     documents : list of str
     vocab : dict {term: index}
     n_docs : int
         Tổng số documents.
 
-    Returns
+    Trả về
     -------
     csr_matrix: (n_docs × vocab_size), đã L2-normalize
     df_array: numpy array — DF của mỗi term
@@ -148,7 +147,7 @@ def compute_tfidf(documents, vocab, n_docs):
     # Bước 1: Đếm DF cho tất cả terms trong vocab
     df_array = np.zeros(vocab_size, dtype=np.float64)
 
-    # Dùng LIL để build từng dòng
+    # Dùng LIL để xây dựng từng dòng
     tf_lil = lil_matrix((n_docs, vocab_size), dtype=np.float64)
 
     for doc_idx, doc in enumerate(documents):
@@ -184,7 +183,7 @@ def compute_tfidf(documents, vocab, n_docs):
     # Bước 3: Nhân TF × IDF
     tfidf_lil = tf_lil.copy()
     for doc_idx in range(n_docs):
-        row = tfidf_lil[doc_idx]
+        row = tfidf_lil[doc_idx].tocsr()
         if row.nnz == 0:
             continue
         for j in range(row.nnz):
@@ -206,11 +205,11 @@ def _l2_normalize_rows(sparse_matrix):
     """
     L2 normalize từng dòng của sparse CSR matrix.
 
-    Parameters
+    Tham số
     ----------
     sparse_matrix : csr_matrix
 
-    Returns
+    Trả về
     -------
     csr_matrix (có thể sparse hơn nếu có dòng zero)
     """
@@ -237,12 +236,12 @@ def build_documents(products_df):
     Mỗi document = product_name + " " + department.
     Xử lý giá trị missing/NaN an toàn.
 
-    Parameters
+    Tham số
     ----------
     products_df : pd.DataFrame
         Với các cột: product_id, product_name, department
 
-    Returns
+    Trả về
     -------
     tuple: (documents, product_ids)
         documents: list các string
@@ -280,7 +279,7 @@ def build_similarity(tfidf_matrix, top_k=100, chunk_size=1000):
 
     Dùng chunked computation: chunk @ tfidf_matrix.T → chỉ giữ top-K mỗi dòng.
 
-    Parameters
+    Tham số
     ----------
     tfidf_matrix : csr_matrix (n_docs × vocab_size), đã L2-normalize
     top_k : int
@@ -288,14 +287,14 @@ def build_similarity(tfidf_matrix, top_k=100, chunk_size=1000):
     chunk_size : int
         Kích thước chunk để tính toán (tránh tràn RAM).
 
-    Returns
+    Trả về
     -------
     csr_matrix (n_docs × n_docs), sparse, chỉ chứa top-K mỗi dòng
     """
     n = tfidf_matrix.shape[0]
     print(f"  [Similarity] Đang tính cosine similarity ({n} × {n}), chunk_size={chunk_size}...")
 
-    # Dùng LIL để build output
+    # Dùng LIL để xây dựng output
     sim_lil = lil_matrix((n, n), dtype=np.float32)
 
     for start in range(0, n, chunk_size):
@@ -353,7 +352,7 @@ def build_cb_model(products_df, max_features=10000, top_k=100):
     """
     Pipeline đầy đủ: tạo documents → vocabulary → TF-IDF → cosine similarity → lưu.
 
-    Parameters
+    Tham số
     ----------
     products_df : pd.DataFrame
         Dữ liệu sản phẩm từ data_loader.load_products().
@@ -362,7 +361,7 @@ def build_cb_model(products_df, max_features=10000, top_k=100):
     top_k : int
         Giữ top-K similar items mỗi sản phẩm (giảm dung lượng lưu trữ).
 
-    Returns
+    Trả về
     -------
     tuple: (tfidf_matrix, similarity_matrix, vocab)
     """
@@ -376,8 +375,8 @@ def build_cb_model(products_df, max_features=10000, top_k=100):
     n_docs = len(documents)
     print(f"  Đã tạo {n_docs} documents")
 
-    # Bước 2: Build vocabulary + TF-IDF
-    print("\n[2/3] TF-IDF vectorization (tự code)...")
+    # Bước 2: Xây dựng vocabulary + TF-IDF
+    print("\n[2/3] TF-IDF vectorization...")
     vocab = build_vocabulary(documents, max_features=max_features)
     tfidf_matrix, df_array = compute_tfidf(documents, vocab, n_docs)
 
@@ -400,7 +399,7 @@ def save_model(tfidf_matrix, sim_matrix, vocab):
     """
     Lưu CB model outputs vào thư mục models/.
 
-    Parameters
+    Tham số
     ----------
     tfidf_matrix : csr_matrix
     sim_matrix : csr_matrix
@@ -429,7 +428,7 @@ if __name__ == "__main__":
     sys.path.insert(0, str(PROJECT_ROOT))
     from src.utils.data_loader import load_products
 
-    # Load dữ liệu
+    # Tải dữ liệu
     products_df = load_products()
 
     # Xây dựng model

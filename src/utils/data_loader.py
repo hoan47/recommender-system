@@ -1,10 +1,10 @@
 """
-Data loader tập trung cho dataset Instacart Market Basket Analysis.
+Trình tải dữ liệu tập trung cho dataset Instacart Market Basket Analysis.
 
-Cung cấp giao diện thống nhất để load tất cả file CSV và tách
-train/test ground truth dựa trên orders.csv[eval_set].
+Cung cấp giao diện thống nhất để tải tất cả file CSV và tách
+ground truth train/test dựa trên orders.csv[eval_set].
 
-Tất cả model (CB, SPMI, KG, Hybrid) dùng module này để load dữ liệu nhất quán.
+Tất cả model (CB, SPMI, KG, Hybrid) dùng module này để tải dữ liệu nhất quán.
 """
 
 import csv
@@ -13,17 +13,17 @@ from pathlib import Path
 
 import pandas as pd
 
-# Thư mục gốc project (tính từ file này)
+# Thư mục gốc dự án (tính từ file này)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 
 
 def load_products():
     """
-    Load products.csv và join với departments.csv.
-    File aisles.csv KHÔNG được dùng trong project này.
+    Tải products.csv và join với departments.csv.
+    File aisles.csv KHÔNG được dùng trong dự án này.
 
-    Returns
+    Trả về
     -------
     pd.DataFrame với các cột:
         product_id, product_name, department_id, department
@@ -45,14 +45,14 @@ def load_products():
 
 def load_orders(eval_set=None):
     """
-    Load orders.csv, tùy chọn lọc theo eval_set.
+    Tải orders.csv, tùy chọn lọc theo eval_set.
 
-    Parameters
+    Tham số
     ----------
     eval_set : str hoặc None
-        Một trong 'prior', 'train', 'test', hoặc None (load tất cả).
+        Một trong 'prior', 'train', 'test', hoặc None (tải tất cả).
 
-    Returns
+    Trả về
     -------
     pd.DataFrame với các cột:
         order_id, user_id, eval_set, order_number, order_dow,
@@ -69,14 +69,14 @@ def load_orders(eval_set=None):
 
 def load_order_products(file_type="prior"):
     """
-    Load order_products__prior.csv hoặc order_products__train.csv.
+    Tải order_products__prior.csv hoặc order_products__train.csv.
 
-    Parameters
+    Tham số
     ----------
     file_type : str
         'prior' hoặc 'train'
 
-    Returns
+    Trả về
     -------
     pd.DataFrame với các cột:
         order_id, product_id, add_to_cart_order, reordered
@@ -84,7 +84,7 @@ def load_order_products(file_type="prior"):
     filename = f"order_products__{file_type}.csv"
     filepath = DATA_DIR / filename
 
-    # Dùng pandas để load nhanh
+    # Dùng pandas để tải nhanh
     df = pd.read_csv(filepath, encoding="utf-8")
 
     return df
@@ -98,13 +98,13 @@ def load_train_test_split():
     order_products__train.csv chứa CẢ ground truth train (131,209 đơn) và
     test (75,000 đơn). Ta phân biệt chúng qua orders.csv[eval_set].
 
-    Returns
+    Trả về
     -------
     tuple: (train_gt_df, test_gt_df)
         Mỗi cái là pd.DataFrame với các cột:
             order_id, product_id, add_to_cart_order, reordered
     """
-    # Load orders để lấy ánh xạ eval_set
+    # Tải orders để lấy ánh xạ eval_set
     orders_path = DATA_DIR / "orders.csv"
     orders = pd.read_csv(orders_path, encoding="utf-8")
 
@@ -112,7 +112,7 @@ def load_train_test_split():
     train_order_ids = set(orders[orders["eval_set"] == "train"]["order_id"])
     test_order_ids = set(orders[orders["eval_set"] == "test"]["order_id"])
 
-    # Load TẤT CẢ order products từ file train
+    # Tải TẤT CẢ order products từ file train
     train_products = load_order_products("train")
 
     # Tách dựa trên order_id
@@ -126,10 +126,10 @@ def load_prior_in_chunks(chunksize=500000):
     """
     Generator trả về từng chunk của order_products__prior.csv.
 
-    Dùng để xử lý 32.4M records theo chunk mà không cần load
+    Dùng để xử lý 32.4M records theo chunk mà không cần tải
     toàn bộ vào RAM cùng lúc.
 
-    Parameters
+    Tham số
     ----------
     chunksize : int
         Số dòng mỗi chunk (mặc định: 500,000).
@@ -148,14 +148,14 @@ def load_data_for_model(model_name):
     """
     Trả về dữ liệu phù hợp cho từng model.
 
-    Parameters
+    Tham số
     ----------
     model_name : str
         Một trong 'cb', 'spmi', 'kg'.
-        Lưu ý: 'hybrid' KHÔNG được hỗ trợ ở đây vì nó load model outputs
+        Lưu ý: 'hybrid' KHÔNG được hỗ trợ ở đây vì nó tải model outputs
         từ file do CB, SPMI, KG tạo ra.
 
-    Returns
+    Trả về
     -------
     Tùy theo model_name:
         - 'cb': products_df
@@ -181,14 +181,14 @@ def load_data_for_model(model_name):
         raise ValueError(
             f"model_name không hợp lệ: '{model_name}'. "
             f"Giá trị hợp lệ: 'cb', 'spmi', 'kg'. "
-            f"Lưu ý: 'hybrid' load model outputs trực tiếp."
+            f"Lưu ý: 'hybrid' tải model outputs trực tiếp."
         )
 
 
 def get_data_stats():
     """
     In thống kê tóm tắt của dataset.
-    Hữu ích để kiểm tra sau khi load.
+    Hữu ích để kiểm tra sau khi tải.
     """
     orders = load_orders()
 

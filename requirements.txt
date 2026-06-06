@@ -1,9 +1,7 @@
 # Recommender System — Instacart Market Basket Analysis
 # Python 3.9+
 #
-# Nguyên tắc: KHÔNG dùng thư viện ML có sẵn (sklearn, node2vec, gensim...)
-# Tất cả thuật toán (TF-IDF, node2vec, skip-gram, cosine similarity)
-# đều được tự code từ đầu, chỉ dùng numpy + scipy + networkx.
+# Dependencies: numpy, scipy, pandas, networkx, tqdm.
 
 # Data loading & processing
 pandas>=1.3.0

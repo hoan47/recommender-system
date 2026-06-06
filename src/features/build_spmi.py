@@ -1,32 +1,32 @@
 """
 Shifted Positive PMI (SPMI) — Collaborative Filtering model.
 
-Builds item-item co-occurrence from prior order history, then applies
-SPMI to filter noise and identify truly complementary product pairs.
+Xây dựng co-occurrence item-item từ lịch sử prior, sau đó áp dụng
+SPMI để lọc nhiễu và tìm các cặp sản phẩm thực sự mua kèm.
 
-Co-occurrence counting:
-  - For each order in prior, every pair of products (A, B) in that order
-    counts as one co-occurrence.
-  - Processed chunk-by-chunk to handle 32.4M records.
+Đếm co-occurrence:
+  - Với mỗi đơn hàng trong prior, mỗi cặp sản phẩm (A, B) trong đơn đó
+    được tính là một co-occurrence.
+  - Xử lý theo chunk để xử lý 32.4M records.
 
-SPMI formula:
+Công thức SPMI:
   PMI(A,B) = log(cooc[A][B] * total_prior_orders / (freq[A] * freq[B]))
   SPMI(A,B) = max(PMI(A,B) - log(k), 0)
 
-  where freq[A] = number of orders containing product A (document frequency),
-  NOT total purchase count. total_prior_orders = 3,214,874.
+  Trong đó freq[A] = số đơn hàng chứa sản phẩm A (document frequency),
+  KHÔNG phải tổng lượt mua. total_prior_orders = 3,214,874.
 
-Hyperparameter tuning:
-  - k values: [1, 2, 3, 5, 10]
-  - Tuned on TRAIN set only (in-sample leave-one-out)
-  - TEST set is NEVER used during tuning
+Tuning hyperparameter:
+  - Giá trị k: [1, 2, 3, 5, 10]
+  - Tune trên tập TRAIN (in-sample leave-one-out)
+  - Tập TEST không bao giờ được dùng trong quá trình tune
 
-Depends on: src.utils.data_loader
+Phụ thuộc: src.utils.data_loader
 
 Outputs:
-  - models/cooc_matrix.npz      - Raw co-occurrence sparse matrix
-  - models/spmi_matrix.npz      - SPMI sparse matrix (only SPMI > 0)
-  - models/spmi_best_k.json     - Best k value and train metrics
+  - models/cooc_matrix.npz      - Ma trận co-occurrence sparse gốc
+  - models/spmi_matrix.npz      - Ma trận SPMI sparse (chỉ giữ SPMI > 0)
+  - models/spmi_best_k.json     - Giá trị k tốt nhất và metrics trên train
 """
 
 import json
@@ -36,7 +36,7 @@ import numpy as np
 from scipy.sparse import lil_matrix, csr_matrix, save_npz, load_npz
 from tqdm import tqdm
 
-# Project root
+# Thư mục gốc dự án
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 MODELS_DIR = PROJECT_ROOT / "models"
 
@@ -45,108 +45,108 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 def count_cooccurrence(prior_df, n_products=None):
     """
-    Count co-occurrence pairs from prior orders.
+    Đếm co-occurrence pairs từ prior orders.
 
-    For each order, every unordered pair (A, B) of products increments
-    cooc[A][B] and cooc[B][A] by 1.
+    Với mỗi đơn hàng, mỗi cặp không thứ tự (A, B) tăng
+    cooc[A][B] và cooc[B][A] lên 1.
 
-    Parameters
+    Tham số
     ----------
     prior_df : pd.DataFrame
-        Columns: order_id, product_id (from order_products__prior.csv).
-    n_products : int or None
-        Number of unique products (if None, inferred from data).
+        Các cột: order_id, product_id (từ order_products__prior.csv).
+    n_products : int hoặc None
+        Số sản phẩm unique (nếu None, tự suy từ dữ liệu).
 
-    Returns
+    Trả về
     -------
     tuple: (cooc_matrix, order_freqs)
         cooc_matrix: scipy.sparse.csr_matrix (n_products x n_products)
-            cooc[A][B] = number of orders where both A and B appear.
+            cooc[A][B] = số đơn hàng mà cả A và B cùng xuất hiện.
         order_freqs: numpy array (n_products,)
-            order_freqs[A] = number of orders containing product A.
+            order_freqs[A] = số đơn hàng chứa sản phẩm A.
     """
     if n_products is None:
         n_products = prior_df["product_id"].max() + 1
 
-    print(f"  Number of products (index space): {n_products:,}")
+    print(f"  Số sản phẩm (không gian index): {n_products:,}")
 
-    # Use LIL matrix for efficient incremental building
+    # Dùng LIL matrix để xây dựng increment hiệu quả
     cooc = lil_matrix((n_products, n_products), dtype=np.float64)
     order_freqs = np.zeros(n_products, dtype=np.float64)
 
-    # Process by orders
+    # Xử lý theo từng đơn hàng
     grouped = prior_df.groupby("order_id")
     n_orders = prior_df["order_id"].nunique()
 
-    print(f"  Processing {n_orders:,} orders ({len(prior_df):,} interactions)...")
+    print(f"  Đang xử lý {n_orders:,} đơn hàng ({len(prior_df):,} interactions)...")
 
-    for order_id, group in tqdm(grouped, desc="  Counting co-occurrence", unit="orders"):
+    for order_id, group in tqdm(grouped, desc="  Đếm co-occurrence", unit="orders"):
         products = group["product_id"].values
         n = len(products)
 
-        # Skip orders with only 1 product (no pairs)
+        # Bỏ qua đơn chỉ có 1 sản phẩm (không có cặp)
         if n < 2:
             continue
 
-        # Update order frequencies (each product in this order → freq++)
+        # Cập nhật order frequencies (mỗi sản phẩm trong đơn này → freq++)
         unique_products = np.unique(products)
         order_freqs[unique_products] += 1
 
-        # Count all unordered pairs
+        # Đếm tất cả cặp không thứ tự
         for i in range(n):
             for j in range(i + 1, n):
                 a, b = int(products[i]), int(products[j])
                 cooc[a, b] += 1
                 cooc[b, a] += 1
 
-    print(f"  Co-occurrence matrix built. Converting to CSR...")
+    print(f"  Đã xây dựng co-occurrence matrix. Đang chuyển sang CSR...")
     cooc_csr = cooc.tocsr()
     print(f"  Non-zero cooc entries: {cooc_csr.nnz:,}")
-    print(f"  Average non-zero per product: {cooc_csr.nnz / n_products:.1f}")
+    print(f"  Trung bình non-zero mỗi sản phẩm: {cooc_csr.nnz / n_products:.1f}")
 
     return cooc_csr, order_freqs
 
 
 def compute_spmi(cooc_matrix, order_freqs, total_orders, k=1):
     """
-    Compute SPMI from co-occurrence matrix.
+    Tính SPMI từ ma trận co-occurrence.
 
     SPMI(A,B) = max(log(cooc[A][B] * N / (freq[A] * freq[B])) - log(k), 0)
 
-    where N = total_prior_orders, freq = document frequency (#orders containing product).
+    Trong đó N = total_prior_orders, freq = document frequency (số đơn chứa sản phẩm).
 
-    Parameters
+    Tham số
     ----------
     cooc_matrix : csr_matrix
-        Co-occurrence matrix (n_products x n_products).
+        Ma trận co-occurrence (n_products x n_products).
     order_freqs : numpy array
-        Number of orders containing each product.
+        Số đơn hàng chứa mỗi sản phẩm.
     total_orders : int
-        Total number of prior orders (3,214,874).
+        Tổng số prior orders (3,214,874).
     k : int
-        Shift parameter. Higher k → more conservative (fewer edges).
+        Tham số shift. k càng cao → càng conservative (ít edges).
 
-    Returns
+    Trả về
     -------
     csr_matrix
-        SPMI matrix, only entries with SPMI > 0 are kept.
+        SPMI matrix, chỉ giữ entries có SPMI > 0.
     """
-    print(f"  Computing SPMI with k={k} (shift = {np.log(k):.4f})...")
+    print(f"  Đang tính SPMI với k={k} (shift = {np.log(k):.4f})...")
 
     n = cooc_matrix.shape[0]
     spmi = cooc_matrix.astype(np.float64).tolil()
     log_shift = np.log(k)
 
-    # Build frequency product matrix for normalization
+    # Xây dựng frequency product matrix để chuẩn hóa
     # P(A) * P(B) = (freq[A]/N) * (freq[B]/N)
     # cooc[A][B] * N / (freq[A] * freq[B]) → log
 
-    # We process row by row for memory efficiency
+    # Xử lý từng dòng để tiết kiệm bộ nhớ
     spmi_data = []
     spmi_indices = []
     spmi_indptr = [0]
 
-    for i in tqdm(range(n), desc="  Computing SPMI rows", unit="rows"):
+    for i in tqdm(range(n), desc="  Tính SPMI từng dòng", unit="rows"):
         row = cooc_matrix[i]
         if row.nnz == 0:
             spmi_indptr.append(spmi_indptr[-1])
@@ -168,7 +168,7 @@ def compute_spmi(cooc_matrix, order_freqs, total_orders, k=1):
             if freq_j == 0 or cooc_val == 0:
                 continue
 
-            # PMI formula
+            # Công thức PMI
             pmi = np.log(cooc_val * total_orders / (freq_i * freq_j))
             spmi_val = max(pmi - log_shift, 0)
 
@@ -180,7 +180,7 @@ def compute_spmi(cooc_matrix, order_freqs, total_orders, k=1):
         spmi_indices.append(np.array(row_cols, dtype=np.int32))
         spmi_indptr.append(spmi_indptr[-1] + len(row_cols))
 
-    # Build CSR matrix
+    # Xây dựng CSR matrix
     spmi_data = np.concatenate(spmi_data) if spmi_data else np.array([], dtype=np.float32)
     spmi_indices = np.concatenate(spmi_indices) if spmi_indices else np.array([], dtype=np.int32)
     spmi_indptr = np.array(spmi_indptr, dtype=np.int32)
@@ -188,39 +188,39 @@ def compute_spmi(cooc_matrix, order_freqs, total_orders, k=1):
     spmi_csr = csr_matrix((spmi_data, spmi_indices, spmi_indptr), shape=(n, n))
 
     print(f"  SPMI matrix non-zero entries: {spmi_csr.nnz:,}")
-    print(f"  Average non-zero per product: {spmi_csr.nnz / n:.1f}")
+    print(f"  Trung bình non-zero mỗi sản phẩm: {spmi_csr.nnz / n:.1f}")
 
     return spmi_csr
 
 
 def evaluate_in_sample(spmi_matrix, train_gt_df, ks=(5, 10, 20)):
     """
-    In-sample evaluation on train set using leave-one-out per product.
+    Đánh giá in-sample trên tập train dùng leave-one-out mỗi sản phẩm.
 
-    For each order in train_gt:
-      - Get all products in that order
-      - For each product Pi as query:
-          - Ground truth = all other products in the same order
-          - Get top-K recommendations from spmi_matrix[Pi]
-          - Compute hit (any match counts as 1)
+    Với mỗi đơn hàng trong train_gt:
+      - Lấy tất cả sản phẩm trong đơn đó
+      - Với mỗi sản phẩm Pi làm query:
+          - Ground truth = tất cả sản phẩm khác trong cùng đơn
+          - Lấy top-K recommendations từ spmi_matrix[Pi]
+          - Tính hit (bất kỳ match nào cũng tính là 1)
 
-    Only evaluates orders with >= 2 products.
+    Chỉ đánh giá đơn có >= 2 sản phẩm.
 
-    Parameters
+    Tham số
     ----------
     spmi_matrix : csr_matrix
         SPMI similarity (n_products x n_products).
     train_gt_df : pd.DataFrame
-        Ground truth interactions for train set.
+        Ground truth interactions cho tập train.
     ks : tuple of int
 
-    Returns
+    Trả về
     -------
-    dict: {k: recall_value} for each k
+    dict: {k: recall_value} cho mỗi k
     """
-    print(f"\n  Evaluating in-sample on train set ({len(train_gt_df):,} interactions)...")
+    print(f"\n  Đánh giá in-sample trên tập train ({len(train_gt_df):,} interactions)...")
 
-    # Group products by order
+    # Nhóm sản phẩm theo đơn hàng
     order_groups = train_gt_df.groupby("order_id")["product_id"].apply(list)
 
     hits = {k: 0.0 for k in ks}
@@ -228,7 +228,7 @@ def evaluate_in_sample(spmi_matrix, train_gt_df, ks=(5, 10, 20)):
 
     for order_id, products in tqdm(
         order_groups.items(),
-        desc="  Evaluating",
+        desc="  Đánh giá",
         unit="orders",
         total=len(order_groups),
     ):
@@ -242,15 +242,15 @@ def evaluate_in_sample(spmi_matrix, train_gt_df, ks=(5, 10, 20)):
             query = products[i]
             ground_truth = products_set - {query}
 
-            # Get recommendations from SPMI matrix
+            # Lấy recommendations từ SPMI matrix
             row = spmi_matrix[query]
             if row.nnz == 0:
                 continue
 
-            # Get top items by SPMI score
+            # Lấy top items theo SPMI score
             row_data = row.data
             row_indices = row.indices
-            # Sort by score descending
+            # Sắp xếp theo score giảm dần
             sorted_idx = np.argsort(row_data)[::-1]
 
             max_k = max(ks)
@@ -264,7 +264,7 @@ def evaluate_in_sample(spmi_matrix, train_gt_df, ks=(5, 10, 20)):
             total_queries += 1
 
     results = {}
-    print(f"\n  Total queries evaluated: {total_queries:,}")
+    print(f"\n  Tổng queries đánh giá: {total_queries:,}")
     for k in ks:
         recall = hits[k] / total_queries if total_queries > 0 else 0
         results[f"recall@{k}"] = round(recall, 6)
@@ -276,9 +276,9 @@ def evaluate_in_sample(spmi_matrix, train_gt_df, ks=(5, 10, 20)):
 def tune_spmi_k(cooc_matrix, order_freqs, total_orders, train_gt_df,
                 k_values=(1, 2, 3, 5, 10)):
     """
-    Tune SPMI shift parameter k on train set.
+    Tune tham số shift k của SPMI trên tập train.
 
-    Parameters
+    Tham số
     ----------
     cooc_matrix : csr_matrix
     order_freqs : numpy array
@@ -286,12 +286,12 @@ def tune_spmi_k(cooc_matrix, order_freqs, total_orders, train_gt_df,
     train_gt_df : pd.DataFrame
     k_values : tuple of int
 
-    Returns
+    Trả về
     -------
     tuple: (best_k, best_spmi_matrix, all_results)
     """
     print("=" * 50)
-    print("Tuning SPMI k parameter")
+    print("Tuning tham số k của SPMI")
     print("=" * 50)
 
     best_k = None
@@ -300,11 +300,11 @@ def tune_spmi_k(cooc_matrix, order_freqs, total_orders, train_gt_df,
     all_results = {}
 
     for k in k_values:
-        print(f"\n--- Testing k = {k} ---")
+        print(f"\n--- Đang test k = {k} ---")
         spmi = compute_spmi(cooc_matrix, order_freqs, total_orders, k=k)
         metrics = evaluate_in_sample(spmi, train_gt_df)
 
-        # Use recall@5 as the selection criteria
+        # Dùng recall@5 làm tiêu chí chọn
         score = metrics.get("recall@5", 0)
         all_results[k] = metrics
 
@@ -312,9 +312,9 @@ def tune_spmi_k(cooc_matrix, order_freqs, total_orders, train_gt_df,
             best_score = score
             best_k = k
             best_spmi = spmi
-            print(f"  >>> New best k = {k} (recall@5 = {score:.4f})")
+            print(f"  >>> K tốt nhất mới: k = {k} (recall@5 = {score:.4f})")
 
-    print(f"\nBest k = {best_k} with recall@5 = {best_score:.4f}")
+    print(f"\nk tốt nhất = {best_k} với recall@5 = {best_score:.4f}")
 
     return best_k, best_spmi, all_results
 
@@ -322,64 +322,64 @@ def tune_spmi_k(cooc_matrix, order_freqs, total_orders, train_gt_df,
 def build_spmi_model(prior_df, train_gt_df, total_prior_orders=3214874,
                      k_values=(1, 2, 3, 5, 10)):
     """
-    Full SPMI pipeline: co-occurrence → PMI → tune k → save.
+    Pipeline SPMI đầy đủ: co-occurrence → PMI → tune k → lưu.
 
-    Parameters
+    Tham số
     ----------
     prior_df : pd.DataFrame
         Prior order products.
     train_gt_df : pd.DataFrame
-        Train ground truth for tuning.
+        Train ground truth để tuning.
     total_prior_orders : int
-        Total number of prior orders (default: 3,214,874).
+        Tổng số prior orders (mặc định: 3,214,874).
     k_values : tuple
 
-    Returns
+    Trả về
     -------
     tuple: (cooc_matrix, spmi_matrix, best_k, tuning_results)
     """
     print("=" * 50)
-    print("Building SPMI Model")
+    print("Xây dựng SPMI Model")
     print("=" * 50)
 
-    # Step 1: Count co-occurrence
-    print("\n[1/3] Counting co-occurrence from prior...")
+    # Bước 1: Đếm co-occurrence
+    print("\n[1/3] Đếm co-occurrence từ prior...")
     n_products = max(
         prior_df["product_id"].max(),
         train_gt_df["product_id"].max(),
     ) + 1
     cooc_matrix, order_freqs = count_cooccurrence(prior_df, n_products=n_products)
 
-    # Step 2: Tune k on train
-    print("\n[2/3] Tuning k parameter on train set...")
+    # Bước 2: Tune k trên train
+    print("\n[2/3] Tuning tham số k trên tập train...")
     best_k, spmi_matrix, tuning_results = tune_spmi_k(
         cooc_matrix, order_freqs, total_prior_orders, train_gt_df, k_values
     )
 
-    # Step 3: Final SPMI with best k (already done in tune)
-    print(f"\n[3/3] Final SPMI with best k = {best_k}")
+    # Bước 3: SPMI cuối cùng với k tốt nhất (đã làm trong tune)
+    print(f"\n[3/3] SPMI cuối cùng với k tốt nhất = {best_k}")
 
     return cooc_matrix, spmi_matrix, best_k, tuning_results
 
 
 def save_model(cooc_matrix, spmi_matrix, best_k, tuning_results):
     """
-    Save SPMI model outputs.
+    Lưu SPMI model outputs.
 
-    Parameters
+    Tham số
     ----------
     cooc_matrix : csr_matrix
     spmi_matrix : csr_matrix
     best_k : int
     tuning_results : dict
     """
-    print("\nSaving SPMI model outputs...")
+    print("\nĐang lưu SPMI model outputs...")
 
     save_npz(MODELS_DIR / "cooc_matrix.npz", cooc_matrix)
-    print(f"  Saved: models/cooc_matrix.npz")
+    print(f"  Đã lưu: models/cooc_matrix.npz")
 
     save_npz(MODELS_DIR / "spmi_matrix.npz", spmi_matrix)
-    print(f"  Saved: models/spmi_matrix.npz")
+    print(f"  Đã lưu: models/spmi_matrix.npz")
 
     output = {
         "best_k": best_k,
@@ -389,9 +389,9 @@ def save_model(cooc_matrix, spmi_matrix, best_k, tuning_results):
     }
     with open(MODELS_DIR / "spmi_best_k.json", "w", encoding="utf-8") as f:
         json.dump(output, f, indent=2)
-    print(f"  Saved: models/spmi_best_k.json")
+    print(f"  Đã lưu: models/spmi_best_k.json")
 
-    print("\nSPMI model complete!")
+    print("\nSPMI model hoàn tất!")
 
 
 if __name__ == "__main__":
@@ -399,17 +399,17 @@ if __name__ == "__main__":
     sys.path.insert(0, str(PROJECT_ROOT))
     from src.utils.data_loader import load_order_products, load_train_test_split
 
-    # Load data
-    print("Loading prior interactions...")
+    # Tải dữ liệu
+    print("Đang tải prior interactions...")
     prior_df = load_order_products("prior")
 
-    print("Loading train/test split...")
+    print("Đang tải train/test split...")
     train_gt_df, _ = load_train_test_split()
 
-    # Build model
+    # Xây dựng model
     cooc_matrix, spmi_matrix, best_k, tuning_results = build_spmi_model(
         prior_df, train_gt_df
     )
 
-    # Save
+    # Lưu
     save_model(cooc_matrix, spmi_matrix, best_k, tuning_results)

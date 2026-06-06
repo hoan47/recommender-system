@@ -1,27 +1,26 @@
 """
-Knowledge Graph (KG) model — Node2Vec embeddings (TỰ CODE).
+Knowledge Graph (KG) model — Node2Vec embeddings.
 
-Tự cài đặt toàn bộ pipeline: random walks (node2vec strategy) + skip-gram
-với negative sampling + cosine similarity. KHÔNG dùng node2vec, gensim,
-sklearn hay bất kỳ thư viện ML nào. Chỉ dùng numpy + networkx (đồ thị) + scipy.sparse.
+Pipeline: random walks (node2vec strategy) + skip-gram
+với negative sampling + cosine similarity. Dùng numpy + networkx + scipy.sparse.
 
-Builds a graph with:
+Xây dựng đồ thị với:
   - Nodes: product (49,688) + department (21)
   - Edges:
-    1. (product_A) --[co_purchase]--> (product_B): only pairs with SPMI > 0,
-       weight = SPMI value. Uses SPMI to filter noise and reduce edges.
-    2. (product) --[belongs_to]--> (department): weight = 1.0
+     1. (product_A) --[co_purchase]--> (product_B): chỉ giữ cặp có SPMI > 0,
+        weight = SPMI value. Dùng SPMI để lọc nhiễu và giảm edges.
+     2. (product) --[belongs_to]--> (department): weight = 1.0
 
-Learns node2vec embeddings on the graph, then computes cosine similarity
-between product embeddings.
+Học node2vec embeddings trên đồ thị, sau đó tính cosine similarity
+giữa các product embeddings.
 
-Depends on:
-  - src.utils.data_loader (for prior, products)
+Phụ thuộc:
+  - src.utils.data_loader (cho prior, products)
   - src.features.build_spmi (output: models/spmi_matrix.npz)
 
 Outputs:
   - models/kg_embeddings.npy        - Product embeddings matrix
-  - models/kg_best_params.json      - Best hyperparameters from grid search
+  - models/kg_best_params.json      - Hyperparameters tốt nhất từ grid search
   - models/kg_similarity.npz        - Cosine similarity (product x product)
 """
 
@@ -34,7 +33,7 @@ from tqdm import tqdm
 
 import networkx as nx
 
-# Project root
+# Thư mục gốc dự án
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 MODELS_DIR = PROJECT_ROOT / "models"
 
@@ -42,40 +41,40 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ============================================================================
-# PHASE 1: Graph Building
+# PHASE 1: Xây dựng đồ thị
 # ============================================================================
 
 def build_graph(spmi_matrix, products_df, prior_df):
     """
-    Build NetworkX graph with product and department nodes.
+    Xây dựng đồ thị NetworkX với các node product và department.
 
-    Graph structure:
+    Cấu trúc đồ thị:
       - Nodes: product_<id> (type='product'), dept_<id> (type='department')
       - Edges:
-        * co_purchase: product-product, weight=SPMI value (only SPMI > 0)
+        * co_purchase: product-product, weight=SPMI value (chỉ SPMI > 0)
         * belongs_to: product-department, weight=1.0
 
-    Parameters
+    Tham số
     ----------
     spmi_matrix : csr_matrix
         SPMI matrix (n_products x n_products).
     products_df : pd.DataFrame
-        With columns: product_id, department_id.
+        Với các cột: product_id, department_id.
     prior_df : pd.DataFrame
-        Prior interactions (used to determine which products appear in prior).
+        Prior interactions (dùng để xác định sản phẩm nào xuất hiện trong prior).
 
-    Returns
+    Trả về
     -------
     nx.Graph
     """
-    print("  Building graph...")
+    print("  Đang xây dựng đồ thị...")
 
     n_products = spmi_matrix.shape[0]
     n_departments = products_df["department_id"].max() + 1
 
     graph = nx.Graph()
 
-    # Add product nodes
+    # Thêm node product
     product_ids_in_prior = set(prior_df["product_id"].unique())
 
     for pid in range(n_products):
@@ -83,23 +82,23 @@ def build_graph(spmi_matrix, products_df, prior_df):
         in_prior = 1 if pid in product_ids_in_prior else 0
         graph.add_node(product_label, type="product", in_prior=in_prior)
 
-    # Add department nodes
+    # Thêm node department
     for did in range(n_departments):
         dept_label = f"dept_{did}"
         graph.add_node(dept_label, type="department")
 
-    # Add co_purchase edges from SPMI matrix
-    print(f"  Adding co_purchase edges from SPMI (SPMI > 0)...")
+    # Thêm edges co_purchase từ SPMI matrix
+    print(f"  Đang thêm edges co_purchase từ SPMI (SPMI > 0)...")
     edge_count = 0
     spmi_coo = spmi_matrix.tocoo()
 
     for i, j, w in tqdm(
         zip(spmi_coo.row, spmi_coo.col, spmi_coo.data),
-        desc="  Adding co_purchase edges",
+        desc="  Thêm edges co_purchase",
         unit="edges",
         total=spmi_coo.nnz,
     ):
-        # Only add upper triangle to avoid duplicate edges in undirected graph
+        # Chỉ thêm tam giác trên để tránh trùng lặp trong đồ thị vô hướng
         if i < j and w > 0:
             graph.add_edge(
                 f"product_{i}",
@@ -109,10 +108,10 @@ def build_graph(spmi_matrix, products_df, prior_df):
             )
             edge_count += 1
 
-    print(f"  Added {edge_count:,} co_purchase edges")
+    print(f"  Đã thêm {edge_count:,} edges co_purchase")
 
-    # Add belongs_to edges (product → department)
-    print(f"  Adding belongs_to edges...")
+    # Thêm edges belongs_to (product → department)
+    print(f"  Đang thêm belongs_to edges...")
     for _, row in products_df.iterrows():
         pid = row["product_id"]
         did = row["department_id"]
@@ -124,20 +123,20 @@ def build_graph(spmi_matrix, products_df, prior_df):
                 edge_type="belongs_to",
             )
 
-    print(f"  Graph: {graph.number_of_nodes():,} nodes, {graph.number_of_edges():,} edges")
+    print(f"  Đồ thị: {graph.number_of_nodes():,} nodes, {graph.number_of_edges():,} edges")
 
     return graph
 
 
 # ============================================================================
-# PHASE 2: Node2Vec Random Walks (tự code)
+# PHASE 2: Node2Vec Random Walks
 # ============================================================================
 
 def _node2vec_walk(graph, start_node, walk_length, p, q):
     """
     Thực hiện một random walk bắt đầu từ start_node, dùng node2vec strategy.
 
-    Parameters
+    Tham số
     ----------
     graph : nx.Graph
     start_node : str
@@ -145,7 +144,7 @@ def _node2vec_walk(graph, start_node, walk_length, p, q):
     p : float
     q : float
 
-    Returns
+    Trả về
     -------
     list of str (các node label trong walk)
     """
@@ -197,7 +196,7 @@ def _generate_walks(graph, num_walks, walk_length, p=1.0, q=1.0):
     """
     Sinh node2vec random walks cho tất cả các node.
 
-    Parameters
+    Tham số
     ----------
     graph : nx.Graph
     num_walks : int — số walk mỗi node
@@ -205,14 +204,14 @@ def _generate_walks(graph, num_walks, walk_length, p=1.0, q=1.0):
     p : float
     q : float
 
-    Returns
+    Trả về
     -------
     list of list of str
     """
     nodes = list(graph.nodes())
     walks = []
 
-    for node in tqdm(nodes, desc="  Generating walks", unit="nodes"):
+    for node in tqdm(nodes, desc="  Sinh walks", unit="nodes"):
         for _ in range(num_walks):
             walk = _node2vec_walk(graph, node, walk_length, p, q)
             walks.append(walk)
@@ -221,22 +220,22 @@ def _generate_walks(graph, num_walks, walk_length, p=1.0, q=1.0):
 
 
 # ============================================================================
-# PHASE 3: Skip-Gram với Negative Sampling (tự code)
+# PHASE 3: Skip-Gram với Negative Sampling
 # ============================================================================
 
 def _build_node_index(nodes):
     """
     Xây dựng ánh xạ node label → index (0..N-1).
 
-    Parameters
+    Tham số
     ----------
     nodes : list of str
 
-    Returns
+    Trả về
     -------
     dict: {label: index}
     dict: {index: label}
-    int: total nodes
+    int: tổng số nodes
     """
     node_to_idx = {}
     idx_to_node = {}
@@ -250,7 +249,7 @@ def _skipgram_train(walks, n_nodes, dimensions, window, negative, epochs, lr):
     """
     Huấn luyện skip-gram với negative sampling cho tất cả walks.
 
-    Parameters
+    Tham số
     ----------
     walks : list of list of int (các walks đã convert sang index)
     n_nodes : int — tổng số node (bao gồm cả product + department)
@@ -260,7 +259,7 @@ def _skipgram_train(walks, n_nodes, dimensions, window, negative, epochs, lr):
     epochs : int — số epoch training
     lr : float — learning rate ban đầu
 
-    Returns
+    Trả về
     -------
     numpy array (n_nodes × dimensions) — embedding matrix
     """
@@ -341,7 +340,7 @@ def _skipgram_train(walks, n_nodes, dimensions, window, negative, epochs, lr):
 
                         dot_neg = np.dot(W_in[center], W_out[neg])
                         sig_neg = 1.0 / (1.0 + np.exp(-dot_neg))
-                        grad_neg = sig_neg  # cho negative: grap = σ - 0
+                        grad_neg = sig_neg  # cho negative: grad = σ - 0
 
                         W_in[center] -= lr * grad_neg * W_out[neg]
                         W_out[neg] -= lr * grad_neg * W_in[center]
@@ -369,19 +368,19 @@ def train_node2vec(graph, dimensions=128, walk_length=20, num_walks=200,
                    window=10, p=1.0, q=1.0, epochs=1, negative=5,
                    lr=0.025):
     """
-    Train node2vec embeddings on the graph (TỰ CODE).
+    Huấn luyện node2vec embeddings trên đồ thị.
 
     Pipeline:
       1. Sinh random walks với node2vec strategy
       2. Ánh xạ node label → index
       3. Skip-gram với negative sampling
 
-    Parameters
+    Tham số
     ----------
     graph : nx.Graph
-    dimensions : int — Embedding dimension.
-    walk_length : int — Length of each random walk.
-    num_walks : int — Number of walks per node.
+    dimensions : int — Kích thước embedding.
+    walk_length : int — Độ dài mỗi random walk.
+    num_walks : int — Số walks mỗi node.
     window : int — Context window size.
     p : float — Return parameter.
     q : float — In-out parameter.
@@ -389,23 +388,23 @@ def train_node2vec(graph, dimensions=128, walk_length=20, num_walks=200,
     negative : int — Số negative samples mỗi positive.
     lr : float — Learning rate.
 
-    Returns
+    Trả về
     -------
     tuple: (model_dict, embeddings_matrix)
         model_dict: dict chứa W_in (để tương thích với code cũ)
         embeddings_matrix: numpy array (n_products x dimensions)
-            Only product nodes, indexed by product_id.
+            Chỉ chứa product nodes, index theo product_id.
     """
-    print(f"  Training node2vec: dim={dimensions}, walk_len={walk_length}, "
+    print(f"  Đang huấn luyện node2vec: dim={dimensions}, walk_len={walk_length}, "
           f"num_walks={num_walks}, epochs={epochs}...")
 
-    # Step 1: Generate walks
-    print(f"  [1/3] Generating random walks...")
+    # Bước 1: Sinh walks
+    print(f"  [1/3] Đang sinh random walks...")
     walks = _generate_walks(graph, num_walks, walk_length, p=p, q=q)
-    print(f"  Generated {len(walks):,} walks")
+    print(f"  Đã sinh {len(walks):,} walks")
 
-    # Step 2: Map nodes to indices
-    print(f"  [2/3] Building node index...")
+    # Bước 2: Ánh xạ nodes sang indices
+    print(f"  [2/3] Đang xây dựng node index...")
     all_nodes = list(graph.nodes())
     node_to_idx, idx_to_node, n_nodes = _build_node_index(all_nodes)
 
@@ -416,16 +415,16 @@ def train_node2vec(graph, dimensions=128, walk_length=20, num_walks=200,
         if len(walk_idx) > 1:
             walks_idx.append(walk_idx)
 
-    print(f"  Converted {len(walks_idx):,} walks to indices")
+    print(f"  Đã convert {len(walks_idx):,} walks sang indices")
 
-    # Step 3: Skip-gram training
-    print(f"  [3/3] Training skip-gram with negative sampling...")
+    # Bước 3: Skip-gram training
+    print(f"  [3/3] Đang huấn luyện skip-gram với negative sampling...")
     W_in = _skipgram_train(
         walks_idx, n_nodes, dimensions, window=window,
         negative=negative, epochs=epochs, lr=lr
     )
 
-    # Extract product embeddings (chỉ các node product_<id>)
+    # Trích xuất product embeddings (chỉ các node product_<id>)
     n_products = max(
         int(node.replace("product_", ""))
         for node in graph.nodes()
@@ -448,53 +447,53 @@ def train_node2vec(graph, dimensions=128, walk_length=20, num_walks=200,
 
 
 # ============================================================================
-# PHASE 5: Cosine Similarity (tự code)
+# PHASE 5: Cosine Similarity
 # ============================================================================
 
 def compute_kg_similarity(embeddings, top_k=100, chunk_size=1000):
     """
-    Compute cosine similarity between product embeddings (TỰ CODE).
+    Tính cosine similarity giữa các product embeddings.
 
     L2 normalize → chunked dot product → top-K.
 
-    Parameters
+    Tham số
     ----------
     embeddings : numpy array (n_products x dimensions)
     top_k : int
-        Keep only top-K similar products per row.
+        Chỉ giữ top-K similar products mỗi dòng.
     chunk_size : int
 
-    Returns
+    Trả về
     -------
     csr_matrix (n_products x n_products)
     """
-    print("  Computing cosine similarity...")
+    print("  Đang tính cosine similarity...")
     n = embeddings.shape[0]
 
     # L2 normalize
     norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-    norms[norms == 0] = 1  # Avoid division by zero for cold-start products
+    norms[norms == 0] = 1  # Tránh chia cho 0 với cold-start products
     embeddings_norm = embeddings / norms
 
     sim_lil = lil_matrix((n, n), dtype=np.float32)
 
-    for start in tqdm(range(0, n, chunk_size), desc="  Computing chunks"):
+    for start in tqdm(range(0, n, chunk_size), desc="  Tính chunks"):
         end = min(start + chunk_size, n)
         chunk = embeddings_norm[start:end]  # (chunk_size × dim)
         sim_chunk = chunk @ embeddings_norm.T  # (chunk_size × n)
 
         for i_local, row_idx in enumerate(range(start, end)):
             row = sim_chunk[i_local]
-            # Set self-similarity to 0
+            # Đặt self-similarity = 0
             row[row_idx] = 0
-            # Get top-K
+            # Lấy top-K
             top_indices = np.argpartition(row, -top_k)[-top_k:]
             top_values = row[top_indices]
-            # Sort descending
+            # Sắp xếp giảm dần
             sorted_idx = np.argsort(top_values)[::-1]
             top_indices = top_indices[sorted_idx]
             top_values = top_values[sorted_idx]
-            # Keep only positive
+            # Chỉ giữ giá trị dương
             positive = top_values > 0
             if positive.any():
                 sim_lil[row_idx, top_indices[positive]] = top_values[positive].astype(np.float32)
@@ -506,25 +505,25 @@ def compute_kg_similarity(embeddings, top_k=100, chunk_size=1000):
 
 
 # ============================================================================
-# PHASE 6: Evaluation + Tuning (giữ nguyên logic, không dùng ML lib)
+# PHASE 6: Đánh giá + Tuning
 # ============================================================================
 
 def evaluate_kg_in_sample(sim_matrix, train_gt_df, ks=(5, 10, 20)):
     """
-    In-sample evaluation of KG similarity on train set.
-    Same leave-one-out per product as SPMI evaluation.
+    Đánh giá in-sample KG similarity trên tập train.
+    Cùng giao thức leave-one-out mỗi sản phẩm như SPMI evaluation.
 
-    Parameters
+    Tham số
     ----------
     sim_matrix : csr_matrix
     train_gt_df : pd.DataFrame
     ks : tuple of int
 
-    Returns
+    Trả về
     -------
     dict: {f"recall@{k}": value}
     """
-    print(f"\n  Evaluating KG in-sample ({len(train_gt_df):,} interactions)...")
+    print(f"\n  Đánh giá KG in-sample ({len(train_gt_df):,} interactions)...")
 
     order_groups = train_gt_df.groupby("order_id")["product_id"].apply(list)
 
@@ -533,7 +532,7 @@ def evaluate_kg_in_sample(sim_matrix, train_gt_df, ks=(5, 10, 20)):
 
     for products in tqdm(
         order_groups.values,
-        desc="  Evaluating KG",
+        desc="  Đánh giá KG",
         unit="orders",
         total=len(order_groups),
     ):
@@ -566,7 +565,7 @@ def evaluate_kg_in_sample(sim_matrix, train_gt_df, ks=(5, 10, 20)):
             total_queries += 1
 
     results = {}
-    print(f"\n  Total queries: {total_queries:,}")
+    print(f"\n  Tổng queries: {total_queries:,}")
     for k in ks:
         recall = hits[k] / total_queries if total_queries > 0 else 0
         results[f"recall@{k}"] = round(recall, 6)
@@ -580,9 +579,9 @@ def tune_kg_params(graph, train_gt_df,
                    dimensions_list=(64, 128),
                    num_walks_list=(100, 200)):
     """
-    Grid search node2vec hyperparameters on train set.
+    Grid search node2vec hyperparameters trên tập train.
 
-    Parameters
+    Tham số
     ----------
     graph : nx.Graph
     train_gt_df : pd.DataFrame
@@ -590,7 +589,7 @@ def tune_kg_params(graph, train_gt_df,
     dimensions_list : tuple
     num_walks_list : tuple
 
-    Returns
+    Trả về
     -------
     tuple: (best_params, best_embeddings, best_sim, all_results)
     """
@@ -614,7 +613,7 @@ def tune_kg_params(graph, train_gt_df,
                 print(f"\n--- [{combo_idx}/{total_combos}] walk_len={walk_length}, "
                       f"dim={dimensions}, num_walks={num_walks} ---")
 
-                # Train
+                # Huấn luyện
                 _, embeddings = train_node2vec(
                     graph,
                     dimensions=dimensions,
@@ -622,10 +621,10 @@ def tune_kg_params(graph, train_gt_df,
                     num_walks=num_walks,
                 )
 
-                # Compute similarity
+                # Tính similarity
                 sim = compute_kg_similarity(embeddings, top_k=100)
 
-                # Evaluate on train
+                # Đánh giá trên train
                 metrics = evaluate_kg_in_sample(sim, train_gt_df)
                 score = metrics.get("recall@5", 0)
 
@@ -646,82 +645,82 @@ def tune_kg_params(graph, train_gt_df,
                     }
                     best_embeddings = embeddings
                     best_sim = sim
-                    print(f"  >>> New best! recall@5 = {score:.4f}")
+                    print(f"  >>> Kết quả tốt nhất mới! recall@5 = {score:.4f}")
 
-    print(f"\nBest params: {best_params}")
-    print(f"Best recall@5: {best_score:.4f}")
+    print(f"\nTham số tốt nhất: {best_params}")
+    print(f"Recall@5 tốt nhất: {best_score:.4f}")
 
     return best_params, best_embeddings, best_sim, all_results
 
 
 # ============================================================================
-# PHASE 7: Main Pipeline
+# PHASE 7: Pipeline chính
 # ============================================================================
 
 def build_kg_model(spmi_matrix, products_df, prior_df, train_gt_df):
     """
-    Full KG pipeline: graph → node2vec → similarity → tune → save.
+    Pipeline KG đầy đủ: đồ thị → node2vec → similarity → tune → lưu.
 
-    Parameters
+    Tham số
     ----------
     spmi_matrix : csr_matrix
     products_df : pd.DataFrame
     prior_df : pd.DataFrame
     train_gt_df : pd.DataFrame
 
-    Returns
+    Trả về
     -------
     tuple: (best_params, embeddings, similarity, tuning_results)
     """
     print("=" * 50)
-    print("Building Knowledge Graph (KG) Model")
+    print("Xây dựng Knowledge Graph (KG) Model")
     print("=" * 50)
 
-    # Step 1: Build graph
-    print("\n[1/3] Building graph from SPMI + product metadata...")
+    # Bước 1: Xây dựng đồ thị
+    print("\n[1/3] Đang xây dựng đồ thị từ SPMI + product metadata...")
     graph = build_graph(spmi_matrix, products_df, prior_df)
 
-    # Step 2: Tune node2vec on train
-    print("\n[2/3] Tuning node2vec hyperparameters...")
+    # Bước 2: Tune node2vec trên train
+    print("\n[2/3] Đang tuning node2vec hyperparameters...")
     best_params, embeddings, sim_matrix, tuning_results = tune_kg_params(
         graph, train_gt_df
     )
 
-    # Step 3: Done
-    print(f"\n[3/3] KG model complete with best params: {best_params}")
+    # Bước 3: Hoàn tất
+    print(f"\n[3/3] KG model hoàn tất với tham số tốt nhất: {best_params}")
 
     return best_params, embeddings, sim_matrix, tuning_results
 
 
 def save_model(best_params, embeddings, sim_matrix, tuning_results):
     """
-    Save KG model outputs.
+    Lưu KG model outputs.
 
-    Parameters
+    Tham số
     ----------
     best_params : dict
     embeddings : numpy array
     sim_matrix : csr_matrix
     tuning_results : list
     """
-    print("\nSaving KG model outputs...")
+    print("\nĐang lưu KG model outputs...")
 
     np.save(MODELS_DIR / "kg_embeddings.npy", embeddings)
-    print(f"  Saved: models/kg_embeddings.npy")
+    print(f"  Đã lưu: models/kg_embeddings.npy")
 
     with open(MODELS_DIR / "kg_best_params.json", "w", encoding="utf-8") as f:
         json.dump(best_params, f, indent=2)
-    print(f"  Saved: models/kg_best_params.json")
+    print(f"  Đã lưu: models/kg_best_params.json")
 
     save_npz(MODELS_DIR / "kg_similarity.npz", sim_matrix)
-    print(f"  Saved: models/kg_similarity.npz")
+    print(f"  Đã lưu: models/kg_similarity.npz")
 
-    # Also save tuning results for reference
+    # Lưu thêm tuning results để tham khảo
     with open(MODELS_DIR / "kg_tuning_results.json", "w", encoding="utf-8") as f:
         json.dump(tuning_results, f, indent=2)
-    print(f"  Saved: models/kg_tuning_results.json")
+    print(f"  Đã lưu: models/kg_tuning_results.json")
 
-    print("\nKG model complete!")
+    print("\nKG model hoàn tất!")
 
 
 if __name__ == "__main__":
@@ -729,20 +728,20 @@ if __name__ == "__main__":
     sys.path.insert(0, str(PROJECT_ROOT))
     from src.utils.data_loader import load_products, load_order_products, load_train_test_split
 
-    # Load data
-    print("Loading data...")
+    # Tải dữ liệu
+    print("Đang tải dữ liệu...")
     products_df = load_products()
     prior_df = load_order_products("prior")
     train_gt_df, _ = load_train_test_split()
 
-    # Load SPMI matrix from previous step
-    print("Loading SPMI matrix...")
+    # Tải SPMI matrix từ bước trước
+    print("Đang tải SPMI matrix...")
     spmi_matrix = load_npz(MODELS_DIR / "spmi_matrix.npz")
 
-    # Build model
+    # Xây dựng model
     best_params, embeddings, sim_matrix, tuning_results = build_kg_model(
         spmi_matrix, products_df, prior_df, train_gt_df
     )
 
-    # Save
+    # Lưu
     save_model(best_params, embeddings, sim_matrix, tuning_results)
