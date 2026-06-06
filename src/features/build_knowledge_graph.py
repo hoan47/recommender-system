@@ -11,17 +11,25 @@ Edge gồm:
   2. belongs_to: product-department, weight = 1.0 (từ products.csv)
 
 Sau đó dùng node2vec (random walks + skip-gram negative sampling)
-để học product embeddings. Cuối cùng tính cosine similarity giữa
-các product embeddings để tìm sản phẩm liên quan qua đồ thị.
+để học product embeddings.
+
+Optimizations:
+  1. Graph → adjacency lists (list of neighbor arrays + weight CDFs) 
+     để Numba JIT có thể random walk trực tiếp
+  2. Skip-gram training loop đẩy vào Numba JIT (njit, parallel=False)
+  3. Noise distribution cho negative sampling precompute + JIT sampling
 """
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import gc
+import math
 import numpy as np
 import networkx as nx
 from collections import Counter
 from scipy.sparse import load_npz, save_npz, lil_matrix
+from numba import njit
+from numba.typed import List as NumbaList
 from tqdm import tqdm
 
 from src.config import MODELS_DIR, KG_DIM, KG_WALK_LENGTH, KG_NUM_WALKS, KG_EPOCHS
@@ -30,11 +38,10 @@ from src.config import MODELS_DIR, KG_DIM, KG_WALK_LENGTH, KG_NUM_WALKS, KG_EPOC
 EMB_FILE = MODELS_DIR / "kg_embeddings.npy"
 SIM_FILE = MODELS_DIR / "kg_similarity.npz"
 
+
 def build_graph(spmi, products_df):
     """
     Xây dựng đồ thị NetworkX từ SPMI matrix và product metadata.
-    - SPMI edges: product-product (chỉ giữ tam giác trên để tránh trùng)
-    - belongs_to edges: product-department (từ products.csv)
     
     Tham số:
         spmi: csr_matrix — ma trận SPMI từ build_spmi
@@ -65,112 +72,275 @@ def build_graph(spmi, products_df):
     print(f"  [KG] Graph: {G.number_of_nodes():,} nodes, {G.number_of_edges():,} edges")
     return G
 
-def train_node2vec(G, n_products, dim=KG_DIM, walk_len=KG_WALK_LENGTH, n_walks=KG_NUM_WALKS, epochs=KG_EPOCHS):
+
+def _graph_to_adjacency(G):
     """
-    Huấn luyện node2vec embeddings.
+    Chuyển NetworkX graph thành adjacency arrays cho Numba JIT.
     
-    Random walks: mỗi node sinh n_walks walks, mỗi walk dài walk_len.
-    Bước tiếp theo được chọn dựa trên edge weight (trọng số càng cao càng dễ chọn).
-    Không dùng bias p/q (node2vec chuẩn) để giữ code đơn giản.
+    Mỗi node được biểu diễn bởi:
+      - neighbor_ids: int32 array of neighbors
+      - weight_cdf: float64 array of cumulative weight distribution
     
-    Skip-gram với negative sampling:
-    - Center embedding (W_in) và context embedding (W_out)
-    - Positive: cặp (center, context) trong cùng window
-    - Negative: sample ngẫu nhiên 5 node theo noise distribution (freq^0.75)
+    Trả về:
+        node_ids: list[str] — danh sách node labels theo index
+        n2i: dict — label → index
+        neigh_list: NumbaList[int32[:]] — neighbors cho mỗi node
+        cdf_list: NumbaList[float64[:]] — cumulative weight distribution
+    """
+    nodes = list(G.nodes())
+    n_nodes = len(nodes)
+    n2i = {n: i for i, n in enumerate(nodes)}
+    
+    neigh_list = NumbaList()
+    cdf_list = NumbaList()
+    
+    for node in nodes:
+        nb = list(G.neighbors(node))
+        if not nb:
+            neigh_list.append(np.empty(0, dtype=np.int32))
+            cdf_list.append(np.empty(0, dtype=np.float64))
+            continue
+        
+        # Chuyển neighbor labels → indices
+        nb_indices = np.array([n2i[n] for n in nb], dtype=np.int32)
+        weights = np.array([G[node][n].get("weight", 1.0) for n in nb], dtype=np.float64)
+        
+        # Normalize weights → CDF
+        w_sum = weights.sum()
+        if w_sum > 0:
+            weights /= w_sum
+        cdf = np.cumsum(weights)
+        
+        neigh_list.append(nb_indices)
+        cdf_list.append(cdf)
+    
+    return nodes, n2i, neigh_list, cdf_list
+
+
+@njit
+def _random_walks_jit(n_nodes, n_walks, walk_len, neigh_list, cdf_list, rng_state):
+    """
+    Sinh random walks từ graph adjacency dùng Numba JIT.
+    Bước tiếp theo được chọn dựa trên edge weight (weighted sampling).
+    
+    Tham số:
+        n_nodes: int
+        n_walks: int — số walk mỗi node
+        walk_len: int — độ dài mỗi walk
+        neigh_list: List[int32[:]] — neighbors mỗi node
+        cdf_list: List[float64[:]] — cumulative distribution
+        rng_state: mảng trạng thái RNG (numba random)
+    
+    Trả về:
+        walks_flat: int32[:] — tất cả walks được flatten
+        walk_lengths: int32[:] — độ dài thực tế của mỗi walk
+    """
+    np.random.seed(rng_state[0])
+    
+    total_steps = n_nodes * n_walks * walk_len
+    walks_flat = np.empty(total_steps, dtype=np.int32)
+    walk_lengths = np.empty(n_nodes * n_walks, dtype=np.int32)
+    
+    out_idx = 0
+    wlk_idx = 0
+    
+    for start_node in range(n_nodes):
+        for _ in range(n_walks):
+            cur = start_node
+            walk_start = out_idx
+            walks_flat[out_idx] = cur
+            out_idx += 1
+            
+            for step in range(1, walk_len):
+                nbs = neigh_list[cur]
+                cdf = cdf_list[cur]
+                if len(nbs) == 0:
+                    break
+                
+                # Weighted sampling: uniform random → binary search on CDF
+                r = np.random.random()
+                # Linear scan (nhanh cho degree nhỏ, vốn có trong graph này)
+                chosen = nbs[-1]  # default to last
+                for k in range(len(cdf)):
+                    if r <= cdf[k]:
+                        chosen = nbs[k]
+                        break
+                
+                cur = chosen
+                walks_flat[out_idx] = cur
+                out_idx += 1
+            
+            walk_lengths[wlk_idx] = out_idx - walk_start
+            wlk_idx += 1
+    
+    # Trim excess
+    walks_flat = walks_flat[:out_idx]
+    return walks_flat, walk_lengths
+
+
+@njit
+def _skipgram_train(walks_flat, walk_lengths, walk_offsets, n_nodes, dim, 
+                     epochs, lr_init, noise, neg_samples):
+    """
+    Skip-gram training với negative sampling dùng Numba JIT.
+    
+    Tham số:
+        walks_flat: int32[:] — flattened walk sequences
+        walk_lengths: int32[:] — độ dài mỗi walk
+        walk_offsets: int32[:] — start index của mỗi walk trong walks_flat
+        n_nodes: int — tổng số nodes
+        dim: int — kích thước embedding
+        epochs: int — số epoch
+        lr_init: float — learning rate ban đầu
+        noise: float64[:] — noise distribution
+        neg_samples: int — số negative samples mỗi positive pair
+    
+    Trả về:
+        W_in: float32[:,:] — center embeddings
+    """
+    n_walks = len(walk_lengths)
+    window = dim // 10  # Context window size
+    
+    # Xavier init
+    W_in = np.random.uniform(-0.5 / dim, 0.5 / dim, (n_nodes, dim)).astype(np.float32)
+    W_out = np.random.uniform(-0.5 / dim, 0.5 / dim, (n_nodes, dim)).astype(np.float32)
+    
+    for epoch in range(epochs):
+        lr = lr_init * (0.95 ** epoch)
+        total_loss = 0.0
+        
+        for w_idx in range(n_walks):
+            start = walk_offsets[w_idx]
+            end = start + walk_lengths[w_idx]
+            
+            for pos in range(start, end):
+                center = walks_flat[pos]
+                
+                # Context window
+                left = max(start, pos - window)
+                right = min(end - 1, pos + window)
+                
+                for ctx_pos in range(left, right + 1):
+                    if ctx_pos == pos:
+                        continue
+                    ctx = walks_flat[ctx_pos]
+                    
+                    # Positive: (center, context)
+                    dot = 0.0
+                    for k in range(dim):
+                        dot += W_in[center, k] * W_out[ctx, k]
+                    sig = 1.0 / (1.0 + math.exp(-dot))
+                    grad = sig - 1.0
+                    total_loss += -math.log(max(sig, 1e-15))
+                    
+                    # Update positive
+                    for k in range(dim):
+                        grad_w_in = lr * grad * W_out[ctx, k]
+                        grad_w_out = lr * grad * W_in[center, k]
+                        W_in[center, k] -= grad_w_in
+                        W_out[ctx, k] -= grad_w_out
+                    
+                    # Negative samples
+                    for _ in range(neg_samples):
+                        neg = np.searchsorted(noise, np.random.random())
+                        if neg == center or neg == ctx:
+                            continue
+                        
+                        dot_n = 0.0
+                        for k in range(dim):
+                            dot_n += W_in[center, k] * W_out[neg, k]
+                        sig_n = 1.0 / (1.0 + math.exp(-dot_n))
+                        grad_n = sig_n
+                        total_loss += -math.log(max(1.0 - sig_n, 1e-15))
+                        
+                        # Update negative
+                        for k in range(dim):
+                            grad_w_in = lr * grad_n * W_out[neg, k]
+                            grad_w_out = lr * grad_n * W_in[center, k]
+                            W_in[center, k] -= grad_w_in
+                            W_out[neg, k] -= grad_w_out
+        
+        print(f"    Epoch {epoch+1}/{epochs} loss={total_loss:.4f}")
+    
+    return W_in
+
+
+def train_node2vec(G, n_products, dim=KG_DIM, walk_len=KG_WALK_LENGTH, 
+                   n_walks=KG_NUM_WALKS, epochs=KG_EPOCHS, neg_samples=5):
+    """
+    Huấn luyện node2vec embeddings với Numba JIT acceleration.
+    
+    Bước 1: Chuyển graph → adjacency arrays
+    Bước 2: Random walks bằng Numba JIT
+    Bước 3: Skip-gram training bằng Numba JIT
     
     Tham số:
         G: nx.Graph — đồ thị đầu vào
-        n_products: int — số lượng product (để tách product embeddings từ node embeddings)
-        dim: int — kích thước embedding vector
-        walk_len: int — độ dài mỗi random walk
+        n_products: int — số lượng product
+        dim: int — kích thước embedding
+        walk_len: int — độ dài mỗi walk
         n_walks: int — số walk mỗi node
-        epochs: int — số epoch huấn luyện skip-gram
-        
+        epochs: int — số epoch
+        neg_samples: int — số negative samples
+    
     Trả về:
-        emb: numpy array (n_products x dim) — embeddings cho mỗi product
+        emb: numpy array (n_products x dim) — product embeddings
     """
-    print(f"  [KG] Training node2vec dim={dim} ...")
-    nodes = list(G.nodes())
+    print(f"  [KG] Training node2vec dim={dim} (Numba JIT) ...")
+    
+    # Bước 1: Chuyển graph sang adjacency arrays
+    print("  [KG]   Converting graph to adjacency lists ...")
+    nodes, n2i, neigh_list, cdf_list = _graph_to_adjacency(G)
     n_nodes = len(nodes)
-    n2i = {n: i for i, n in enumerate(nodes)}  # Node label → index
-
-    # Bước 1: Sinh random walks
-    walks = []
-    for start in tqdm(nodes, desc="  Walks"):
-        for _ in range(n_walks):
-            walk = [start]
-            for _ in range(walk_len - 1):
-                nb = list(G.neighbors(walk[-1]))
-                if not nb:
-                    break
-                # Chọn neighbor theo edge weight (weighted random)
-                w = np.array([G[walk[-1]][n].get("weight", 1.0) for n in nb], dtype=float)
-                w /= w.sum()
-                walk.append(np.random.choice(nb, p=w))
-            # Convert node label → index để huấn luyện
-            walks.append([n2i[n] for n in walk if n in n2i])
-
-    # Bước 2: Khởi tạo embeddings ngẫu nhiên (Xavier init style)
-    W_in = np.random.uniform(-0.5 / dim, 0.5 / dim, (n_nodes, dim)).astype(np.float32)
-    W_out = np.random.uniform(-0.5 / dim, 0.5 / dim, (n_nodes, dim)).astype(np.float32)
-
-    # Bước 3: Noise distribution cho negative sampling (freq^0.75)
-    freq = Counter()
-    for w in walks:
-        for nid in w:
-            freq[nid] += 1
-    noise = np.array([freq[i] ** 0.75 for i in range(n_nodes)], dtype=float)
-    noise /= noise.sum()
-
-    # Bước 4: Huấn luyện skip-gram
-    lr = 0.025  # Learning rate ban đầu
-    for epoch in range(epochs):
-        loss = 0.0
-        for walk in tqdm(walks, desc=f"  Epoch {epoch+1}/{epochs}"):
-            for cpos in range(len(walk)):
-                center = walk[cpos]
-                # Context window: dim//10 là kích thước window
-                left = max(0, cpos - dim // 10)
-                right = min(len(walk), cpos + dim // 10 + 1)
-                for ctx_pos in range(left, right):
-                    if ctx_pos == cpos:
-                        continue
-                    ctx = walk[ctx_pos]
-                    
-                    # Positive sample: (center, context) → sigmoid dot product
-                    dot = np.dot(W_in[center], W_out[ctx])
-                    sig = 1.0 / (1.0 + np.exp(-dot))
-                    grad = sig - 1.0  # Gradient cho positive
-                    
-                    # Update embeddings
-                    W_in[center] -= lr * grad * W_out[ctx]
-                    W_out[ctx] -= lr * grad * W_in[center]
-                    loss += -np.log(max(sig, 1e-15))
-                    
-                    # Negative samples: 5 node ngẫu nhiên không phải center/context
-                    negs = np.random.choice(n_nodes, size=5, p=noise, replace=False)
-                    for neg in negs:
-                        if neg == center or neg == ctx:
-                            continue
-                        dot_n = np.dot(W_in[center], W_out[neg])
-                        sig_n = 1.0 / (1.0 + np.exp(-dot_n))
-                        grad_n = sig_n  # Gradient cho negative
-                        
-                        W_in[center] -= lr * grad_n * W_out[neg]
-                        W_out[neg] -= lr * grad_n * W_in[center]
-                        loss += -np.log(max(1.0 - sig_n, 1e-15))
-        lr *= 0.95  # Giảm learning rate sau mỗi epoch
-        print(f"    loss={loss:.4f}")
-
-    # Bước 5: Trích xuất product embeddings (bỏ department nodes)
+    
+    # Bước 2: Random walks
+    print(f"  [KG]   Generating random walks ({n_nodes:,} nodes × {n_walks} walks × {walk_len} steps) ...")
+    rng_state = np.array([np.random.randint(0, 2**31)], dtype=np.int64)
+    walks_flat, walk_lengths = _random_walks_jit(
+        n_nodes, n_walks, walk_len, neigh_list, cdf_list, rng_state
+    )
+    
+    # Precompute walk offsets
+    n_total_walks = len(walk_lengths)
+    walk_offsets = np.empty(n_total_walks + 1, dtype=np.int32)
+    walk_offsets[0] = 0
+    for i in range(n_total_walks):
+        walk_offsets[i + 1] = walk_offsets[i] + walk_lengths[i]
+    
+    print(f"  [KG]   {n_total_walks:,} walks, total steps: {walk_offsets[-1]:,}")
+    
+    # Bước 3: Compute noise distribution
+    freq = np.zeros(n_nodes, dtype=np.float64)
+    for w_idx in range(n_total_walks):
+        s = walk_offsets[w_idx]
+        e = walk_offsets[w_idx + 1]
+        for p in range(s, e):
+            freq[walks_flat[p]] += 1.0
+    noise = freq ** 0.75
+    noise_sum = noise.sum()
+    if noise_sum > 0:
+        noise /= noise_sum
+    # Convert noise to CDF for binary search in JIT
+    noise_cdf = np.cumsum(noise)
+    
+    # Bước 4: Skip-gram training (Numba JIT)
+    print(f"  [KG]   Training skip-gram ({epochs} epoch(s)) ...")
+    W_in = _skipgram_train(
+        walks_flat, walk_lengths, walk_offsets, n_nodes, dim,
+        epochs, 0.025, noise_cdf, neg_samples
+    )
+    
+    # Bước 5: Trích xuất product embeddings
     emb = np.zeros((n_products, dim), dtype=np.float32)
     for pid in range(n_products):
         label = f"p{pid}"
         if label in n2i:
             emb[pid] = W_in[n2i[label]].astype(np.float32)
-
-    del walks, n2i, W_in, W_out; gc.collect()
+    
+    del walks_flat, walk_lengths, walk_offsets, W_in
+    gc.collect()
     return emb
+
 
 def compute_similarity(emb, top_k=100, chunk=1000):
     """
@@ -213,15 +383,18 @@ def compute_similarity(emb, top_k=100, chunk=1000):
     del sim; gc.collect()
     return csr
 
+
 def save(emb, sim):
     """Lưu embeddings và similarity matrix"""
     np.save(EMB_FILE, emb)
     save_npz(SIM_FILE, sim)
     print(f"  [KG] Saved: {EMB_FILE}, {SIM_FILE}")
 
+
 def load():
     """Tải embeddings và similarity matrix"""
     return np.load(EMB_FILE), load_npz(SIM_FILE)
+
 
 if __name__ == "__main__":
     import sys
