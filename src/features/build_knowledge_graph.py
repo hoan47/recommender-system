@@ -260,7 +260,9 @@ def _skipgram_train(walks_flat, walk_lengths, walk_offsets, n_nodes, dim,
                             W_in[center, k] -= grad_w_in
                             W_out[neg, k] -= grad_w_out
         
-        print("    Epoch %d/%d loss=%.4f" % (epoch + 1, epochs, total_loss))
+        # Làm tròn thủ công vì Numba không hỗ trợ string formatting
+        loss_str = int(total_loss * 10000) / 10000
+        print("    Epoch", epoch + 1, "/", epochs, "loss=", loss_str)
     
     return W_in
 
