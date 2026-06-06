@@ -15,7 +15,9 @@ Trong đó:
 SPMI > 0 nghĩa là A và B có mối quan hệ mua kèm thực sự.
 Chỉ giữ top-K mỗi dòng để giảm dung lượng ma trận.
 """
-
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import gc
 import math
 import numpy as np

@@ -14,7 +14,9 @@ Sau đó dùng node2vec (random walks + skip-gram negative sampling)
 để học product embeddings. Cuối cùng tính cosine similarity giữa
 các product embeddings để tìm sản phẩm liên quan qua đồ thị.
 """
-
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import gc
 import numpy as np
 import networkx as nx

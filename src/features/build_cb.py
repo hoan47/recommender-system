@@ -6,7 +6,9 @@ KHÔNG phải model gợi ý chính. Output là dict{pid: dict{vocab_idx: tfidf_
 Khi cần tính similarity giữa 2 sản phẩm, chỉ cần dot product giữa 2 dict
 (key chung nhau). Không cần ma trận sparse 50Kx50K tốn RAM.
 """
-
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import re
 import math
 import gc

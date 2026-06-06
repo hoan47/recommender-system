@@ -14,7 +14,9 @@ SPMI và KG đều tìm complementary (mua kèm) nhưng theo cách khác nhau.
 CB filter bỏ đi các substitute (sản phẩm thay thế) vì không nên recommend
 sản phẩm quá giống với sản phẩm đang xem.
 """
-
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import gc
 import numpy as np
 from scipy.sparse import load_npz, save_npz, csr_matrix, lil_matrix

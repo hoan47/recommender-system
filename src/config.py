@@ -28,7 +28,7 @@ TOP_K = 100
 
 # ===== SPMI (Collaborative Filtering) =====
 # SPMI_K: Threshold shift cho SPMI (càng cao càng loại bỏ nhiều edges yếu)
-SPMI_K = 3
+SPMI_K = 10
 # TOTAL_PRIOR_ORDERS: Tổng số đơn hàng trong prior (dùng cho công thức PMI)
 TOTAL_PRIOR_ORDERS = 3214874
 # SPMI_TOP_K: Chỉ giữ K sản phẩm mua kèm mạnh nhất mỗi sản phẩm
