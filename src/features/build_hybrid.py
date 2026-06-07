@@ -94,19 +94,25 @@ def build_cb_similarity(cb_feat, top_k=100, chunk=2000):
         chunk_sim = cb_feat[start:end].dot(cb_feat.T)
         
         for i_local, row_idx in enumerate(range(start, end)):
-            row = np.asarray(chunk_sim[i_local]).ravel()
-            row[row_idx] = 0  # Bỏ self-similarity
-            
-            if top_k < n and row.size > top_k:
-                idx = np.argpartition(row, -top_k)[-top_k:]
-                vals = row[idx]
-                mask = vals > 0
-                if mask.any():
-                    sim[row_idx, idx[mask]] = vals[mask].astype(np.float32)
+            # Hạn chế: chunk_sim là sparse (ix × n) từ csr @ csr.T
+            # Dùng .toarray() → dense để dùng argpartition
+            row_dense = chunk_sim[i_local].toarray().ravel()
+            row_dense[row_idx] = 0  # Bỏ self-similarity
+            if row_dense.size == 0:
+                continue
+
+            if top_k < n and row_dense.size > top_k:
+                idx = np.argpartition(row_dense, -top_k)[-top_k:]
+                vals = row_dense[idx]
             else:
-                mask = row > 0
-                if mask.any():
-                    sim[row_idx, mask] = row[mask].astype(np.float32)
+                idx = np.arange(row_dense.size, dtype=np.int32)
+                vals = row_dense
+
+            # Lọc positive values
+            pos = vals > 0
+            pos_idx = idx[pos] if idx.dtype == np.int32 else idx[pos]
+            if np.any(pos):
+                sim[row_idx, pos_idx] = vals[pos].astype(np.float32)
     
     csr = sim.tocsr()
     del sim; gc.collect()
