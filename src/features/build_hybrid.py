@@ -94,12 +94,10 @@ def build_cb_similarity(cb_feat, top_k=100, chunk=2000):
         chunk_sim = cb_feat[start:end].dot(cb_feat.T)
         
         for i_local, row_idx in enumerate(range(start, end)):
-            row = chunk_sim[i_local]
-            if isinstance(row, np.matrix):
-                row = np.asarray(row).ravel()
+            row = np.asarray(chunk_sim[i_local]).ravel()
             row[row_idx] = 0  # Bỏ self-similarity
             
-            if top_k < n:
+            if top_k < n and row.size > top_k:
                 idx = np.argpartition(row, -top_k)[-top_k:]
                 vals = row[idx]
                 mask = vals > 0
