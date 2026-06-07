@@ -26,6 +26,7 @@ recommender-system/
 │       └── evaluate.py           # Đánh giá models (CB, SPMI, KG, Hybrid)
 ├── models/                       # Output models (đã .gitignore)
 ├── results/                      # Kết quả evaluation (đã .gitignore)
+├── english_stopwords.txt     # Danh sách stopword tiếng Anh (dùng cho CB)
 ├── requirements.txt
 └── .gitignore
 ```

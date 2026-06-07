@@ -24,7 +24,7 @@ CB_MAX_DF = 0.8
 # CB_MAX_FEATURES: Số lượng term tối đa trong vocabulary (kiểm soát bộ nhớ)
 CB_MAX_FEATURES = 10000
 # CB_STOPWORDS_PATH: Đường dẫn file stopword tiếng Anh (1 từ/dòng, có thể trùng)
-CB_STOPWORDS_PATH = PROJECT_ROOT / "src" / "english_stopwords.txt"
+CB_STOPWORDS_PATH = PROJECT_ROOT / "english_stopwords.txt"
 # TOP_K: Chỉ giữ K sản phẩm tương tự nhất mỗi dòng trong ma trận similarity
 TOP_K = 100
 
