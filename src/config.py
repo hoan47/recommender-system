@@ -26,7 +26,14 @@ CB_MAX_FEATURES = 10000
 # TOP_K: Chỉ giữ K sản phẩm tương tự nhất mỗi dòng trong ma trận similarity
 TOP_K = 100
 
-# ===== SPMI (Collaborative Filtering) =====
+# ===== Confidence (Item-based Collaborative Filtering) =====
+# CONF_FREQ_MIN: Sản phẩm phải xuất hiện trong ít nhất N đơn mới được recommend
+# Loại bỏ nhiễu từ sản phẩm quá hiếm (ví dụ: 2-5 đơn)
+CONF_FREQ_MIN = 30
+# CONF_TOP_K: Chỉ giữ K sản phẩm mua kèm mạnh nhất mỗi sản phẩm
+CONF_TOP_K = 100
+
+# ===== SPMI (Collaborative Filtering, deprecated) =====
 # SPMI_K: Threshold shift cho SPMI (càng cao càng loại bỏ nhiều edges yếu)
 SPMI_K = 10
 # TOTAL_PRIOR_ORDERS: Tổng số đơn hàng trong prior (dùng cho công thức PMI)

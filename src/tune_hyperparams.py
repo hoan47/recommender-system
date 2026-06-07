@@ -3,7 +3,7 @@ Tune hyperparameters — Grid search tự động 4 phase
 
 Quy trình:
   Phase 0: CB (Content-Based) — tune CB_MIN_DF, CB_MAX_DF, CB_MAX_FEATURES
-  Phase 1: SPMI (Collaborative) — tune SPMI_K, SPMI_TOP_K (dùng co-occurrence cache)
+  Phase 1: Confidence (Collab) — tune CONF_FREQ_MIN, CONF_TOP_K (dùng co-occurrence cache)
   Phase 2: KG (Knowledge Graph) — tune KG_DIM, KG_WALK_LENGTH, KG_NUM_WALKS, KG_EPOCHS
   Phase 3: Hybrid — tune HYBRID_ALPHA, HYBRID_BETA, HYBRID_CB_THRESH
 
@@ -11,10 +11,10 @@ Mỗi tổ hợp: build model → evaluate → snapshot kết quả.
 Chọn best params dựa trên recall@10 (hoặc metric khác).
 
 Output lưu tại: results/tune_results/
-  phase0_cb/     — snapshots + best_params.json
-  phase1_spmi/   — snapshots + best_params.json
-  phase2_kg/     — snapshots + best_params.json
-  phase3_hybrid/ — snapshots + best_params.json
+  phase0_cb/          — snapshots + best_params.json
+  phase1_confidence/  — snapshots + best_params.json
+  phase2_kg/          — snapshots + best_params.json
+  phase3_hybrid/      — snapshots + best_params.json
   final_best_params.json  — tổng hợp best toàn cục
 """
 import sys
@@ -32,6 +32,7 @@ from tqdm import tqdm
 from src.config import (
     MODELS_DIR, RESULTS_DIR, EVAL_KS,
     CB_MIN_DF, CB_MAX_DF, CB_MAX_FEATURES, TOP_K,
+    CONF_FREQ_MIN, CONF_TOP_K,
     SPMI_K, TOTAL_PRIOR_ORDERS, SPMI_TOP_K,
     KG_DIM, KG_WALK_LENGTH, KG_NUM_WALKS, KG_EPOCHS,
     HYBRID_ALPHA, HYBRID_BETA, HYBRID_CB_THRESH,
@@ -46,9 +47,9 @@ def _import_build_cb():
     from src.features import build_cb
     return build_cb
 
-def _import_build_spmi():
-    from src.features import build_spmi
-    return build_spmi
+def _import_build_confidence():
+    from src.features import build_spmi  # dùng lại build_cooc từ đây
+    return build_confidence
 
 def _import_build_kg():
     from src.features import build_knowledge_graph as kg
@@ -65,7 +66,7 @@ from src.evaluation.evaluate import evaluate_model
 # ============================================================
 TUNE_DIR = RESULTS_DIR / "tune_results"
 PHASE0_DIR = TUNE_DIR / "phase0_cb"
-PHASE1_DIR = TUNE_DIR / "phase1_spmi"
+PHASE1_DIR = TUNE_DIR / "phase1_confidence"
 PHASE2_DIR = TUNE_DIR / "phase2_kg"
 PHASE3_DIR = TUNE_DIR / "phase3_hybrid"
 
@@ -233,20 +234,20 @@ def tune_cb(products_df, prior_df, train_df):
 
 
 # ============================================================
-# PHASE 1: SPMI (Collaborative Filtering)
+# PHASE 1: Confidence (Item-based Collaborative Filtering)
 # ============================================================
 
-def tune_spmi(prior_df, train_df):
+def tune_confidence(prior_df, train_df):
     """
-    Grid search SPMI params:
-      SPMI_K ∈ [3, 5, 7, 10, 15, 20]
-      SPMI_TOP_K ∈ [50, 100, 200]
+    Grid search Confidence params:
+      CONF_FREQ_MIN ∈ [10, 30, 50, 100]
+      CONF_TOP_K ∈ [50, 100, 200]
     """
     print("\n" + "=" * 60)
-    print("  PHASE 1: Tuning SPMI")
+    print("  PHASE 1: Tuning Confidence (Item-based CF)")
     print("=" * 60)
 
-    grid_k = [3, 5, 7, 10, 15, 20]
+    grid_freq_min = [10, 30, 50, 100]
     grid_topk = [50, 100, 200]
 
     # Build co-occurrence chỉ 1 lần (tốn thời gian nhất)
@@ -258,63 +259,63 @@ def tune_spmi(prior_df, train_df):
     best_params = None
     best_metrics = None
 
-    total = len(grid_k) * len(grid_topk)
+    total = len(grid_freq_min) * len(grid_topk)
     current = 0
 
-    for k in grid_k:
+    for freq_min in grid_freq_min:
         for topk in grid_topk:
             current += 1
             params = {
-                "SPMI_K": k,
-                "SPMI_TOP_K": topk,
+                "CONF_FREQ_MIN": freq_min,
+                "CONF_TOP_K": topk,
             }
-            print(f"\n  --- [{current}/{total}] SPMI: k={k}, top_k={topk} ---")
+            print(f"\n  --- [{current}/{total}] Confidence: freq_min={freq_min}, top_k={topk} ---")
             t0 = time.time()
 
             # Override config
             import src.config as cfg
-            cfg.SPMI_K = k
-            cfg.SPMI_TOP_K = topk
+            cfg.CONF_FREQ_MIN = freq_min
+            cfg.CONF_TOP_K = topk
 
-            # Build SPMI matrix
-            from src.features.build_spmi import build_spmi
-            spmi = build_spmi(cooc, freq, k=k, top_k=topk)
+            # Build Confidence matrix
+            from src.features.build_confidence import build_confidence
+            conf = build_confidence(cooc, freq, freq_min=freq_min, top_k=topk)
 
             # Evaluate
-            metrics = evaluate_model(spmi, train_df, name=f"SPMI(k={k})", ks=EVAL_KS)
+            metrics = evaluate_model(conf, train_df, name=f"Conf(freq_min={freq_min})", ks=EVAL_KS)
             elapsed = time.time() - t0
 
-            combined_metrics = {"SPMI": metrics}
-            save_snapshot(PHASE1_DIR, "spmi", params, combined_metrics, elapsed)
+            combined_metrics = {"Confidence": metrics}
+            save_snapshot(PHASE1_DIR, "confidence", params, combined_metrics, elapsed)
 
             metric_val = extract_metric(metrics)
             if metric_val > best_metric_val:
                 best_metric_val = metric_val
                 best_params = params.copy()
                 best_metrics = combined_metrics
-                spmi_file = PHASE1_DIR / "spmi_matrix_best.npz"
-                save_npz(spmi_file, spmi)
+                conf_file = PHASE1_DIR / "confidence_matrix_best.npz"
+                save_npz(conf_file, conf)
 
-            del spmi; gc.collect()
+            del conf; gc.collect()
 
     del cooc, freq; gc.collect()
 
     if best_params:
-        save_best(PHASE1_DIR, best_params, best_metrics, PHASE1_DIR / "spmi_matrix_best.npz")
+        save_best(PHASE1_DIR, best_params, best_metrics, PHASE1_DIR / "confidence_matrix_best.npz")
         import shutil
-        shutil.copy(PHASE1_DIR / "spmi_matrix_best.npz", MODELS_DIR / "spmi_matrix.npz")
+        shutil.copy(PHASE1_DIR / "confidence_matrix_best.npz", MODELS_DIR / "confidence_matrix.npz")
         print(f"\n  [Tune] Phase 1 done. Best: {best_params}")
     else:
-        print("\n  [Tune] Phase 1: No valid SPMI params found!")
+        print("\n  [Tune] Phase 1: No valid Confidence params found!")
 
-    return load_npz(MODELS_DIR / "spmi_matrix.npz")
+    return load_npz(MODELS_DIR / "confidence_matrix.npz")
 
 
 # ============================================================
 # PHASE 2: Knowledge Graph (KG)
 # ============================================================
 
-def tune_kg(spmi, products_df, prior_df, train_df):
+def tune_kg(confidence, products_df, prior_df, train_df):
     """
     Grid search KG params:
       KG_DIM ∈ [32, 64]
@@ -331,10 +332,10 @@ def tune_kg(spmi, products_df, prior_df, train_df):
     grid_nwalks = [30, 50]
     grid_epochs = [1, 3]
 
-    # Build graph chỉ 1 lần (dùng SPMI best)
+    # Build graph chỉ 1 lần (dùng Confidence best)
     print("\n  [Tune] Building graph (once)...")
     from src.features.build_knowledge_graph import build_graph
-    G = build_graph(spmi, products_df)
+    G = build_graph(confidence, products_df)
 
     best_metric_val = -1.0
     best_params = None
@@ -367,7 +368,7 @@ def tune_kg(spmi, products_df, prior_df, train_df):
 
                     # Train node2vec
                     from src.features.build_knowledge_graph import train_node2vec, compute_similarity
-                    n_products = max(spmi.shape[0], int(prior_df["product_id"].max()) + 1)
+                    n_products = max(confidence.shape[0], int(prior_df["product_id"].max()) + 1)
                     emb = train_node2vec(G, n_products, dim=dim, walk_len=walk_len,
                                          n_walks=n_walks, epochs=epochs)
                     # Compute similarity
@@ -408,7 +409,7 @@ def tune_kg(spmi, products_df, prior_df, train_df):
 # PHASE 3: Hybrid
 # ============================================================
 
-def tune_hybrid(spmi, kg_sim, cb_vectors, train_df):
+def tune_hybrid(confidence, kg_sim, cb_vectors, train_df):
     """
     Grid search Hybrid params:
       HYBRID_ALPHA ∈ [0.0, 0.1, 0.2, 0.3, 0.5]
@@ -453,7 +454,7 @@ def tune_hybrid(spmi, kg_sim, cb_vectors, train_df):
 
                 # Build Hybrid matrix
                 from src.features.build_hybrid import build_hybrid
-                hybrid = build_hybrid(spmi, kg_sim, cb_vectors,
+                hybrid = build_hybrid(confidence, kg_sim, cb_vectors,
                                       alpha=alpha, beta=beta, cb_thresh=cb_thresh)
 
                 # Evaluate (chỉ Hybrid)
@@ -491,7 +492,7 @@ def save_final_best():
     final = {}
     for phase_dir, phase_name in [
         (PHASE0_DIR, "CB"),
-        (PHASE1_DIR, "SPMI"),
+        (PHASE1_DIR, "Confidence"),
         (PHASE2_DIR, "KG"),
         (PHASE3_DIR, "Hybrid"),
     ]:
@@ -533,14 +534,14 @@ def main():
     # === Phase 0: CB ===
     cb_vec = tune_cb(products_df, prior_df, train_df)
 
-    # === Phase 1: SPMI ===
-    spmi = tune_spmi(prior_df, train_df)
+    # === Phase 1: Confidence ===
+    confidence = tune_confidence(prior_df, train_df)
 
     # === Phase 2: KG ===
-    kg_sim = tune_kg(spmi, products_df, prior_df, train_df)
+    kg_sim = tune_kg(confidence, products_df, prior_df, train_df)
 
     # === Phase 3: Hybrid ===
-    tune_hybrid(spmi, kg_sim, cb_vec, train_df)
+    tune_hybrid(confidence, kg_sim, cb_vec, train_df)
 
     # === Final ===
     save_final_best()

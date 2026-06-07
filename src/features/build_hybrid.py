@@ -25,6 +25,8 @@ from src.config import HYBRID_ALPHA, HYBRID_BETA, HYBRID_CB_THRESH
 
 # File lưu hybrid matrix
 HYBRID_FILE = MODELS_DIR / "hybrid_matrix.npz"
+CONF_FILE = MODELS_DIR / "confidence_matrix.npz"
+SPMI_FILE = MODELS_DIR / "spmi_matrix.npz"
 
 
 def build_cb_sparse(cb_vectors, n_products):
@@ -120,22 +122,22 @@ def build_cb_similarity(cb_feat, top_k=100, chunk=2000):
     return csr
 
 
-def build_hybrid(spmi, kg_sim, cb_vectors, alpha=HYBRID_ALPHA, beta=HYBRID_BETA, cb_thresh=HYBRID_CB_THRESH):
+def build_hybrid(confidence, kg_sim, cb_vectors, alpha=HYBRID_ALPHA, beta=HYBRID_BETA, cb_thresh=HYBRID_CB_THRESH):
     """
-    Kết hợp SPMI và KG thành hybrid score, loại substitute bằng CB filter.
+    Kết hợp Confidence và KG thành hybrid score, loại substitute bằng CB filter.
     
     Quy trình:
-        1. Normalize SPMI về [0, 1]
-        2. Compute combined scores: α * SPMI_norm + β * KG_sim (sparse addition)
+        1. Normalize Confidence về [0, 1]
+        2. Compute combined scores: α * Conf_norm + β * KG_sim (sparse addition)
         3. Precompute CB similarity matrix sparse từ cb_vectors
         4. Với mỗi dòng, zero-out entries có CB similarity > threshold
         5. Giữ top scoring entries
     
     Tham số:
-        spmi: csr_matrix — ma trận SPMI từ build_spmi
+        confidence: csr_matrix — ma trận Confidence từ build_confidence
         kg_sim: csr_matrix — ma trận KG similarity từ build_knowledge_graph
         cb_vectors: dict — CB vectors từ build_cb
-        alpha: float — trọng số SPMI
+        alpha: float — trọng số Confidence
         beta: float — trọng số KG
         cb_thresh: float — ngưỡng CB filter (mặc định: 0.8)
         
@@ -143,19 +145,19 @@ def build_hybrid(spmi, kg_sim, cb_vectors, alpha=HYBRID_ALPHA, beta=HYBRID_BETA,
         csr_matrix (n_products x n_products) — ma trận hybrid score
     """
     print(f"\n  [Hybrid] α={alpha}, β={beta}, cb_thresh={cb_thresh} ...")
-    n = spmi.shape[0]
+    n = confidence.shape[0]
     
-    # Bước 1: Normalize SPMI về [0, 1]
-    spmi_data = spmi.data.copy()
-    max_s = spmi_data.max()
+    # Bước 1: Normalize Confidence về [0, 1]
+    conf_data = confidence.data.copy()
+    max_s = conf_data.max()
     if max_s > 0:
-        spmi_data /= max_s
-    spmi_norm = csr_matrix((spmi_data, spmi.indices, spmi.indptr), shape=spmi.shape)
+        conf_data /= max_s
+    conf_norm = csr_matrix((conf_data, confidence.indices, confidence.indptr), shape=confidence.shape)
     
-    # Bước 2: Combine SPMI + KG (sparse addition với trọng số)
-    print("  [Hybrid] Combining SPMI + KG scores ...")
-    combined = alpha * spmi_norm + beta * kg_sim
-    del spmi_norm
+    # Bước 2: Combine Confidence + KG (sparse addition với trọng số)
+    print("  [Hybrid] Combining Confidence + KG scores ...")
+    combined = alpha * conf_norm + beta * kg_sim
+    del conf_norm
     gc.collect()
     print(f"  [Hybrid] Combined: {combined.nnz:,} entries")
     
@@ -234,11 +236,17 @@ if __name__ == "__main__":
     sys.path.insert(0, str(MODELS_DIR.parent))
     from src.features.build_cb import load as load_cb
     
-    # Tải SPMI, KG, CB từ các bước trước
-    spmi = load_npz(MODELS_DIR / "spmi_matrix.npz")
+    # Ưu tiên Confidence matrix, fallback về SPMI
+    try:
+        confidence = load_npz(CONF_FILE)
+        print("  [Hybrid] Loaded Confidence matrix")
+    except FileNotFoundError:
+        confidence = load_npz(SPMI_FILE)
+        print("  [Hybrid] Confidence not found, using SPMI as fallback")
+    
     kg_sim = load_npz(MODELS_DIR / "kg_similarity.npz")
     load_cb()  # Nạp cb_vectors vào bộ nhớ
     
     from src.features.build_cb import cb_vectors
-    h = build_hybrid(spmi, kg_sim, cb_vectors)
+    h = build_hybrid(confidence, kg_sim, cb_vectors)
     save(h)

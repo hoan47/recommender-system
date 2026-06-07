@@ -18,9 +18,10 @@ recommender-system/
 │   ├── tune_hyperparams.py       # Grid search tự động 4 phase
 │   ├── features/
 │   │   ├── build_cb.py           # Content-Based (standalone + substitute filter)
-│   │   ├── build_spmi.py         # SPMI (collaborative filtering)
+│   │   ├── build_spmi.py         # SPMI (DEPRECATED — giữ lại cho compat)
+│   │   ├── build_confidence.py   # Confidence (Item-based CF) — THAY THẾ SPMI
 │   │   ├── build_knowledge_graph.py  # Knowledge Graph (node2vec)
-│   │   └── build_hybrid.py       # Hybrid: SPMI + KG, filter CB
+│   │   └── build_hybrid.py       # Hybrid: Confidence + KG, filter CB
 │   └── evaluation/
 │       └── evaluate.py           # Đánh giá models (CB, SPMI, KG, Hybrid)
 ├── models/                       # Output models (đã .gitignore)
@@ -34,10 +35,35 @@ recommender-system/
 | Model | File | Mục đích |
 |-------|------|----------|
 | CB | `build_cb.py` | TF-IDF dict-based, tìm sản phẩm tương tự (substitute), có thể dùng standalone hoặc làm bộ lọc |
-| SPMI | `build_spmi.py` | Co-occurrence → SPMI, tìm sản phẩm mua kèm (complementary) |
+| **Confidence** | **`build_confidence.py`** | **Co-occurrence → Confidence (Item-based CF), tìm sản phẩm mua kèm (complementary). THAY THẾ SPMI** |
+| SPMI | `build_spmi.py` | Giữ lại cho backward compatibility |
 | KG | `build_knowledge_graph.py` | Graph + node2vec, tìm sản phẩm liên quan qua đồ thị |
-| Hybrid | `build_hybrid.py` | α*SPMI + β*KG, filter bằng CB |
-| Tuning | `tune_hyperparams.py` | Grid search tự động 4 phase (CB → SPMI → KG → Hybrid) |
+| Hybrid | `build_hybrid.py` | α*Confidence + β*KG, filter bằng CB |
+| Tuning | `tune_hyperparams.py` | Grid search tự động 4 phase (CB → Confidence → KG → Hybrid) |
+
+### Confidence — thuật toán mới thay SPMI
+
+**Công thức:**
+```
+Confidence(A → B) = cooc(A,B) / freq(A)
+```
+Đọc: "Nếu mua A, xác suất cũng mua B là bao nhiêu %"
+
+**Tại sao thay SPMI?**
+- SPMI dùng `max(PMI - log(k), 0)` với threshold toàn cục → loại bỏ cặp phổ biến có PMI thấp (Burger+Khoai tây), giữ cặp hiếm ảo (Phô mai+Truffle chỉ 2 đơn chung)
+- Confidence dùng % thực tế, không threshold, không log, không shift
+- Chỉ recommend từ sản phẩm có freq(A) ≥ FREQ_MIN (mặc định 30) — loại nhiễu từ sản phẩm quá hiếm
+- Ma trận KHÔNG đối xứng: Confidence(A→B) ≠ Confidence(B→A)
+
+Ví dụ với Confidence:
+| A | B | cooc | freq(A) | Confidence | Nhận xét |
+|---|----|:---:|:-------:|:----------:|----------|
+| Burger | Khoai tây | 8,000 | 20,000 | **40%** | Mua kèm mạnh |
+| Cơm | Gà rán | 15,000 | 60,000 | **25%** | Mua kèm trung bình |
+| Gà rán | Cơm | 15,000 | 20,000 | **75%** | Rất mạnh (ngược chiều) |
+| Tương cà | Khoai tây chiên | 5,000 | 8,000 | **62.5%** | Rất mạnh |
+| Phô mai ý | Sốt truffle | 2 | 5 | 40% → **KHÔNG recommend** | freq=5 < 30 |
+| Dầu ăn | Nồi cơm điện | 40 | 35,000 | **0.11%** | Rất thấp → không recommend |
 
 ## Cấu hình Hybrid
 
@@ -45,36 +71,32 @@ Các tham số Hybrid được định nghĩa trong `src/config.py`:
 
 | Tham số | Giá trị | Giải thích |
 |---------|---------|------------|
-| `HYBRID_ALPHA` | 0.2 | Trọng số SPMI (thấp vì SPMI recall chỉ ~1-4%) |
-| `HYBRID_BETA` | 0.8 | Trọng số KG (cao vì KG recall ~11-25%) |
+| `HYBRID_ALPHA` | 0.2 | Trọng số Confidence (thay SPMI) |
+| `HYBRID_BETA` | 0.8 | Trọng số KG |
 | `HYBRID_CB_THRESH` | 1.0 | Tạm tắt CB filter (sẽ tinh chỉnh sau) |
+
+### Tham số Confidence
+
+| Tham số | Giá trị | Giải thích |
+|---------|---------|------------|
+| `CONF_FREQ_MIN` | 30 | Chỉ recommend từ sản phẩm có ≥30 đơn |
+| `CONF_TOP_K` | 100 | Giữ tối đa 100 gợi ý mỗi sản phẩm |
 
 ## Lưu ý Evaluation
 
 Dataset Instacart public **KHÔNG cung cấp ground truth** cho test set (75K orders).
 Do đó evaluation chạy trên **train set** (131K orders) với giao thức leave-one-out.
 
-### Kết quả metrics hiện tại
-
-| Model | recall@5 | recall@10 | recall@20 | ndcg@5 | ndcg@10 | ndcg@20 | map@5 | map@10 | map@20 |
-|-------|----------|-----------|-----------|--------|---------|---------|-------|--------|--------|
-| CB | — | — | — | — | — | — | — | — | — |
-| SPMI | 1.38% | 2.43% | 3.89% | 0.34% | 0.36% | 0.41% | 0.18% | 0.14% | 0.12% |
-| KG | 10.90% | 16.87% | 25.23% | 2.72% | 2.51% | 2.60% | 1.43% | 0.96% | 0.78% |
-| Hybrid | **11.03%** | **16.97%** | **25.20%** | **2.80%** | **2.58%** | **2.67%** | **1.49%** | **1.01%** | **0.83%** |
-
-> **Ghi chú:** Hybrid dùng α=0.2 (SPMI) + β=0.8 (KG), CB filter tạm tắt (threshold=1.0).
-> CB chưa có kết quả — sẽ được cập nhật sau khi chạy tune_hyperparams.py.
-> Metrics có thể được cải thiện sau khi tune.
+> **Lưu ý:** Metrics cũ của SPMI (1-4% recall) không còn áp dụng. Cần chạy lại evaluation với Confidence để có số liệu mới.
 
 ## Chạy
 
-### Build & đánh giá thủ công
+### Build & đánh giá thủ công — Thứ tự mới
 
 ```bash
 # 1. Build từng model theo thứ tự
 python src/features/build_cb.py
-python src/features/build_spmi.py
+python src/features/build_confidence.py    # <-- SPMI --> Confidence
 python src/features/build_knowledge_graph.py
 python src/features/build_hybrid.py
 
@@ -88,13 +110,13 @@ python src/recommend.py
 ### Tune hyperparameters tự động
 
 ```bash
-# Grid search 4 phase: CB → SPMI → KG → Hybrid
+# Grid search 4 phase: CB → Confidence → KG → Hybrid
 python src/tune_hyperparams.py
 ```
 
 Kết quả tune lưu tại `results/tune_results/`:
 - `phase0_cb/` — snapshots từng tổ hợp CB params + best_params.json
-- `phase1_spmi/` — snapshots từng tổ hợp SPMI params + best_params.json
+- `phase1_confidence/` — snapshots từng tổ hợp Confidence params + best_params.json
 - `phase2_kg/` — snapshots từng tổ hợp KG params + best_params.json
 - `phase3_hybrid/` — snapshots từng tổ hợp Hybrid params + best_params.json
 - `final_best_params.json` — tổng hợp best params toàn cục
@@ -104,8 +126,9 @@ Kết quả tune lưu tại `results/tune_results/`:
 | Phase | Model | Tham số tune | Grid size |
 |-------|-------|-------------|:---------:|
 | 0 | CB | CB_MIN_DF, CB_MAX_DF, CB_MAX_FEATURES | 27 |
-| 1 | SPMI | SPMI_K, SPMI_TOP_K | 12 |
+| 1 | **Confidence** | CONF_FREQ_MIN, CONF_TOP_K | **12** |
 | 2 | KG | KG_DIM, KG_WALK_LENGTH, KG_NUM_WALKS, KG_EPOCHS | 24 |
 | 3 | Hybrid | HYBRID_ALPHA, HYBRID_BETA, HYBRID_CB_THRESH | ~40 |
 
 > **Lưu ý:** Phase 2 (KG) là chậm nhất do phải train node2vec. Tổng thời gian có thể >24h nếu chạy full grid.
+> Phase 1 (Confidence) nhanh hơn SPMI vì không cần loop Numba JIT lần 2.

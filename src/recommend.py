@@ -29,11 +29,14 @@ def recommend(pid, top_k=10):
     Trả về:
         list[int] — danh sách product_id gợi ý
     """
-    # Ưu tiên Hybrid matrix, fallback về SPMI
+    # Ưu tiên Hybrid matrix, fallback về Confidence, rồi SPMI
     try:
         matrix = load_npz(MODELS_DIR / "hybrid_matrix.npz")
-    except:
-        matrix = load_npz(MODELS_DIR / "spmi_matrix.npz")
+    except FileNotFoundError:
+        try:
+            matrix = load_npz(MODELS_DIR / "confidence_matrix.npz")
+        except FileNotFoundError:
+            matrix = load_npz(MODELS_DIR / "spmi_matrix.npz")
 
     row = matrix[pid]
     if row.nnz == 0:
@@ -57,8 +60,11 @@ def recommend_with_scores(pid, top_k=10):
     """
     try:
         matrix = load_npz(MODELS_DIR / "hybrid_matrix.npz")
-    except:
-        matrix = load_npz(MODELS_DIR / "spmi_matrix.npz")
+    except FileNotFoundError:
+        try:
+            matrix = load_npz(MODELS_DIR / "confidence_matrix.npz")
+        except FileNotFoundError:
+            matrix = load_npz(MODELS_DIR / "spmi_matrix.npz")
 
     row = matrix[pid]
     if row.nnz == 0:
