@@ -239,14 +239,14 @@ def tune_cb(products_df, prior_df, train_df):
 def tune_spmi(prior_df, train_df):
     """
     Grid search SPMI params:
-      SPMI_K ∈ [3, 5, 7, 10]
+      SPMI_K ∈ [3, 5, 7, 10, 15, 20]
       SPMI_TOP_K ∈ [50, 100, 200]
     """
     print("\n" + "=" * 60)
     print("  PHASE 1: Tuning SPMI")
     print("=" * 60)
 
-    grid_k = [3, 5, 7, 10]
+    grid_k = [3, 5, 7, 10, 15, 20]
     grid_topk = [50, 100, 200]
 
     # Build co-occurrence chỉ 1 lần (tốn thời gian nhất)
