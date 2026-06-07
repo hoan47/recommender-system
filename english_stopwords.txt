@@ -426,3 +426,117 @@ yourselves
 ’re
 ’s
 ’ve
+usa
+united states
+america
+american
+canada
+canadian
+mexico
+mexican
+brazil
+brazilian
+chile
+chilean
+france
+french
+italy
+italian
+spain
+spanish
+germany
+german
+uk
+united kingdom
+britain
+british
+norway
+norwegian
+netherlands
+dutch
+belgium
+belgian
+denmark
+danish
+japan
+japanese
+korea
+korean
+china
+chinese
+taiwan
+taiwanese
+thailand
+thai
+malaysia
+malaysian
+singapore
+singaporean
+australia
+australian
+new zealand
+nestle
+kraft
+heinz
+kellogg
+danone
+mars
+mondelez
+hershey
+nutella
+ferrero
+oreo
+cadbury
+campbell
+mccormick
+kikkoman
+ajinomoto
+fonterra
+anchor
+president
+elle vire
+devondale
+meiji
+coca cola
+pepsi
+starbucks
+lipton
+twinings
+nescafe
+heineken
+budweiser
+blackmores
+healthy care
+kirkland
+san pellegrino
+evian
+perrier
+red bull
+monster energy
+snickers
+twix
+kitkat
+pringles
+lays
+doritos
+cheetos
+walmart
+costco
+target
+kroger
+aldi
+lidl
+tesco
+carrefour
+woolworths
+whole foods
+trader joes
+safeway
+7 eleven
+ubereats
+doordash
+deliveroo
+grubhub
+just eat
+postmates
+instacart

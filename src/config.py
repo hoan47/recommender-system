@@ -80,7 +80,6 @@ def _load_stopwords():
         print(f"  [Config] WARNING: {CB_STOPWORDS_PATH} not found, stopword removal disabled")
     return stopwords
 
-# Global set stopwords cho CB
 CB_STOPWORDS = _load_stopwords()
 
 # ===== Evaluation =====
