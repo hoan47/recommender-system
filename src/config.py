@@ -53,8 +53,8 @@ HYBRID_ALPHA = 0.2
 HYBRID_BETA = 0.8
 # HYBRID_CB_THRESH: Ngưỡng CB similarity để loại sản phẩm substitute
 # Nếu CB_sim(A,B) > threshold → A và B quá giống → loại khỏi gợi ý
-# Đặt = 1.0 để tạm tắt CB filter (sẽ tinh chỉnh sau)
-HYBRID_CB_THRESH = 1.0
+# 0.85: chỉ loại substitute rất giống (cùng tên gần như identical), giữ lại complementary
+HYBRID_CB_THRESH = 0.85
 
 # ===== Evaluation =====
 # EVAL_KS: Các giá trị K để đánh giá recall@K
