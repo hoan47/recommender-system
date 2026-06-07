@@ -37,6 +37,16 @@ recommender-system/
 | KG | `build_knowledge_graph.py` (~100 dòng) | Graph + node2vec, tìm sản phẩm liên quan qua đồ thị |
 | Hybrid | `build_hybrid.py` (~40 dòng) | α*SPMI + β*KG, filter bằng CB |
 
+## Cấu hình Hybrid
+
+Các tham số Hybrid được định nghĩa trong `src/config.py`:
+
+| Tham số | Giá trị | Giải thích |
+|---------|---------|------------|
+| `HYBRID_ALPHA` | 0.2 | Trọng số SPMI (thấp vì SPMI recall chỉ ~1-4%) |
+| `HYBRID_BETA` | 0.8 | Trọng số KG (cao vì KG recall ~11-25%) |
+| `HYBRID_CB_THRESH` | 1.0 | Tạm tắt CB filter (sẽ tinh chỉnh sau) |
+
 ## Lưu ý Evaluation
 
 Dataset Instacart public **KHÔNG cung cấp ground truth** cho test set (75K orders).
@@ -44,11 +54,13 @@ Do đó evaluation chạy trên **train set** (131K orders) với giao thức le
 
 ### Kết quả metrics hiện tại
 
-| Model | recall@5 | recall@10 | recall@20 |
-|-------|----------|-----------|-----------|
-| SPMI | 1.38% | 2.43% | 3.89% |
-| KG | 10.90% | 16.87% | 25.23% |
-| Hybrid | 9.42% | 16.06% | 24.94% |
+| Model | recall@5 | recall@10 | recall@20 | ndcg@5 | ndcg@10 | ndcg@20 | map@5 | map@10 | map@20 |
+|-------|----------|-----------|-----------|--------|---------|---------|-------|--------|--------|
+| SPMI | 1.38% | 2.43% | 3.89% | 0.34% | 0.36% | 0.41% | 0.18% | 0.14% | 0.12% |
+| KG | 10.90% | 16.87% | 25.23% | 2.72% | 2.51% | 2.60% | 1.43% | 0.96% | 0.78% |
+| Hybrid | **11.03%** | **16.97%** | **25.20%** | **2.80%** | **2.58%** | **2.67%** | **1.49%** | **1.01%** | **0.83%** |
+
+> **Ghi chú:** Hybrid dùng α=0.2 (SPMI) + β=0.8 (KG), CB filter tạm tắt (threshold=1.0).
 
 ## Chạy
 

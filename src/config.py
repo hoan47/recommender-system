@@ -46,12 +46,15 @@ KG_EPOCHS = 1
 
 # ===== Hybrid =====
 # HYBRID_ALPHA: Trọng số cho SPMI score (0.0 ~ 1.0)
-HYBRID_ALPHA = 0.6
+# SPMI recall ~1-4% (yếu) → trọng số thấp
+HYBRID_ALPHA = 0.2
 # HYBRID_BETA: Trọng số cho KG score (0.0 ~ 1.0)
-HYBRID_BETA = 0.4
+# KG recall ~11-25% (mạnh) → trọng số cao
+HYBRID_BETA = 0.8
 # HYBRID_CB_THRESH: Ngưỡng CB similarity để loại sản phẩm substitute
 # Nếu CB_sim(A,B) > threshold → A và B quá giống → loại khỏi gợi ý
-HYBRID_CB_THRESH = 0.8
+# Đặt = 1.0 để tạm tắt CB filter (sẽ tinh chỉnh sau)
+HYBRID_CB_THRESH = 1.0
 
 # ===== Evaluation =====
 # EVAL_KS: Các giá trị K để đánh giá recall@K
