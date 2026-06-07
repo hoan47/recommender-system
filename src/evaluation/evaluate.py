@@ -10,7 +10,7 @@ Với mỗi sản phẩm trong mỗi đơn hàng (của train set):
 GHI CHÚ: Dataset Instacart public KHÔNG cung cấp ground truth cho test set (75K orders).
 Do đó evaluation chạy trên train set (131K orders có ground truth).
 
-Đánh giá trên SPMI, KG, và Hybrid (nếu có file).
+Đánh giá trên CB, SPMI, KG, và Hybrid (nếu có file).
 Kết quả lưu vào results/metrics.json.
 """
 import sys
@@ -168,6 +168,14 @@ def evaluate_all(test_df):
     Tải ma trận từ models/ và chạy evaluation.
     """
     results = {}
+
+    # Đánh giá CB (standalone)
+    try:
+        cb = load_npz(MODELS_DIR / "cb_similarity.npz")
+        results["CB"] = evaluate_model(cb, test_df, "CB")
+        del cb; gc.collect()
+    except Exception as e:
+        print(f"  Skip CB: {e}")
 
     # Đánh giá SPMI
     try:
