@@ -23,6 +23,8 @@ CB_MIN_DF = 5
 CB_MAX_DF = 0.8
 # CB_MAX_FEATURES: Số lượng term tối đa trong vocabulary (kiểm soát bộ nhớ)
 CB_MAX_FEATURES = 10000
+# CB_STOPWORDS_PATH: Đường dẫn file stopword tiếng Anh (1 từ/dòng, có thể trùng)
+CB_STOPWORDS_PATH = PROJECT_ROOT / "src" / "english_stopwords.txt"
 # TOP_K: Chỉ giữ K sản phẩm tương tự nhất mỗi dòng trong ma trận similarity
 TOP_K = 100
 
@@ -62,6 +64,24 @@ HYBRID_BETA = 0.8
 # Nếu CB_sim(A,B) > threshold → A và B quá giống → loại khỏi gợi ý
 # 0.85: chỉ loại substitute rất giống (cùng tên gần như identical), giữ lại complementary
 HYBRID_CB_THRESH = 0.85
+
+# Hàm load stopwords (dùng set để dedup)
+def _load_stopwords():
+    """Đọc file stopword, trả về set các stopword (đã strip, lowercase, dedup)"""
+    stopwords = set()
+    try:
+        with open(CB_STOPWORDS_PATH, "r", encoding="utf-8") as f:
+            for line in f:
+                w = line.strip().lower()
+                if w:  # bỏ dòng rỗng
+                    stopwords.add(w)
+        print(f"  [Config] Loaded {len(stopwords):,} stopwords from {CB_STOPWORDS_PATH}")
+    except FileNotFoundError:
+        print(f"  [Config] WARNING: {CB_STOPWORDS_PATH} not found, stopword removal disabled")
+    return stopwords
+
+# Global set stopwords cho CB
+CB_STOPWORDS = _load_stopwords()
 
 # ===== Evaluation =====
 # EVAL_KS: Các giá trị K để đánh giá recall@K

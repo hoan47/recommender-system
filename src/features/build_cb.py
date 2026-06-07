@@ -21,7 +21,7 @@ from collections import Counter
 import numpy as np
 from tqdm import tqdm
 
-from src.config import MODELS_DIR, CB_MIN_DF, CB_MAX_DF, CB_MAX_FEATURES
+from src.config import MODELS_DIR, CB_MIN_DF, CB_MAX_DF, CB_MAX_FEATURES, CB_STOPWORDS
 
 # File lưu CB vectors dạng json (vì dict-based, không phải ma trận)
 CB_FILE = MODELS_DIR / "cb_vectors.json"
@@ -31,11 +31,14 @@ cb_vectors = {}
 
 def _tokenize_product(text):
     """
-    Tokenize tên sản phẩm: lowercase, chỉ giữ chữ cái/số, unigram + bigram.
+    Tokenize tên sản phẩm: lowercase, chỉ giữ chữ cái/số, unigram + bigram,
+    loại bỏ stopword.
     Thuần Python (regex-based), nhanh vì chỉ ~50K sản phẩm, không phải bottleneck.
     """
     text = re.sub(r'[^a-z0-9 ]', ' ', text.lower()).strip()
     tokens = text.split()
+    # Lọc bỏ token nếu là stopword
+    tokens = [t for t in tokens if t not in CB_STOPWORDS]
     ngrams = list(tokens)  # unigram
     for i in range(len(tokens) - 1):
         ngrams.append(f"{tokens[i]} {tokens[i+1]}")  # bigram
