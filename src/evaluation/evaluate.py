@@ -1,16 +1,21 @@
 """
-Đánh giá các model trên tập TEST bằng giao thức leave-one-out
+Đánh giá các model trên tập TRAIN bằng giao thức leave-one-out
 
-Với mỗi sản phẩm trong mỗi đơn hàng (của test set):
+Với mỗi sản phẩm trong mỗi đơn hàng (của train set):
   - Query = sản phẩm đó
   - Ground truth = các sản phẩm còn lại trong cùng đơn hàng
   - Lấy top-K recommendations từ similarity/score matrix
   - Hit = có ít nhất 1 ground truth trong top-K
 
+GHI CHÚ: Dataset Instacart public KHÔNG cung cấp ground truth cho test set (75K orders).
+Do đó evaluation chạy trên train set (131K orders có ground truth).
+
 Đánh giá trên SPMI, KG, và Hybrid (nếu có file).
 Kết quả lưu vào results/metrics.json.
 """
-
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import gc
 import json
 import numpy as np
@@ -28,7 +33,7 @@ def evaluate_model(matrix, test_df, name="model", ks=EVAL_KS):
     
     Tham số:
         matrix: csr_matrix (n_products x n_products) — ma trận similarity/score
-        test_df: DataFrame (order_id, product_id) — ground truth test
+        test_df: DataFrame (order_id, product_id) — ground truth
         name: str — tên model (để hiển thị)
         ks: tuple — các giá trị K cần đánh giá
     
@@ -46,12 +51,17 @@ def evaluate_model(matrix, test_df, name="model", ks=EVAL_KS):
         prods_set = set(prods)
         for query in prods:
             gt = prods_set - {query}  # Các sản phẩm còn lại trong đơn
+            # Query là product_id (1-based), matrix row index là 0-based
+            # Nếu matrix shape < max product_id + 1, cần chuyển đổi
+            if query >= matrix.shape[0]:
+                continue
             row = matrix[query]
             if row.nnz == 0:
                 continue
             # Sắp xếp recommendations theo score giảm dần
             order = np.argsort(row.data)[::-1]
-            top = row.indices[order[:max(ks)]]  # Lấy top-k lớn nhất
+            max_k = max(ks)
+            top = row.indices[order[:max_k]]  # Lấy top-k lớn nhất
             for k in ks:
                 if set(top[:k]) & gt:  # Có ít nhất 1 ground truth trong top-K?
                     hits[k] += 1
@@ -61,7 +71,7 @@ def evaluate_model(matrix, test_df, name="model", ks=EVAL_KS):
     for k in ks:
         recall = hits[k] / total if total > 0 else 0
         metrics[f"recall@{k}"] = round(recall, 6)
-        print(f"    recall@{k} = {recall:.4f}")
+        print(f"    recall@{k} = {recall:.4f} (hits={hits[k]}, total={total})")
     return metrics
 
 def evaluate_all(test_df):
@@ -105,5 +115,8 @@ if __name__ == "__main__":
     import sys
     sys.path.insert(0, str(MODELS_DIR.parent))
     from src.data_loader import load_train_test
-    _, test_df = load_train_test()
-    evaluate_all(test_df)
+    # Dataset Instacart public KHÔNG có ground truth cho test set.
+    # Chỉ train set (131K orders) có ground truth trong order_products__train.csv
+    # Do đó dùng train set để đánh giá.
+    train_df, _ = load_train_test()
+    evaluate_all(train_df)
