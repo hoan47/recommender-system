@@ -18,12 +18,11 @@ recommender-system/
 │   ├── tune_hyperparams.py       # Grid search tự động 4 phase
 │   ├── features/
 │   │   ├── build_cb.py           # Content-Based (standalone + substitute filter)
-│   │   ├── build_spmi.py         # SPMI (DEPRECATED — giữ lại cho compat)
-│   │   ├── build_confidence.py   # Confidence (Item-based CF) — THAY THẾ SPMI
+│   │   ├── build_confidence.py   # Confidence (Item-based CF) — Unified Scoring
 │   │   ├── build_knowledge_graph.py  # Knowledge Graph (node2vec)
 │   │   └── build_hybrid.py       # Hybrid: Confidence + KG, filter CB
 │   └── evaluation/
-│       └── evaluate.py           # Đánh giá models (CB, SPMI, KG, Hybrid)
+│       └── evaluate.py           # Đánh giá models (CB, Confidence, KG, Hybrid)
 ├── models/                       # Output models (đã .gitignore)
 ├── results/                      # Kết quả evaluation (đã .gitignore)
 ├── english_stopwords.txt     # Danh sách stopword tiếng Anh (dùng cho CB)
@@ -36,35 +35,27 @@ recommender-system/
 | Model | File | Mục đích |
 |-------|------|----------|
 | CB | `build_cb.py` | TF-IDF dict-based, tìm sản phẩm tương tự (substitute), có thể dùng standalone hoặc làm bộ lọc |
-| **Confidence** | **`build_confidence.py`** | **Co-occurrence → Confidence (Item-based CF), tìm sản phẩm mua kèm (complementary). THAY THẾ SPMI** |
-| SPMI | `build_spmi.py` | Giữ lại cho backward compatibility |
+| **Confidence** | **`build_confidence.py`** | **Unified scoring = ochiai × confidence × log1p, tìm sản phẩm mua kèm (complementary). BẤT ĐỐI XỨNG** |
 | KG | `build_knowledge_graph.py` | Graph + node2vec, tìm sản phẩm liên quan qua đồ thị |
 | Hybrid | `build_hybrid.py` | α*Confidence + β*KG, filter bằng CB |
 | Tuning | `tune_hyperparams.py` | Grid search tự động 4 phase (CB → Confidence → KG → Hybrid) |
 
-### Confidence — thuật toán mới thay SPMI
+### Confidence — Unified Scoring (thay thế SPMI cũ)
 
 **Công thức:**
 ```
-Confidence(A → B) = cooc(A,B) / freq(A)
+ochiai(A,B) = cnt / sqrt(freq[A] * freq[B])   # Cosine Similarity
+log_ab      = log1p(cnt)                        # Popularity Bonus
+conf(A→B)   = cnt / freq[A]                     # Conditional Probability
+score(A→B)  = ochiai * conf(A→B) * log_ab       # Unified Score
 ```
-Đọc: "Nếu mua A, xác suất cũng mua B là bao nhiêu %"
 
-**Tại sao thay SPMI?**
-- SPMI dùng `max(PMI - log(k), 0)` với threshold toàn cục → loại bỏ cặp phổ biến có PMI thấp (Burger+Khoai tây), giữ cặp hiếm ảo (Phô mai+Truffle chỉ 2 đơn chung)
-- Confidence dùng % thực tế, không threshold, không log, không shift
+Đọc: "Nếu mua A, xác suất cũng mua B là bao nhiêu %, điều chỉnh theo độ tương quan (ochiai) và độ phổ biến (log)."
+
+**Đặc điểm:**
+- **BẤT ĐỐI XỨNG**: score(A→B) ≠ score(B→A) — phản ánh đúng hành vi mua kèm thực tế
+- Kết hợp cả tần suất (popularity), xác suất có điều kiện (confidence), và mức độ tương quan (cosine similarity)
 - Chỉ recommend từ sản phẩm có freq(A) ≥ FREQ_MIN (mặc định 30) — loại nhiễu từ sản phẩm quá hiếm
-- Ma trận KHÔNG đối xứng: Confidence(A→B) ≠ Confidence(B→A)
-
-Ví dụ với Confidence:
-| A | B | cooc | freq(A) | Confidence | Nhận xét |
-|---|----|:---:|:-------:|:----------:|----------|
-| Burger | Khoai tây | 8,000 | 20,000 | **40%** | Mua kèm mạnh |
-| Cơm | Gà rán | 15,000 | 60,000 | **25%** | Mua kèm trung bình |
-| Gà rán | Cơm | 15,000 | 20,000 | **75%** | Rất mạnh (ngược chiều) |
-| Tương cà | Khoai tây chiên | 5,000 | 8,000 | **62.5%** | Rất mạnh |
-| Phô mai ý | Sốt truffle | 2 | 5 | 40% → **KHÔNG recommend** | freq=5 < 30 |
-| Dầu ăn | Nồi cơm điện | 40 | 35,000 | **0.11%** | Rất thấp → không recommend |
 
 ## Cấu hình Hybrid
 
@@ -72,9 +63,9 @@ Các tham số Hybrid được định nghĩa trong `src/config.py`:
 
 | Tham số | Giá trị | Giải thích |
 |---------|---------|------------|
-| `HYBRID_ALPHA` | 0.2 | Trọng số Confidence (thay SPMI) |
+| `HYBRID_ALPHA` | 0.2 | Trọng số Confidence (thay SPMI cũ) |
 | `HYBRID_BETA` | 0.8 | Trọng số KG |
-| `HYBRID_CB_THRESH` | 1.0 | Tạm tắt CB filter (sẽ tinh chỉnh sau) |
+| `HYBRID_CB_THRESH` | 0.85 | Ngưỡng CB filter |
 
 ### Tham số Confidence
 
@@ -97,7 +88,7 @@ Do đó evaluation chạy trên **train set** (131K orders) với giao thức le
 ```bash
 # 1. Build từng model theo thứ tự
 python src/features/build_cb.py
-python src/features/build_confidence.py    # <-- SPMI --> Confidence
+python src/features/build_confidence.py   # Unified Scoring (thay thế SPMI)
 python src/features/build_knowledge_graph.py
 python src/features/build_hybrid.py
 
@@ -132,4 +123,4 @@ Kết quả tune lưu tại `results/tune_results/`:
 | 3 | Hybrid | HYBRID_ALPHA, HYBRID_BETA, HYBRID_CB_THRESH | ~40 |
 
 > **Lưu ý:** Phase 2 (KG) là chậm nhất do phải train node2vec. Tổng thời gian có thể >24h nếu chạy full grid.
-> Phase 1 (Confidence) nhanh hơn SPMI vì không cần loop Numba JIT lần 2.
+> Phase 1 (Confidence) nhanh hơn SPMI cũ vì không cần loop Numba JIT lần 2 cho scoring.

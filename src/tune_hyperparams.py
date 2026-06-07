@@ -33,7 +33,6 @@ from src.config import (
     MODELS_DIR, RESULTS_DIR, EVAL_KS,
     CB_MIN_DF, CB_MAX_DF, CB_MAX_FEATURES, TOP_K,
     CONF_FREQ_MIN, CONF_TOP_K,
-    SPMI_K, TOTAL_PRIOR_ORDERS, SPMI_TOP_K,
     KG_DIM, KG_WALK_LENGTH, KG_NUM_WALKS, KG_EPOCHS,
     HYBRID_ALPHA, HYBRID_BETA, HYBRID_CB_THRESH,
 )
@@ -48,7 +47,7 @@ def _import_build_cb():
     return build_cb
 
 def _import_build_confidence():
-    from src.features import build_spmi  # dùng lại build_cooc từ đây
+    from src.features import build_confidence
     return build_confidence
 
 def _import_build_kg():
@@ -251,7 +250,7 @@ def tune_confidence(prior_df, train_df):
     grid_topk = [50, 100, 200]
 
     # Build co-occurrence chỉ 1 lần (tốn thời gian nhất)
-    from src.features.build_spmi import build_cooc
+    from src.features.build_confidence import build_cooc
     print("\n  [Tune] Building co-occurrence matrix (once)...")
     cooc, freq = build_cooc(prior_df)
 

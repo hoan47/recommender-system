@@ -1,14 +1,14 @@
 """
-Hybrid — kết hợp SPMI + Knowledge Graph, loại substitute bằng CB
+Hybrid — kết hợp Confidence + Knowledge Graph, loại substitute bằng CB
 
 Công thức:
-  final_score(A → B) = α * SPMI_norm(A,B) + β * KG_sim(A,B)
+  final_score(A → B) = α * Conf_norm(A,B) + β * KG_sim(A,B)
   Nếu CB_sim(A,B) > threshold → final_score = 0 (loại substitute)
 
 Optimizations:
   1. Xây dựng CB feature matrix sparse (n_products × vocab_size) từ cb_vectors
   2. CB similarity = feature_matrix @ feature_matrix.T (sparse dot product)
-  3. Batch combine SPMI + KG bằng sparse matrix operations
+  3. Batch combine Confidence + KG bằng sparse matrix operations
   4. CB filter = element-wise mask trên combined scores
 """
 import sys
@@ -26,7 +26,6 @@ from src.config import HYBRID_ALPHA, HYBRID_BETA, HYBRID_CB_THRESH
 # File lưu hybrid matrix
 HYBRID_FILE = MODELS_DIR / "hybrid_matrix.npz"
 CONF_FILE = MODELS_DIR / "confidence_matrix.npz"
-SPMI_FILE = MODELS_DIR / "spmi_matrix.npz"
 
 
 def build_cb_sparse(cb_vectors, n_products):
@@ -134,7 +133,7 @@ def build_hybrid(confidence, kg_sim, cb_vectors, alpha=HYBRID_ALPHA, beta=HYBRID
         5. Giữ top scoring entries
     
     Tham số:
-        confidence: csr_matrix — ma trận Confidence từ build_confidence
+        confidence: csr_matrix — ma trận Confidence từ build_confidence (unified scoring)
         kg_sim: csr_matrix — ma trận KG similarity từ build_knowledge_graph
         cb_vectors: dict — CB vectors từ build_cb
         alpha: float — trọng số Confidence
@@ -236,13 +235,12 @@ if __name__ == "__main__":
     sys.path.insert(0, str(MODELS_DIR.parent))
     from src.features.build_cb import load as load_cb
     
-    # Ưu tiên Confidence matrix, fallback về SPMI
     try:
         confidence = load_npz(CONF_FILE)
         print("  [Hybrid] Loaded Confidence matrix")
     except FileNotFoundError:
-        confidence = load_npz(SPMI_FILE)
-        print("  [Hybrid] Confidence not found, using SPMI as fallback")
+        print("  [Hybrid] ERROR: Confidence matrix not found! Run build_confidence.py first.")
+        raise
     
     kg_sim = load_npz(MODELS_DIR / "kg_similarity.npz")
     load_cb()  # Nạp cb_vectors vào bộ nhớ

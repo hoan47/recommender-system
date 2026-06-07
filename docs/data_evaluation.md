@@ -6,7 +6,7 @@ Tập dữ liệu sử dụng là **Instacart Market Basket Analysis** — tập
 
 **Hướng tiếp cận: Global (Item-Oriented)**
 - Không xây dựng profile riêng cho từng user
-- Thay vào đó, xây dựng **ma trận quan hệ giữa các sản phẩm** dựa trên co-occurrence (SPMI), cấu trúc đồ thị (KG), và nội dung sản phẩm (CB)
+- Thay vào đó, xây dựng **ma trận quan hệ giữa các sản phẩm** dựa trên co-occurrence (Confidence unified scoring), cấu trúc đồ thị (KG), và nội dung sản phẩm (CB)
 - Output là item-item similarity/scores — mọi user đều dùng chung một ma trận
 
 ## 2. Cấu trúc dữ liệu
@@ -74,7 +74,7 @@ Tập dữ liệu sử dụng là **Instacart Market Basket Analysis** — tập
 | eval_set | Số lượng | % | Vai trò trong Global |
 |----------|----------|---|----------------------|
 | `prior` (lịch sử) | 3,214,874 | 94.0% | **Xây dựng model**: co-occurrence matrix, graph edges, TF-IDF |
-| `train` (huấn luyện) | 131,209 | 3.8% | **Tune hyperparameters**: threshold SPMI, params KG, weights Hybrid |
+| `train` (huấn luyện) | 131,209 | 3.8% | **Tune hyperparameters**: threshold Confidence, params KG, weights Hybrid |
 | `test` (đánh giá) | 75,000 | 2.2% | **Đánh giá cuối**: báo cáo metrics (chỉ dùng 1 lần) |
 
 ### 3.2. Sản phẩm & Danh mục
@@ -108,19 +108,19 @@ Tập dữ liệu sử dụng là **Instacart Market Basket Analysis** — tập
 ### 4.2. Sparsity của Item-Item Matrix
 
 - Ma trận co-occurrence item-item (50K×50K) có mật độ thưa: chỉ khoảng 1–2% cặp sản phẩm từng xuất hiện cùng nhau trong cùng đơn hàng.
-- Cần dùng **SPMI (Shifted Positive PMI)** để lọc nhiễu: các cặp xuất hiện cùng nhau do ngẫu nhiên (frequency thấp) sẽ bị shift về 0.
+- Ma trận co-occurrence dùng **Confidence unified scoring** (ochiai × confidence × log1p) để tính điểm mua kèm.
 - Với những cặp không xuất hiện cùng nhau (99% ma trận), dùng **Content-Based similarity** (TF-IDF) để fallback.
 
 ### 4.3. Imbalance reorder
 
 - ~59% reorder vs ~41% first-time purchase — thể hiện hành vi mua lặp lại phổ biến.
-- Trong global SPMI, reorder không phải vấn đề vì co-occurrence đếm **mọi lần xuất hiện cùng nhau**, không phân biệt reorder hay không.
-- Tuy nhiên, nếu muốn ưu tiên sản phẩm mới (first-time), có thể dùng SPMI có trọng số theo `reordered=0`.
+- Trong global Confidence, reorder không phải vấn đề vì co-occurrence đếm **mọi lần xuất hiện cùng nhau**, không phân biệt reorder hay không.
+- Tuy nhiên, nếu muốn ưu tiên sản phẩm mới (first-time), có thể dùng Confidence có trọng số theo `reordered=0`.
 
 ### 4.4. Long-tail products
 
 - Nhiều sản phẩm có tần suất xuất hiện thấp trong prior (long-tail).
-- Với các sản phẩm long-tail, co-occurrence với sản phẩm khác rất thấp → SPMI không đủ tin cậy.
+- Với các sản phẩm long-tail, co-occurrence với sản phẩm khác rất thấp → Confidence không đủ tin cậy.
 - **Content-Based filtering** (TF-IDF từ `product_name` + `department`) là giải pháp fallback cho long-tail items:
   - Dựa trên nội dung tên sản phẩm (text) thay vì interaction count
   - Không bị ảnh hưởng bởi sparsity của co-occurrence
@@ -140,15 +140,15 @@ Khác với per-user (mỗi user có prior/train/test riêng), hướng Global d
 | Tập | Số đơn | Vai trò trong pipeline |
 |-----|--------|------------------------|
 | **prior** (100%) | 3,214,874 | **Xây dựng toàn bộ model** — không có "train" model theo nghĩa supervised learning. Toàn bộ co-occurrence matrix, graph edges, TF-IDF vectors đều được tính từ prior. |
-| **train** (100%) | 131,209 | **Tune hyperparameters** — dùng ground truth từ train set để tìm threshold tối ưu cho SPMI (shift k), restart_prob cho KG, và trọng số α/β cho Hybrid. |
+| **train** (100%) | 131,209 | **Tune hyperparameters** — dùng ground truth từ train set để tìm threshold tối ưu cho Confidence (freq_min), restart_prob cho KG, và trọng số α/β cho Hybrid. |
 | **test** (100%) | 75,000 | **Đánh giá cuối cùng** — chỉ chạy 1 lần duy nhất sau khi đã tune xong mọi tham số. Dùng metrics: Recall@K, NDCG@K, MAP@K. |
 
 **Cơ chế đánh giá cụ thể:**
 - Không phải "train model rồi predict test" như supervised learning thông thường
-- Model (SPMI / KG) được xây từ prior và không thay đổi
+- Model (Confidence / KG) được xây từ prior và không thay đổi
 - Với mỗi đơn trong test:
   1. Lấy danh sách sản phẩm trong đơn đó
-  2. Với mỗi sản phẩm A, dùng SPMI/KG → top-N sản phẩm hay mua kèm với A
+  2. Với mỗi sản phẩm A, dùng Confidence/KG → top-N sản phẩm hay mua kèm với A
   3. So sánh top-N với các sản phẩm còn lại trong đơn (ground truth)
   4. Tính Recall@K, NDCG@K
 
@@ -168,7 +168,7 @@ Khác với per-user (mỗi user có prior/train/test riêng), hướng Global d
 | ✅ Đa dạng | 50K sản phẩm, 21 departments |
 | ✅ Temporal | Có timestamp, có thể dùng để phân tích mùa vụ |
 | ✅ Split sẵn | prior / train / test — prior xây model, train tune params, test eval |
-| ⚠️ Sparsity | Item-item co-occurrence thưa — cần SPMI + CB fallback |
+| ⚠️ Sparsity | Item-item co-occurrence thưa — cần Confidence + CB fallback |
 | ⚠️ Long-tail | Sản phẩm ít xuất hiện → cần CB fallback dựa trên nội dung |
 
-Dataset này hoàn toàn phù hợp để xây dựng hệ thống gợi ý sản phẩm **global (item-oriented)** với 4 models đã định nghĩa: **Content-Based (CB)**, **Collaborative Filtering (SPMI)**, **Knowledge Graph (KG)**, và **Hybrid**.
+Dataset này hoàn toàn phù hợp để xây dựng hệ thống gợi ý sản phẩm **global (item-oriented)** với 4 models đã định nghĩa: **Content-Based (CB)**, **Collaborative Filtering (Confidence unified scoring)**, **Knowledge Graph (KG)**, và **Hybrid**.

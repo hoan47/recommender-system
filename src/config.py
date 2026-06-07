@@ -28,20 +28,13 @@ CB_STOPWORDS_PATH = PROJECT_ROOT / "english_stopwords.txt"
 # TOP_K: Chỉ giữ K sản phẩm tương tự nhất mỗi dòng trong ma trận similarity
 TOP_K = 100
 
-# ===== Confidence (Item-based Collaborative Filtering) =====
+# ===== Confidence (Item-based Collaborative Filtering - Unified Scoring) =====
 # CONF_FREQ_MIN: Sản phẩm phải xuất hiện trong ít nhất N đơn mới được recommend
 # Loại bỏ nhiễu từ sản phẩm quá hiếm (ví dụ: 2-5 đơn)
 CONF_FREQ_MIN = 30
 # CONF_TOP_K: Chỉ giữ K sản phẩm mua kèm mạnh nhất mỗi sản phẩm
+# Unified scoring = ochiai * confidence * log1p
 CONF_TOP_K = 100
-
-# ===== SPMI (Collaborative Filtering, deprecated) =====
-# SPMI_K: Threshold shift cho SPMI (càng cao càng loại bỏ nhiều edges yếu)
-SPMI_K = 10
-# TOTAL_PRIOR_ORDERS: Tổng số đơn hàng trong prior (dùng cho công thức PMI)
-TOTAL_PRIOR_ORDERS = 3214874
-# SPMI_TOP_K: Chỉ giữ K sản phẩm mua kèm mạnh nhất mỗi sản phẩm
-SPMI_TOP_K = 100
 
 # ===== Knowledge Graph (KG) =====
 # KG_DIM: Kích thước embedding vector cho mỗi node (product + department)

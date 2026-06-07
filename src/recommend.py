@@ -1,5 +1,5 @@
 """
-Recommend — gợi ý sản phẩm dùng Hybrid matrix (có fallback SPMI)
+Recommend — gợi ý sản phẩm dùng Hybrid matrix (có fallback Confidence)
 
 Cách dùng:
     from src.recommend import recommend
@@ -7,8 +7,8 @@ Cách dùng:
     recs = recommend_with_scores(1, 10)       # Trả về list (pid, score)
 
 Giải thích luồng:
-    1. Thử load Hybrid matrix (đã kết hợp SPMI + KG + CB filter)
-    2. Nếu Hybrid không có → fallback về SPMI
+    1. Thử load Hybrid matrix (đã kết hợp Confidence + KG + CB filter)
+    2. Nếu Hybrid không có → fallback về Confidence
     3. Lấy dòng product_id từ matrix, sắp xếp theo score giảm dần
     4. Trả về top-K kết quả
 """
@@ -29,14 +29,15 @@ def recommend(pid, top_k=10):
     Trả về:
         list[int] — danh sách product_id gợi ý
     """
-    # Ưu tiên Hybrid matrix, fallback về Confidence, rồi SPMI
+    # Ưu tiên Hybrid matrix, fallback về Confidence
     try:
         matrix = load_npz(MODELS_DIR / "hybrid_matrix.npz")
     except FileNotFoundError:
         try:
             matrix = load_npz(MODELS_DIR / "confidence_matrix.npz")
         except FileNotFoundError:
-            matrix = load_npz(MODELS_DIR / "spmi_matrix.npz")
+            print("  [Recommend] ERROR: No matrix found! Run build_confidence.py or build_hybrid.py first.")
+            return []
 
     row = matrix[pid]
     if row.nnz == 0:
@@ -64,7 +65,8 @@ def recommend_with_scores(pid, top_k=10):
         try:
             matrix = load_npz(MODELS_DIR / "confidence_matrix.npz")
         except FileNotFoundError:
-            matrix = load_npz(MODELS_DIR / "spmi_matrix.npz")
+            print("  [Recommend] ERROR: No matrix found! Run build_confidence.py or build_hybrid.py first.")
+            return []
 
     row = matrix[pid]
     if row.nnz == 0:
