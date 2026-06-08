@@ -36,14 +36,6 @@ CONF_FREQ_MIN = 30
 # Unified scoring = ochiai * confidence * log1p
 CONF_TOP_K = 100
 
-# ===== Cross-dept bonus =====
-# CROSS_DEPT_BONUS: Hệ số ưu tiên sản phẩm khác department (complementary)
-# Cặp khác dept: ochiai * conf * log1p * (1 + CROSS_DEPT_BONUS)
-# Cặp cùng dept: ochiai * conf * log1p * (SAME_DEPT_PENALTY)
-# Model 1 dùng 1.3, nhưng chúng ta dùng nhẹ hơn: 1.05-1.1
-CROSS_DEPT_BONUS = 1.1
-SAME_DEPT_PENALTY = 0.9
-
 # ===== Reorder rate bonus =====
 # RORDER_BONUS: Hệ số ưu tiên sản phẩm có reorder rate cao
 # rr_bonus = 1.0 + RORDER_BONUS * avg(reorder_rate(A), reorder_rate(B))

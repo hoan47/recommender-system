@@ -494,10 +494,17 @@ if __name__ == "__main__":
     import sys
     sys.path.insert(0, str(MODELS_DIR.parent))
     from src.data_loader import load_products, load_prior
+    from scipy.sparse import csr_matrix
+
     products = load_products()
     prior = load_prior()
-    # Tải SPMI matrix từ bước trước
-    spmi = load_npz(MODELS_DIR / "spmi_matrix.npz")
+
+    # Dùng confidence matrix làm SPMI (giống pipeline)
+    confidence = load_npz(MODELS_DIR / "confidence_matrix.npz")
+    spmi = confidence.copy()
+    spmi.data[spmi.data < 0] = 0
+    spmi = spmi.maximum(spmi.T)
+
     # Tính department-department SPMI
     dept_spmi, n_depts = build_dept_spmi(prior, products)
     # Xây dựng đồ thị với department-department edges

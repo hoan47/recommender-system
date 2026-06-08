@@ -7,12 +7,11 @@ Công thức unified scoring (asymmetric, directed graph):
   conf(A→B)   = cnt / freq[A]                            # Conditional Probability
   score(A→B)  = ochiai(A,B) * conf(A→B) * log_ab        # Unified score
 
-Đặc điểm:
-  - KHÔNG đối xứng: score(A→B) ≠ score(B→A)
-  - Kết hợp cả tần suất (popularity), xác suất có điều kiện (confidence) và
-    mức độ tương quan (cosine similarity)
-  - Chỉ recommend từ product có freq(A) >= FREQ_MIN (loại nhiễu)
-  - Giữ top-K mỗi dòng để giảm dung lượng
+  Reorder bonus (optional):
+    rr_bonus = 1.0 + REORDER_BONUS * avg(reorder_rate[A], reorder_rate[B])
+    score *= rr_bonus
+
+Ma trận lưu dạng scipy.sparse.csr_matrix để tiết kiệm bộ nhớ và tương thích với các module khác.
 
 Co-occurrence dùng Numba JIT + typed Dict → ~100x nhanh hơn Python loop.
 Scoring dùng Python loop có numpy argpartition cho top-K selection.
@@ -28,7 +27,7 @@ from numba import njit
 from numba.typed import Dict
 from numba.core import types as nb_types
 
-from src.config import MODELS_DIR, CONF_FREQ_MIN, CONF_TOP_K, CROSS_DEPT_BONUS, SAME_DEPT_PENALTY, REORDER_BONUS
+from src.config import MODELS_DIR, CONF_FREQ_MIN, CONF_TOP_K, REORDER_BONUS
 
 # File lưu ma trận co-occurrence và Confidence (unified scoring)
 COOC_FILE = MODELS_DIR / "cooc_matrix.npz"
@@ -74,7 +73,6 @@ def _cooc_from_orders(order_ids, product_ids, n_products):
         # Lấy unique products trong order
         local = product_ids[start:end]
         local_sorted = np.sort(local)
-        # Mask để loại bỏ duplicates
         if len(local_sorted) > 0:
             uniq_mask = np.ones(len(local_sorted), dtype=np.bool_)
             for k in range(1, len(local_sorted)):
@@ -86,17 +84,14 @@ def _cooc_from_orders(order_ids, product_ids, n_products):
 
         k = len(uniq)
         if k < 2:
-            # Cập nhật freq kể cả khi chỉ có 1 sản phẩm
             for idx_u in range(k):
                 freq[int(uniq[idx_u])] += 1.0
             start = end
             continue
 
-        # Cập nhật order frequency cho mỗi sản phẩm
         for idx_u in range(k):
             freq[int(uniq[idx_u])] += 1.0
 
-        # Đếm tất cả cặp không thứ tự
         for ai in range(k):
             for bi in range(ai + 1, k):
                 a = int(uniq[ai])
@@ -141,25 +136,19 @@ def build_cooc(prior_df):
 
     n = int(prior_df["product_id"].max()) + 1
 
-    # Sort theo order_id để Numba JIT dễ dàng scan
     sorted_df = prior_df.sort_values("order_id")
     order_ids = sorted_df["order_id"].values.astype(np.int32)
     product_ids = sorted_df["product_id"].values.astype(np.int32)
 
-    print(f"  [Confidence]   Orders: {len(prior_df['order_id'].unique()):,}, "
+    print(f"  [Confidence] Orders: {len(prior_df['order_id'].unique()):,}, "
           f"Records: {len(prior_df):,}, Products: {n:,}")
 
-    # Gọi Numba JIT function
     rows, cols, vals, freq = _cooc_from_orders(order_ids, product_ids, n)
 
-    # Xây dựng COO matrix (tam giác trên)
     cooc_triu = coo_matrix((vals, (rows, cols)), shape=(n, n), dtype=np.float64)
-
-    # Symmetrize: cooc = triu + triu.T (ma trận đối xứng)
     cooc = cooc_triu + cooc_triu.T
     cooc_csr = cooc.tocsr()
 
-    # Dọn dẹp
     del sorted_df, order_ids, product_ids, rows, cols, vals, cooc_triu, cooc
     gc.collect()
 
@@ -172,31 +161,25 @@ def build_cooc(prior_df):
 # Build Confidence (Unified Scoring)
 # ============================================================
 
-def build_confidence(cooc_csr, freq, dept_map=None, reorder_rate=None,
+def build_confidence(cooc_csr, freq, reorder_rate=None,
                      freq_min=CONF_FREQ_MIN, top_k=CONF_TOP_K):
     """
-    Tính Confidence matrix = unified scoring + cross-dept bonus + reorder bonus, bất đối xứng.
+    Tính Confidence matrix = unified scoring + reorder bonus, bất đối xứng.
 
     Công thức mỗi cặp (i→j):
       cnt = cooc[i, j]
       ochiai = cnt / sqrt(freq[i] * freq[j])
       log_ab = log1p(cnt)
       conf   = cnt / freq[i]
-      score  = ochiai * conf * log_ab * cross_bonus * rr_bonus
-
-    Cross-dept bonus:
-      - Khác dept: cross_bonus = CROSS_DEPT_BONUS (1.1) → ưu tiên complementary
-      - Cùng dept: cross_bonus = SAME_DEPT_PENALTY (0.9) → giảm substitute
+      score  = ochiai * conf * log_ab * rr_bonus
 
     Reorder bonus:
-      - rr_bonus = 1.0 + REORDER_BONUS * avg(reorder_rate[i], reorder_rate[j])
-      - Sản phẩm hay mua lại được ưu tiên hơn
+      rr_bonus = 1.0 + REORDER_BONUS * avg(reorder_rate[i], reorder_rate[j])
 
     Tham số:
         cooc_csr: csr_matrix — ma trận co-occurrence đối xứng
         freq: numpy array — order frequency mỗi sản phẩm
-        dept_map: dict[int, int] — product_id → department_id (nếu None, không có cross-dept bonus)
-        reorder_rate: dict[int, float] — product_id → reorder rate (nếu None, không có reorder bonus)
+        reorder_rate: dict[int, float] — product_id → reorder rate (nếu None, rr_bonus = 1)
         freq_min: int — ngưỡng tối thiểu freq(i) để recommend
         top_k: int — số lượng gợi ý tối đa mỗi sản phẩm
 
@@ -214,14 +197,13 @@ def build_confidence(cooc_csr, freq, dept_map=None, reorder_rate=None,
     for i in range(n):
         fi = freq[i]
         if fi < freq_min:
-            continue  # Bỏ qua sản phẩm quá hiếm
+            continue
 
         row_start = cooc_csr.indptr[i]
         row_end = cooc_csr.indptr[i + 1]
         if row_start == row_end:
             continue
 
-        # Lấy indices và counts của dòng i
         local_j = cooc_csr.indices[row_start:row_end]
         local_c = cooc_csr.data[row_start:row_end]
 
@@ -229,7 +211,6 @@ def build_confidence(cooc_csr, freq, dept_map=None, reorder_rate=None,
         if m == 0:
             continue
 
-        # Tính scores cho chiều i→j
         scores = np.zeros(m, dtype=np.float64)
         for idx in range(m):
             j = local_j[idx]
@@ -238,22 +219,11 @@ def build_confidence(cooc_csr, freq, dept_map=None, reorder_rate=None,
             if fj == 0:
                 continue
 
-            # Unified scoring
             ochiai = cnt / math.sqrt(fi * fj)
             log_ab = math.log1p(cnt)
             conf_ij = cnt / fi
             score = ochiai * conf_ij * log_ab
 
-            # Cross-dept bonus
-            if dept_map is not None:
-                d_i = dept_map.get(i, -1)
-                d_j = dept_map.get(j, -1)
-                if d_i != d_j and d_i != -1 and d_j != -1:
-                    score *= CROSS_DEPT_BONUS  # 1.1
-                else:
-                    score *= SAME_DEPT_PENALTY  # 0.9
-
-            # Reorder rate bonus
             if reorder_rate is not None:
                 rr_i = reorder_rate.get(i, 0.5)
                 rr_j = reorder_rate.get(j, 0.5)
@@ -265,7 +235,6 @@ def build_confidence(cooc_csr, freq, dept_map=None, reorder_rate=None,
         if np.all(scores == 0):
             continue
 
-        # Sort giảm dần, giữ top_k
         n_keep = min(m, top_k)
         if n_keep < m:
             top_idx = np.argpartition(scores, -n_keep)[-n_keep:]
@@ -282,7 +251,6 @@ def build_confidence(cooc_csr, freq, dept_map=None, reorder_rate=None,
                 vals_list.append(val)
                 nnz_total += 1
 
-    # Xây dựng CSR matrix
     if nnz_total > 0:
         confidence = csr_matrix(
             (np.array(vals_list, dtype=np.float32),
@@ -323,8 +291,14 @@ def load():
 # ============================================================
 
 if __name__ == "__main__":
-    from src.data_loader import load_prior
+    from src.data_loader import load_prior, load_products
+
     prior = load_prior()
+    products_df = load_products()
+
+    # Tính reorder rate để có bonus khi build confidence
+    reorder_rate = prior.groupby('product_id')['reordered'].mean().to_dict()
+
     cooc, freq = build_cooc(prior)
-    conf = build_confidence(cooc, freq)
+    conf = build_confidence(cooc, freq, reorder_rate=reorder_rate)
     save(cooc, conf)

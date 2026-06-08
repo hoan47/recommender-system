@@ -41,11 +41,6 @@ from src.recommend import set_prod_dept_map, recommend_simple
 from src.evaluation.evaluate import run_comparison
 
 
-def build_prod_dept_map(products_df):
-    """Xây dựng product_id → department_id mapping."""
-    return dict(zip(products_df['product_id'], products_df['department_id']))
-
-
 def build_reorder_rate(prior_df):
     """Xây dựng product_id → reorder rate mapping."""
     return prior_df.groupby('product_id')['reordered'].mean().to_dict()
@@ -54,7 +49,7 @@ def build_reorder_rate(prior_df):
 def main():
     total_t0 = time.time()
     print("=" * 75)
-    print("  PIPELINE: Build + Evaluate Model 2 (Improved)")
+    print("  PIPELINE: Build + Evaluate")
     print("=" * 75)
     
     # ── Step 1: Load dữ liệu ──────────────────────────────
@@ -65,7 +60,7 @@ def main():
     prior_df = load_prior()
     print(f"  Products: {len(products_df):,} | Prior: {len(prior_df):,}")
     
-    prod_dept_map = build_prod_dept_map(products_df)
+    prod_dept_map = dict(zip(products_df['product_id'], products_df['department_id']))
     reorder_rate = build_reorder_rate(prior_df)
     
     # ── Step 2: Build Co-occurrence ───────────────────────
@@ -74,13 +69,12 @@ def main():
     print("-" * 60)
     cooc, freq = build_cooc(prior_df)
     
-    # ── Step 3: Build Confidence (có cross-dept + reorder bonus) ──
+    # ── Step 3: Build Confidence (với reorder bonus) ──
     print("\n" + "-" * 60)
-    print("  STEP 3: Building Confidence (with cross-dept + reorder bonus)")
+    print("  STEP 3: Building Confidence (with reorder bonus)")
     print("-" * 60)
     confidence = build_confidence(
         cooc, freq,
-        dept_map=prod_dept_map,
         reorder_rate=reorder_rate,
         freq_min=30, top_k=100
     )
