@@ -141,7 +141,7 @@ Khác với per-user (mỗi user có prior/train/test riêng), hướng Global d
 |-----|--------|------------------------|
 | **prior** (100%) | 3,214,874 | **Xây dựng toàn bộ model** — không có "train" model theo nghĩa supervised learning. Toàn bộ co-occurrence matrix, graph edges, TF-IDF vectors đều được tính từ prior. |
 | **train** (100%) | 131,209 | **Tune hyperparameters** — dùng ground truth từ train set để tìm threshold tối ưu cho Confidence (freq_min), restart_prob cho KG, và trọng số α/β cho Hybrid. |
-| **test** (100%) | 75,000 | **Đánh giá cuối cùng** — chỉ chạy 1 lần duy nhất sau khi đã tune xong mọi tham số. Dùng metrics: Recall@K, NDCG@K, MAP@K. |
+| **test** (100%) | 75,000 | **Đánh giá cuối cùng** — chỉ chạy 1 lần duy nhất sau khi đã tune xong mọi tham số. Dùng metrics: Hit Rate@K, Precision@K, F1@K, NDCG@K, MAP@K. |
 
 **Cơ chế đánh giá cụ thể:**
 - Không phải "train model rồi predict test" như supervised learning thông thường
@@ -150,7 +150,7 @@ Khác với per-user (mỗi user có prior/train/test riêng), hướng Global d
   1. Lấy danh sách sản phẩm trong đơn đó
   2. Với mỗi sản phẩm A, dùng Confidence/KG → top-N sản phẩm hay mua kèm với A
   3. So sánh top-N với các sản phẩm còn lại trong đơn (ground truth)
-  4. Tính Recall@K, NDCG@K
+  4. Tính Hit Rate@K, Precision@K, F1@K, NDCG@K, MAP@K
 
 ### 4.7. Lưu ý kỹ thuật
 

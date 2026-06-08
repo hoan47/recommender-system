@@ -79,6 +79,13 @@ Các tham số Hybrid được định nghĩa trong `src/config.py`:
 Dataset Instacart public **KHÔNG cung cấp ground truth** cho test set (75K orders).
 Do đó evaluation chạy trên **train set** (131K orders) với giao thức leave-one-out.
 
+**Metrics đánh giá:**
+- **Hit Rate@K** (H) — tỷ lệ query có ít nhất 1 ground truth trong top-K (tương đương Recall@K cũ)
+- **Precision@K** (P) — trung bình số lượng ground truth trong top-K, chia cho K
+- **F1@K** (F) — harmonic mean của Hit Rate và Precision
+- **NDCG@K** — Normalized Discounted Cumulative Gain
+- **MAP@K** — Mean Average Precision
+
 > **Lưu ý:** Metrics cũ của SPMI (1-4% recall) không còn áp dụng. Cần chạy lại evaluation với Association Rules để có số liệu mới.
 
 ## Chạy

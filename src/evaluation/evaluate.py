@@ -5,7 +5,7 @@ Với mỗi sản phẩm trong mỗi đơn hàng (của train set):
   - Query = sản phẩm đó
   - Ground truth = các sản phẩm còn lại trong cùng đơn hàng
   - Lấy top-K recommendations từ similarity/score matrix
-  - Tính: Recall@K, NDCG@K, MAP@K
+  - Tính: Hit Rate@K, Precision@K, F1@K, NDCG@K, MAP@K
 
 GHI CHÚ: Dataset Instacart public KHÔNG cung cấp ground truth cho test set (75K orders).
 Do đó evaluation chạy trên train set (131K orders có ground truth).
@@ -89,7 +89,7 @@ def ap_at_k(ranked_list, gt_set, k):
 
 def evaluate_model(matrix, test_df, name="model", ks=EVAL_KS):
     """
-    Đánh giá Recall@K, NDCG@K, MAP@K trên test set.
+    Đánh giá Hit Rate@K, Precision@K, F1@K, NDCG@K, MAP@K trên test set.
     
     Tham số:
         matrix: csr_matrix (n_products x n_products) — ma trận similarity/score
@@ -104,7 +104,8 @@ def evaluate_model(matrix, test_df, name="model", ks=EVAL_KS):
     groups = test_df.groupby("order_id")["product_id"].apply(list)
     
     # Khởi tạo accumulators cho từng metric
-    recall_hits = {k: 0 for k in ks}
+    recall_hits = {k: 0 for k in ks}       # Số query có ít nhất 1 hit (cho Hit Rate)
+    precision_hits = {k: 0 for k in ks}    # Tổng số hits trong top-K (cho Precision)
     recall_total = 0
     ndcg_sums = {k: 0.0 for k in ks}
     ap_sums = {k: 0.0 for k in ks}
@@ -129,9 +130,13 @@ def evaluate_model(matrix, test_df, name="model", ks=EVAL_KS):
             top = row.indices[order[:max_k]].tolist()
             
             for k in ks:
-                # Recall: có ít nhất 1 ground truth trong top-K?
-                if set(top[:k]) & gt:
+                topk_set = set(top[:k])
+                # Hit Rate: có ít nhất 1 ground truth trong top-K?
+                if topk_set & gt:
                     recall_hits[k] += 1
+                
+                # Precision: đếm số lượng ground truth trong top-K
+                precision_hits[k] += len(topk_set & gt)
                 
                 # NDCG@K
                 ndcg_sums[k] += ndcg_at_k(top[:k], gt, k)
@@ -144,9 +149,20 @@ def evaluate_model(matrix, test_df, name="model", ks=EVAL_KS):
 
     metrics = {}
     for k in ks:
-        # Recall@K
-        recall = recall_hits[k] / recall_total if recall_total > 0 else 0
-        metrics[f"recall@{k}"] = round(recall, 6)
+        # Hit Rate@K (= Recall@K cũ): tỷ lệ query có ít nhất 1 ground truth trong top-K
+        hit = recall_hits[k] / recall_total if recall_total > 0 else 0
+        metrics[f"hit@{k}"] = round(hit, 6)
+        
+        # Precision@K: trung bình số lượng ground truth trong top-K, chia cho K
+        precision = precision_hits[k] / (query_count * k) if query_count > 0 else 0
+        metrics[f"precision@{k}"] = round(precision, 6)
+        
+        # F1@K: harmonic mean của Hit Rate và Precision
+        if hit > 0 and precision > 0:
+            f1 = 2 * hit * precision / (hit + precision)
+        else:
+            f1 = 0.0
+        metrics[f"f1@{k}"] = round(f1, 6)
         
         # NDCG@K
         ndcg_avg = ndcg_sums[k] / query_count if query_count > 0 else 0
@@ -156,8 +172,9 @@ def evaluate_model(matrix, test_df, name="model", ks=EVAL_KS):
         ap_avg = ap_sums[k] / query_count if query_count > 0 else 0
         metrics[f"map@{k}"] = round(ap_avg, 6)
         
-        print(f"    recall@{k} = {recall:.4f}  ndcg@{k} = {ndcg_avg:.4f}  map@{k} = {ap_avg:.4f} "
-              f"(hits={recall_hits[k]}, queries={query_count})")
+        print(f"    hit@{k} = {hit:.4f}  precision@{k} = {precision:.4f}  f1@{k} = {f1:.4f}  "
+              f"ndcg@{k} = {ndcg_avg:.4f}  map@{k} = {ap_avg:.4f}  "
+              f"(pra_hits={precision_hits[k]}, queries={query_count})")
     
     return metrics
 
@@ -169,13 +186,13 @@ def evaluate_all(test_df):
     """
     results = {}
 
-    # Đánh giá CB (standalone)
-    try:
-        cb = load_npz(MODELS_DIR / "cb_similarity.npz")
-        results["CB"] = evaluate_model(cb, test_df, "CB")
-        del cb; gc.collect()
-    except Exception as e:
-        print(f"  Skip CB: {e}")
+    # # Đánh giá CB (standalone)
+    # try:
+    #     cb = load_npz(MODELS_DIR / "cb_similarity.npz")
+    #     results["CB"] = evaluate_model(cb, test_df, "CB")
+    #     del cb; gc.collect()
+    # except Exception as e:
+    #     print(f"  Skip CB: {e}")
 
     # Đánh giá SPMI
     try:
@@ -185,21 +202,21 @@ def evaluate_all(test_df):
     except Exception as e:
         print(f"  Skip SPMI: {e}")
 
-    # Đánh giá KG
-    try:
-        kg = load_npz(MODELS_DIR / "kg_similarity.npz")
-        results["KG"] = evaluate_model(kg, test_df, "KG")
-        del kg; gc.collect()
-    except Exception as e:
-        print(f"  Skip KG: {e}")
+    # # Đánh giá KG
+    # try:
+    #     kg = load_npz(MODELS_DIR / "kg_similarity.npz")
+    #     results["KG"] = evaluate_model(kg, test_df, "KG")
+    #     del kg; gc.collect()
+    # except Exception as e:
+    #     print(f"  Skip KG: {e}")
 
-    # Đánh giá Hybrid
-    try:
-        hybrid = load_npz(MODELS_DIR / "hybrid_matrix.npz")
-        results["Hybrid"] = evaluate_model(hybrid, test_df, "Hybrid")
-        del hybrid; gc.collect()
-    except Exception as e:
-        print(f"  Skip Hybrid: {e}")
+    # # Đánh giá Hybrid
+    # try:
+    #     hybrid = load_npz(MODELS_DIR / "hybrid_matrix.npz")
+    #     results["Hybrid"] = evaluate_model(hybrid, test_df, "Hybrid")
+    #     del hybrid; gc.collect()
+    # except Exception as e:
+    #     print(f"  Skip Hybrid: {e}")
 
     # Lưu kết quả ra file
     with open(METRICS_FILE, "w", encoding="utf-8") as f:
