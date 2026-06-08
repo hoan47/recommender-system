@@ -9,6 +9,9 @@ Edge gồm:
   1. co_purchase: product-product, weight = SPMI score (từ build_spmi)
      Chỉ giữ cặp có SPMI > 0 để lọc nhiễu
   2. belongs_to: product-department, weight = 1.0 (từ products.csv)
+  3. dept_co_purchase: department-department, weight = department-level SPMI
+     Cho phép cross-department recommendation (vd: gà → xà) qua đường vòng
+     d_thực_phẩm → d_rau_củ → p_xà
 
 Sau đó dùng node2vec (random walks + skip-gram negative sampling)
 để học product embeddings.
@@ -25,27 +28,107 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import gc
 import math
 import numpy as np
+import pandas as pd
 import networkx as nx
 from collections import Counter
-from scipy.sparse import load_npz, save_npz, lil_matrix
+from scipy.sparse import load_npz, save_npz, lil_matrix, csr_matrix
 from numba import njit
 from numba.typed import List as NumbaList
 from tqdm import tqdm
 
-from src.config import MODELS_DIR, KG_DIM, KG_WALK_LENGTH, KG_NUM_WALKS, KG_EPOCHS
+from src.config import MODELS_DIR, DATA_DIR, KG_DIM, KG_WALK_LENGTH, KG_NUM_WALKS, KG_EPOCHS
 
 # File lưu embeddings và similarity matrix
 EMB_FILE = MODELS_DIR / "kg_embeddings.npy"
 SIM_FILE = MODELS_DIR / "kg_similarity.npz"
+DEPT_SPMI_FILE = MODELS_DIR / "dept_spmi.npz"
 
 
-def build_graph(spmi, products_df):
+def build_dept_spmi(prior, products_df):
     """
-    Xây dựng đồ thị NetworkX từ SPMI matrix và product metadata.
+    Tính SPMI (Shifted Positive Pointwise Mutual Information) giữa các department.
+    
+    Công thức SPMI (cùng level product):
+      P(d_k, d_l) = số đơn hàng chứa cả d_k và d_l / tổng số đơn
+      P(d_k)       = số đơn hàng chứa d_k / tổng số đơn
+      PMI = log2( P(d_k, d_l) / (P(d_k) * P(d_l)) )
+      SPMI = max(0, PMI - log2(alpha)), với alpha = 1 (Shifted)
     
     Tham số:
-        spmi: csr_matrix — ma trận SPMI từ build_spmi
+        prior: DataFrame — order_products__prior (order_id, product_id)
         products_df: DataFrame — product_id, department_id
+    
+    Trả về:
+        dept_spmi: csr_matrix (n_depts x n_depts) — SPMI giữa các department
+        n_depts: int — số department
+    """
+    print("\n  [KG] Computing department-department SPMI ...")
+    n_depts = products_df["department_id"].nunique()
+    
+    # Map product_id → department_id
+    p2d = dict(zip(products_df["product_id"], products_df["department_id"]))
+    
+    # Với mỗi order, lấy danh sách department_id duy nhất
+    order_depts = prior.groupby("order_id")["product_id"].apply(
+        lambda prods: list(set(p2d.get(p, -1) for p in prods if p2d.get(p, -1) != -1))
+    )
+    n_orders = len(order_depts)
+    print(f"  [KG]   {n_orders:,} orders, {n_depts} departments")
+    
+    # Đếm co-occurrence giữa các department
+    # Dùng ma trận thưa 21×21
+    cooc = lil_matrix((n_depts, n_depts), dtype=np.float64)
+    dept_count = np.zeros(n_depts, dtype=np.float64)
+    
+    for depts in order_depts:
+        # Đánh dấu department nào xuất hiện trong order này
+        depts_unique = set(depts)
+        for d in depts_unique:
+            dept_count[d - 1] += 1.0  # department_id bắt đầu từ 1
+        # Tăng co-occurrence cho từng cặp department trong order
+        dept_list = sorted(depts_unique)
+        for i_idx, d_i in enumerate(dept_list):
+            for d_j in dept_list[i_idx:]:  # i_idx để lấy tam giác trên (d_i <= d_j)
+                cooc[d_i - 1, d_j - 1] += 1.0
+    
+    # Tính SPMI
+    n_orders_f = float(n_orders)
+    alpha = 1.0  # Shifted parameter
+    spmi = lil_matrix((n_depts, n_depts), dtype=np.float32)
+    
+    coo = cooc.tocoo()
+    for i, j, p_ij in zip(coo.row, coo.col, coo.data):
+        p_i = dept_count[i] / n_orders_f
+        p_j = dept_count[j] / n_orders_f
+        p_ij_norm = p_ij / n_orders_f
+        
+        pmi = math.log2(p_ij_norm / (p_i * p_j)) if p_i > 0 and p_j > 0 else 0.0
+        spmi_val = max(0.0, pmi - math.log2(alpha))
+        
+        if spmi_val > 0:
+            spmi[i, j] = spmi_val
+            if i != j:
+                spmi[j, i] = spmi_val  # Đối xứng
+    
+    csr_spmi = spmi.tocsr()
+    print(f"  [KG]   Dept SPMI: {csr_spmi.nnz:,} non-zero pairs (density {csr_spmi.nnz / (n_depts * n_depts):.2%})")
+    
+    # Lưu lại để dùng sau
+    save_npz(DEPT_SPMI_FILE, csr_spmi)
+    
+    del cooc, spmi; gc.collect()
+    return csr_spmi, n_depts
+
+
+def build_graph(spmi, dept_spmi, products_df, n_depts):
+    """
+    Xây dựng đồ thị NetworkX từ SPMI matrix, department SPMI và product metadata.
+    
+    Tham số:
+        spmi: csr_matrix — ma trận SPMI product-product từ build_spmi
+        dept_spmi: csr_matrix — ma trận SPMI department-department
+        products_df: DataFrame — product_id, department_id
+        n_depts: int — số department
         
     Trả về:
         G: nx.Graph — đồ thị vô hướng
@@ -57,17 +140,26 @@ def build_graph(spmi, products_df):
     # Thêm product nodes (p0..pn-1) với type="product"
     G.add_nodes_from([f"p{i}" for i in range(n)], type="product")
     
+    # Thêm department nodes (d0..dM-1) với type="department"
+    G.add_nodes_from([f"d{i}" for i in range(n_depts)], type="department")
+    
     # Thêm edges co_purchase từ SPMI matrix (chỉ tam giác trên i<j)
     coo = spmi.tocoo()
     for i, j, w in zip(coo.row, coo.col, coo.data):
         if i < j and w > 0:
             G.add_edge(f"p{i}", f"p{j}", weight=float(w))
     
-    # Thêm department nodes (d0..dm) + edges belongs_to
+    # Thêm edges belongs_to: product → department
     for _, row in products_df.iterrows():
         pid, did = int(row["product_id"]), int(row["department_id"])
         if pid < n:
-            G.add_edge(f"p{pid}", f"d{did}", weight=1.0)
+            G.add_edge(f"p{pid}", f"d{did - 1}", weight=1.0)  # did-1 vì department SPMI dùng 0-based
+    
+    # Thêm edges department-department từ dept_spmi
+    coo_d = dept_spmi.tocoo()
+    for i, j, w in zip(coo_d.row, coo_d.col, coo_d.data):
+        if i <= j and w > 0:  # Tam giác trên để tránh duplicate
+            G.add_edge(f"d{i}", f"d{j}", weight=float(w))
     
     print(f"  [KG] Graph: {G.number_of_nodes():,} nodes, {G.number_of_edges():,} edges")
     return G
@@ -406,7 +498,10 @@ if __name__ == "__main__":
     prior = load_prior()
     # Tải SPMI matrix từ bước trước
     spmi = load_npz(MODELS_DIR / "spmi_matrix.npz")
-    G = build_graph(spmi, products)
+    # Tính department-department SPMI
+    dept_spmi, n_depts = build_dept_spmi(prior, products)
+    # Xây dựng đồ thị với department-department edges
+    G = build_graph(spmi, dept_spmi, products, n_depts)
     emb = train_node2vec(G, spmi.shape[0])
     sim = compute_similarity(emb)
     save(emb, sim)
