@@ -36,7 +36,7 @@ recommender-system/
 |-------|------|----------|
 | CB | `build_cb.py` | TF-IDF dict-based, tìm sản phẩm tương tự (substitute), có thể dùng standalone hoặc làm bộ lọc |
 | **Association Rules** | **`build_association_rules.py`** | **Unified scoring = ochiai × confidence × log1p, tìm sản phẩm mua kèm (complementary). BẤT ĐỐI XỨNG** |
-| KG | `build_knowledge_graph.py` | Graph + node2vec, tìm sản phẩm liên quan qua đồ thị |
+| KG | `build_knowledge_graph.py` | Graph + node2vec (3 loại edge: product-product SPMI, product-department, department-department SPMI), tìm sản phẩm liên quan qua đồ thị |
 | Hybrid | `build_hybrid.py` | α*AssociationRules + β*KG, filter bằng CB |
 | Tuning | `tune_hyperparams.py` | Grid search tự động 4 phase (CB → Association Rules → KG → Hybrid) |
 

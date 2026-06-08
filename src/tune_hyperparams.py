@@ -333,8 +333,9 @@ def tune_kg(confidence, products_df, prior_df, train_df):
 
     # Build graph chỉ 1 lần (dùng Confidence best)
     print("\n  [Tune] Building graph (once)...")
-    from src.features.build_knowledge_graph import build_graph
-    G = build_graph(confidence, products_df)
+    from src.features.build_knowledge_graph import build_graph, build_dept_spmi
+    dept_spmi, n_depts = build_dept_spmi(prior_df, products_df)
+    G = build_graph(confidence, dept_spmi, products_df, n_depts)
 
     best_metric_val = -1.0
     best_params = None
