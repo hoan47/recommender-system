@@ -43,6 +43,19 @@ recommender-system/
 
 ## Các thay đổi gần đây
 
+### 6/9/2026 — Refactor features: xóa cross-dept bonus, sửa __main__ để chạy riêng lẻ
+
+- **Vấn đề:** Chạy 4 feature riêng lẻ (`build_association_rules.py`, `build_knowledge_graph.py`, `build_hybrid.py`) cho kết quả H@10 ~0.1 thay vì ~0.3 như pipeline vì:
+  1. `build_association_rules.py` chạy riêng: thiếu `reorder_rate` bonus
+  2. `build_knowledge_graph.py` chạy riêng: tìm file `spmi_matrix.npz` không tồn tại (pipeline dùng `confidence_matrix.npz`)
+  3. `build_hybrid.py` chạy riêng: dùng confidence thiếu reorder bonus
+- **Sửa:**
+  - `src/config.py`: xóa `CROSS_DEPT_BONUS`, `SAME_DEPT_PENALTY`
+  - `src/features/build_association_rules.py`: xóa tham số `dept_map`, xóa cross-dept bonus, `__main__` có `reorder_rate`
+  - `src/features/build_knowledge_graph.py`: `__main__` dùng `confidence_matrix.npz` thay `spmi_matrix.npz`
+  - `src/features/build_hybrid.py`: `__main__` tương thích
+  - `src/run_pipeline.py`: xóa `build_prod_dept_map`, xóa tham số `dept_map` trong `build_confidence`
+
 ### 6/8/2026 — Refactor evaluation
 
 - **Vấn đề:** File evaluate.py cũ eval trên **train set** (131K orders) vì cho rằng test set không có ground truth — điều này sai.
