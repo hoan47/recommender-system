@@ -251,12 +251,12 @@ if __name__ == "__main__":
 
     models = {}
 
-    # CB
-    try:
-        m = load_npz(MODELS_DIR / "cb_similarity.npz")
-        models["CB"] = _make_rec_func(m, "CB")
-    except Exception as e:
-        print(f"  Skip CB: {e}")
+    # # CB
+    # try:
+    #     m = load_npz(MODELS_DIR / "cb_similarity.npz")
+    #     models["CB"] = _make_rec_func(m, "CB")
+    # except Exception as e:
+    #     print(f"  Skip CB: {e}")
 
     # SPMI
     try:
@@ -265,19 +265,19 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"  Skip SPMI: {e}")
 
-    # KG
-    try:
-        m = load_npz(MODELS_DIR / "kg_similarity.npz")
-        models["KG"] = _make_rec_func(m, "KG")
-    except Exception as e:
-        print(f"  Skip KG: {e}")
+    # # KG
+    # try:
+    #     m = load_npz(MODELS_DIR / "kg_similarity.npz")
+    #     models["KG"] = _make_rec_func(m, "KG")
+    # except Exception as e:
+    #     print(f"  Skip KG: {e}")
 
-    # Hybrid
-    try:
-        m = load_npz(MODELS_DIR / "hybrid_matrix.npz")
-        models["Hybrid"] = _make_rec_func(m, "Hybrid")
-    except Exception as e:
-        print(f"  Skip Hybrid: {e}")
+    # # Hybrid
+    # try:
+    #     m = load_npz(MODELS_DIR / "hybrid_matrix.npz")
+    #     models["Hybrid"] = _make_rec_func(m, "Hybrid")
+    # except Exception as e:
+    #     print(f"  Skip Hybrid: {e}")
 
     if not models:
         print("  [Eval] No models loaded. Nothing to evaluate.")
