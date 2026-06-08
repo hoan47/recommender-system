@@ -36,6 +36,19 @@ CONF_FREQ_MIN = 30
 # Unified scoring = ochiai * confidence * log1p
 CONF_TOP_K = 100
 
+# ===== Cross-dept bonus =====
+# CROSS_DEPT_BONUS: Hệ số ưu tiên sản phẩm khác department (complementary)
+# Cặp khác dept: ochiai * conf * log1p * (1 + CROSS_DEPT_BONUS)
+# Cặp cùng dept: ochiai * conf * log1p * (SAME_DEPT_PENALTY)
+# Model 1 dùng 1.3, nhưng chúng ta dùng nhẹ hơn: 1.05-1.1
+CROSS_DEPT_BONUS = 1.1
+SAME_DEPT_PENALTY = 0.9
+
+# ===== Reorder rate bonus =====
+# RORDER_BONUS: Hệ số ưu tiên sản phẩm có reorder rate cao
+# rr_bonus = 1.0 + RORDER_BONUS * avg(reorder_rate(A), reorder_rate(B))
+REORDER_BONUS = 0.3
+
 # ===== Knowledge Graph (KG) =====
 # KG_DIM: Kích thước embedding vector cho mỗi node (product + department)
 KG_DIM = 64
@@ -55,8 +68,22 @@ HYBRID_ALPHA = 0.2
 HYBRID_BETA = 0.8
 # HYBRID_CB_THRESH: Ngưỡng CB similarity để loại sản phẩm substitute
 # Nếu CB_sim(A,B) > threshold → A và B quá giống → loại khỏi gợi ý
-# 0.85: chỉ loại substitute rất giống (cùng tên gần như identical), giữ lại complementary
-HYBRID_CB_THRESH = 0.85
+# Giảm từ 0.85 xuống 0.45 để lọc substitute hiệu quả hơn
+HYBRID_CB_THRESH = 0.45
+
+# ===== Diversity filter =====
+# MAX_PER_DEPT: Tối đa số sản phẩm cùng department được gợi ý
+MAX_PER_DEPT = 5
+# SAME_DEPT_MAX: Tối đa số sản phẩm cùng department với seed được gợi ý
+SAME_DEPT_MAX = 3
+
+# ===== Department direction =====
+# MIN_CONF: Ngưỡng confidence tối thiểu để xác định direction
+MIN_CONF = 30.0
+# MIN_LIFT: Ngưỡng lift tối thiểu
+MIN_LIFT = 1.05
+# ASYMMETRY_RATIO: Tỉ lệ asymmetry để xác định 1 chiều vs 2 chiều
+ASYMMETRY_RATIO = 1.15
 
 # Hàm load stopwords (dùng set để dedup)
 def _load_stopwords():

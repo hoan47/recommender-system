@@ -28,7 +28,7 @@ from numba import njit
 from numba.typed import Dict
 from numba.core import types as nb_types
 
-from src.config import MODELS_DIR, CONF_FREQ_MIN, CONF_TOP_K
+from src.config import MODELS_DIR, CONF_FREQ_MIN, CONF_TOP_K, CROSS_DEPT_BONUS, SAME_DEPT_PENALTY, REORDER_BONUS
 
 # File lưu ma trận co-occurrence và Confidence (unified scoring)
 COOC_FILE = MODELS_DIR / "cooc_matrix.npz"
@@ -172,23 +172,31 @@ def build_cooc(prior_df):
 # Build Confidence (Unified Scoring)
 # ============================================================
 
-def build_confidence(cooc_csr, freq, freq_min=CONF_FREQ_MIN, top_k=CONF_TOP_K):
+def build_confidence(cooc_csr, freq, dept_map=None, reorder_rate=None,
+                     freq_min=CONF_FREQ_MIN, top_k=CONF_TOP_K):
     """
-    Tính Confidence matrix = unified scoring, bất đối xứng.
+    Tính Confidence matrix = unified scoring + cross-dept bonus + reorder bonus, bất đối xứng.
 
     Công thức mỗi cặp (i→j):
       cnt = cooc[i, j]
       ochiai = cnt / sqrt(freq[i] * freq[j])
       log_ab = log1p(cnt)
       conf   = cnt / freq[i]
-      score  = ochiai * conf * log_ab
+      score  = ochiai * conf * log_ab * cross_bonus * rr_bonus
 
-    Chỉ recommend từ product i nếu freq[i] >= freq_min (loại sản phẩm quá hiếm).
-    Giữ top-K mỗi dòng.
+    Cross-dept bonus:
+      - Khác dept: cross_bonus = CROSS_DEPT_BONUS (1.1) → ưu tiên complementary
+      - Cùng dept: cross_bonus = SAME_DEPT_PENALTY (0.9) → giảm substitute
+
+    Reorder bonus:
+      - rr_bonus = 1.0 + REORDER_BONUS * avg(reorder_rate[i], reorder_rate[j])
+      - Sản phẩm hay mua lại được ưu tiên hơn
 
     Tham số:
         cooc_csr: csr_matrix — ma trận co-occurrence đối xứng
         freq: numpy array — order frequency mỗi sản phẩm
+        dept_map: dict[int, int] — product_id → department_id (nếu None, không có cross-dept bonus)
+        reorder_rate: dict[int, float] — product_id → reorder rate (nếu None, không có reorder bonus)
         freq_min: int — ngưỡng tối thiểu freq(i) để recommend
         top_k: int — số lượng gợi ý tối đa mỗi sản phẩm
 
@@ -234,7 +242,25 @@ def build_confidence(cooc_csr, freq, freq_min=CONF_FREQ_MIN, top_k=CONF_TOP_K):
             ochiai = cnt / math.sqrt(fi * fj)
             log_ab = math.log1p(cnt)
             conf_ij = cnt / fi
-            scores[idx] = ochiai * conf_ij * log_ab
+            score = ochiai * conf_ij * log_ab
+
+            # Cross-dept bonus
+            if dept_map is not None:
+                d_i = dept_map.get(i, -1)
+                d_j = dept_map.get(j, -1)
+                if d_i != d_j and d_i != -1 and d_j != -1:
+                    score *= CROSS_DEPT_BONUS  # 1.1
+                else:
+                    score *= SAME_DEPT_PENALTY  # 0.9
+
+            # Reorder rate bonus
+            if reorder_rate is not None:
+                rr_i = reorder_rate.get(i, 0.5)
+                rr_j = reorder_rate.get(j, 0.5)
+                rr_bonus = 1.0 + REORDER_BONUS * (rr_i + rr_j) / 2.0
+                score *= rr_bonus
+
+            scores[idx] = score
 
         if np.all(scores == 0):
             continue
