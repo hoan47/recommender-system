@@ -76,5 +76,7 @@ def _load_stopwords():
 CB_STOPWORDS = _load_stopwords()
 
 # ===== Evaluation =====
-# EVAL_KS: Các giá trị K để đánh giá recall@K
+# EVAL_KS: Các giá trị K để đánh giá
 EVAL_KS = (5, 10, 20)
+# PATH_OUTPUT_CSV: File lưu kết quả evaluation dạng DataFrame
+PATH_OUTPUT_CSV = RESULTS_DIR / "metrics.csv"

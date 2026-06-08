@@ -74,19 +74,31 @@ Các tham số Hybrid được định nghĩa trong `src/config.py`:
 | `CONF_FREQ_MIN` | 30 | Chỉ recommend từ sản phẩm có ≥30 đơn |
 | `CONF_TOP_K` | 100 | Giữ tối đa 100 gợi ý mỗi sản phẩm |
 
-## Lưu ý Evaluation
+## Evaluation
 
-Dataset Instacart public **KHÔNG cung cấp ground truth** cho test set (75K orders).
-Do đó evaluation chạy trên **train set** (131K orders) với giao thức leave-one-out.
+**Test split:** User-based temporal — 80% order đầu của mỗi user → train, 20% cuối → test.
+Đảm bảo không có data leakage (chỉ dùng quá khứ để dự đoán tương lai).
+
+**Ground truth:** Tất cả sản phẩm còn lại trong cùng order (không phân biệt department).
+Cross-dept ưu tiên là việc của model (qua cross_bonus), không phải của evaluator.
 
 **Metrics đánh giá:**
-- **Hit Rate@K** (H) — tỷ lệ query có ít nhất 1 ground truth trong top-K (tương đương Recall@K cũ)
-- **Precision@K** (P) — trung bình số lượng ground truth trong top-K, chia cho K
-- **F1@K** (F) — harmonic mean của Hit Rate và Precision
-- **NDCG@K** — Normalized Discounted Cumulative Gain
+- **H@K** (Hit Rate) — metric chính: tỷ lệ query có ≥1 ground truth trong top-K
+- **R@K** (Recall) — tỷ lệ ground truth items được recommend
+- **P@K** (Precision) — số lượng ground truth trong top-K chia cho K
+- **F1@K** — harmonic mean của R@K và P@K
+- **NDCG@K** — Normalized Discounted Cumulative Gain (đánh giá thứ hạng)
 - **MAP@K** — Mean Average Precision
 
-> **Lưu ý:** Metrics cũ của SPMI (1-4% recall) không còn áp dụng. Cần chạy lại evaluation với Association Rules để có số liệu mới.
+**Benchmark guide** (với 50K sản phẩm, sparse 99.9%):
+| H@10 | Đánh giá |
+|------|----------|
+| < 0.10 | Còn thấp — cần cải thiện model/data |
+| ~ 0.15 | Chấp nhận được |
+| ~ 0.25 | Tốt |
+| > 0.35 | Rất tốt (ngang production system) |
+
+> **Lưu ý:** Metrics cũ của SPMI (1-4% recall) không còn áp dụng. Cần chạy evaluation mới với temporal split và Association Rules.
 
 ## Chạy
 
