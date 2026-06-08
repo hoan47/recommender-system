@@ -133,7 +133,7 @@ def build_hybrid(confidence, kg_sim, cb_vectors, alpha=HYBRID_ALPHA, beta=HYBRID
         5. Giữ top scoring entries
     
     Tham số:
-        confidence: csr_matrix — ma trận Confidence từ build_confidence (unified scoring)
+        confidence: csr_matrix — ma trận Confidence từ build_association_rules (unified scoring)
         kg_sim: csr_matrix — ma trận KG similarity từ build_knowledge_graph
         cb_vectors: dict — CB vectors từ build_cb
         alpha: float — trọng số Confidence
@@ -239,7 +239,7 @@ if __name__ == "__main__":
         confidence = load_npz(CONF_FILE)
         print("  [Hybrid] Loaded Confidence matrix")
     except FileNotFoundError:
-        print("  [Hybrid] ERROR: Confidence matrix not found! Run build_confidence.py first.")
+        print("  [Hybrid] ERROR: Confidence matrix not found! Run build_association_rules.py first.")
         raise
     
     kg_sim = load_npz(MODELS_DIR / "kg_similarity.npz")

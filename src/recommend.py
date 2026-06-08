@@ -36,7 +36,7 @@ def recommend(pid, top_k=10):
         try:
             matrix = load_npz(MODELS_DIR / "confidence_matrix.npz")
         except FileNotFoundError:
-            print("  [Recommend] ERROR: No matrix found! Run build_confidence.py or build_hybrid.py first.")
+            print("  [Recommend] ERROR: No matrix found! Run build_association_rules.py or build_hybrid.py first.")
             return []
 
     row = matrix[pid]
@@ -65,7 +65,6 @@ def recommend_with_scores(pid, top_k=10):
         try:
             matrix = load_npz(MODELS_DIR / "confidence_matrix.npz")
         except FileNotFoundError:
-            print("  [Recommend] ERROR: No matrix found! Run build_confidence.py or build_hybrid.py first.")
             return []
 
     row = matrix[pid]

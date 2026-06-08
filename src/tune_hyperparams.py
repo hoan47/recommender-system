@@ -47,8 +47,8 @@ def _import_build_cb():
     return build_cb
 
 def _import_build_confidence():
-    from src.features import build_confidence
-    return build_confidence
+    from src.features import build_association_rules
+    return build_association_rules
 
 def _import_build_kg():
     from src.features import build_knowledge_graph as kg
@@ -250,7 +250,7 @@ def tune_confidence(prior_df, train_df):
     grid_topk = [50, 100, 200]
 
     # Build co-occurrence chỉ 1 lần (tốn thời gian nhất)
-    from src.features.build_confidence import build_cooc
+    from src.features.build_association_rules import build_cooc
     print("\n  [Tune] Building co-occurrence matrix (once)...")
     cooc, freq = build_cooc(prior_df)
 
@@ -277,7 +277,7 @@ def tune_confidence(prior_df, train_df):
             cfg.CONF_TOP_K = topk
 
             # Build Confidence matrix
-            from src.features.build_confidence import build_confidence
+            from src.features.build_association_rules import build_confidence
             conf = build_confidence(cooc, freq, freq_min=freq_min, top_k=topk)
 
             # Evaluate
