@@ -1,5 +1,5 @@
 """
-Content-Based vectors + similarity (phong cách dict-based, gọn nhẹ)
+Content-Based vectors + similarity
 
 CB dùng để LỌC sản phẩm tương tự (substitute) ra khỏi gợi ý.
 KHÔNG phải model gợi ý chính. Output là dict{pid: dict{vocab_idx: tfidf_val}}.
