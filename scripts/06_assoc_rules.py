@@ -52,4 +52,14 @@ else:
     arm.fit(ochiai, order_products)
     arm.save(save_path)
 
+# Test thu
+sample_id = products['product_id'].iloc[0]
+pname = products[products['product_id'] == sample_id]['product_name'].values[0]
+print(f"\n3. Test recommend cho [{sample_id}] {pname}:")
+recs = arm.recommend(sample_id, top_k=5)
+for pid, lift in recs:
+    rname = products[products['product_id'] == pid]['product_name'].values
+    rname = rname[0] if len(rname) else "?"
+    print(f"   -> {pid}: {rname} (lift={lift:.4f})")
+
 print("\n Done!")

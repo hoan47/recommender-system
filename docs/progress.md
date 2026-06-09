@@ -1,6 +1,6 @@
 # Bảng Theo Dõi Tiến Độ (Progress Tracking)
 
-Cập nhật lần cuối: 2026-06-10 01:37
+Cập nhật lần cuối: 2026-06-10 02:30
 
 ---
 
@@ -17,6 +17,9 @@ Cập nhật lần cuối: 2026-06-10 01:37
 | `src/models/node2vec.py` | ✅ Hoàn tất | Graph embedding + random walk p/q |
 | `src/models/assoc_rules.py` | ✅ Hoàn tất | Association Rules từ co-occurrence matrix |
 | `src/models/ensemble.py` | ✅ Hoàn tất | Weighted ensemble (α=0.5, β=0.25, γ=0.25) + CB Filter |
+| `src/evaluation/__init__.py` | ✅ Hoàn tất | Package init |
+| `src/evaluation/metrics.py` | ✅ Hoàn tất | Precision@K, Recall@K, F1@K, Hit@K |
+| `src/evaluation/survey_generator.py` | ✅ Hoàn tất | Sinh mẫu khảo sát (top5 + noise) |
 
 ## Scripts chạy từng bước
 
@@ -27,8 +30,9 @@ Cập nhật lần cuối: 2026-06-10 01:37
 | `scripts/03_ochiai.py` | ✅ Hoàn tất | Train Ochiai |
 | `scripts/04_item2vec.py` | ✅ Hoàn tất | Train Item2Vec |
 | `scripts/05_node2vec.py` | ✅ Hoàn tất | Train Node2Vec |
-| `scripts/06_assoc_rules.py` | ✅ Hoàn tất | Train Association Rules |
+| `scripts/06_assoc_rules.py` | ✅ Hoàn tất | Train Association Rules + test recommend |
 | `scripts/07_ensemble.py` | ✅ Hoàn tất | Ensemble + test recommend |
+| `scripts/08_evaluate_assoc_rules.py` | ✅ Hoàn tất | Đánh giá Assoc Rules: survey + metrics |
 
 ## Model đã train (cached)
 
@@ -46,4 +50,4 @@ Cập nhật lần cuối: 2026-06-10 01:37
 - [ ] Chạy `scripts/05_node2vec.py` — train Node2Vec (mất ~15-30 phút)
 - [ ] Chạy `scripts/06_assoc_rules.py` — train Assoc Rules (mất ~2-5 phút)
 - [ ] Chạy `scripts/07_ensemble.py` — test ensemble + CB Filter
-- [ ] Giai đoạn sau: Evaluation (Survey + LLM + Metrics)
+- [ ] Chạy `scripts/08_evaluate_assoc_rules.py` — đánh giá Assoc Rules (khi đã train xong)

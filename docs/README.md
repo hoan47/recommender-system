@@ -32,9 +32,13 @@ recommender-system/
 │   ├── 04_item2vec.py       # Train Item2Vec
 │   ├── 05_node2vec.py       # Train Node2Vec
 │   ├── 06_assoc_rules.py    # Train Association Rules
-│   └── 07_ensemble.py       # Ensemble + test
+│   ├── 07_ensemble.py       # Ensemble + test
+│   └── 08_evaluate_assoc_rules.py  # Evaluation: survey + metrics
 ├── src/                     # Source code
 │   ├── config.py            # Cấu hình tập trung
+│   ├── evaluation/          # Đánh giá model
+│   │   ├── metrics.py       # Precision@K, Recall@K, F1@K, Hit@K
+│   │   └── survey_generator.py  # Sinh mẫu khảo sát
 │   ├── features/            # Xử lý dữ liệu & vector hóa
 │   └── models/              # Các model recommendation
 └── .gitignore               # Loại trừ data/, models/, results/
@@ -66,6 +70,7 @@ python scripts/04_item2vec.py
 python scripts/05_node2vec.py
 python scripts/06_assoc_rules.py
 python scripts/07_ensemble.py
+python scripts/08_evaluate_assoc_rules.py
 ```
 
 ## Lưu Ý
