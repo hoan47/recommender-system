@@ -66,9 +66,6 @@ python scripts/04_item2vec.py
 python scripts/05_node2vec.py
 python scripts/06_assoc_rules.py
 python scripts/07_ensemble.py
-
-# Hoặc chạy toàn bộ pipeline 1 lệnh
-python run.py
 ```
 
 ## Lưu Ý
