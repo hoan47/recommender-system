@@ -105,10 +105,11 @@ def build_cb_vectors(products_df, prior_df):
                 vec[k] /= norm
         cb_vectors[pid] = vec
 
+    vocab_size = len(vocab)
     del doc_tokens, doc_freq, vocab, idf, prod_info
     gc.collect()
     print(f"  [CB] Done: {len(cb_vectors):,} vectors, "
-          f"vocab_size={len(vocab):,}")
+          f"vocab_size={vocab_size:,}")
 
 
 def cb_similarity(pid_a, pid_b):
