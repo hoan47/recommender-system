@@ -8,7 +8,7 @@ data/processed/
 data/survey/
 
 # Models & Results
-models/
+/models/
 results/
 
 # Python
