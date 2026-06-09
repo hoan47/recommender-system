@@ -2,12 +2,30 @@
 TF-IDF + One-hot cho CB Diversity Filter.
 Vector hóa sản phẩm dựa trên product_name, aisle_id, department_id.
 """
+import os
 import numpy as np
 from scipy import sparse
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 from sklearn.preprocessing import OneHotEncoder
 
-from src.config import CB_N_GRAM_RANGE, CB_MAX_FEATURES
+from src.config import CB_N_GRAM_RANGE, CB_MAX_FEATURES, PROJECT_ROOT
+
+
+def _load_stop_words():
+    """
+    Load stop words: dung sklearn's ENGLISH_STOP_WORDS + tu custom trong file.
+    File english_stopwords.txt: them tu moi vao day, moi tu 1 dong.
+    """
+    stop_words = set(ENGLISH_STOP_WORDS)
+    stop_file = os.path.join(PROJECT_ROOT, "english_stopwords.txt")
+    if os.path.exists(stop_file):
+        with open(stop_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                word = line.strip().lower()
+                if word and not word.startswith('#'):
+                    stop_words.add(word)
+    return stop_words
 
 
 def build_product_vectors(products_df, ngram_range=None, max_features=None):
@@ -37,12 +55,13 @@ def build_product_vectors(products_df, ngram_range=None, max_features=None):
     
     # --- TF-IDF trên product_name ---
     print("  TF-IDF trên product_name...")
+    stop_words = _load_stop_words()
     tfidf = TfidfVectorizer(
         ngram_range=ngram_range,
         max_features=max_features,
         analyzer='word',
         token_pattern=r'(?u)\b\w+\b',
-        stop_words=None  # có thể dùng english_stopwords.txt sau
+        stop_words=stop_words,
     )
     tfidf_matrix = tfidf.fit_transform(products_df['product_name'].fillna(''))
     print(f"    TF-IDF matrix shape: {tfidf_matrix.shape}")
