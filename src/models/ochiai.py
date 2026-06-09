@@ -208,13 +208,13 @@ class OchiaiModel:
         # Lưu CSR matrix
         sparse.save_npz(os.path.join(path, "cooc_matrix.npz"), self.cooc_matrix)
         
-        # Lưu metadata
+        # Lưu metadata — convert int64 → int để JSON serialize được
         metadata = {
-            'min_support': self.min_support,
-            'n_products': self.n_products,
-            'product_id_to_idx': self.product_id_to_idx,
-            'idx_to_product_id': {str(k): v for k, v in self.idx_to_product_id.items()},
-            'product_counts': self.product_counts.tolist(),
+            'min_support': int(self.min_support),
+            'n_products': int(self.n_products),
+            'product_id_to_idx': {int(k): int(v) for k, v in self.product_id_to_idx.items()},
+            'idx_to_product_id': {str(int(k)): int(v) for k, v in self.idx_to_product_id.items()},
+            'product_counts': [int(c) for c in self.product_counts],
             'total_orders': int(self.total_orders),
         }
         with open(os.path.join(path, "metadata.json"), 'w') as f:
