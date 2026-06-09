@@ -3,6 +3,10 @@ data/*.csv
 data/*.json
 data/*.sql
 
+# Data processed & survey
+data/processed/
+data/survey/
+
 # Models & Results
 models/
 results/
