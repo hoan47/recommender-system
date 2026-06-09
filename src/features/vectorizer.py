@@ -16,6 +16,7 @@ def _load_stop_words():
     """
     Load stop words: dung sklearn's ENGLISH_STOP_WORDS + tu custom trong file.
     File english_stopwords.txt: them tu moi vao day, moi tu 1 dong.
+    Tra ve list de tuong thich voi sklearn TfidfVectorizer.
     """
     stop_words = set(ENGLISH_STOP_WORDS)
     stop_file = os.path.join(PROJECT_ROOT, "english_stopwords.txt")
@@ -25,7 +26,7 @@ def _load_stop_words():
                 word = line.strip().lower()
                 if word and not word.startswith('#'):
                     stop_words.add(word)
-    return stop_words
+    return list(stop_words)
 
 
 def build_product_vectors(products_df, ngram_range=None, max_features=None):
