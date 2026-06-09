@@ -3,12 +3,11 @@ Content-Based vectors + similarity
 
 CB dùng để LỌC sản phẩm tương tự (substitute) ra khỏi gợi ý.
 KHÔNG phải model gợi ý chính. Output là dict{pid: dict{vocab_idx: tfidf_val}}.
-Khi cần tính similarity giữa 2 sản phẩm, chỉ cần dot product giữa 2 dict
-(key chung nhau). Không cần ma trận sparse 50Kx50K tốn RAM.
 
-Optimizations:
-  1. Vectorize vocabulary building (sort + filter bằng numpy arrays)
-  2. Counter batch processing thay vì từng product một (dùng numpy cho IDF)
+Kĩ thuật:
+  - Tokenize: regex unigram + bigram, loại stopword
+  - TF-IDF với L2 normalize
+  - Vocabulary building: sorted theo DF, filter min_df / max_df bằng Python thuần
 """
 import sys
 from pathlib import Path
@@ -18,7 +17,6 @@ import math
 import gc
 import json
 from collections import Counter
-import numpy as np
 from tqdm import tqdm
 
 from src.config import MODELS_DIR, CB_MIN_DF, CB_MAX_DF, CB_MAX_FEATURES, CB_STOPWORDS
@@ -33,7 +31,6 @@ def _tokenize_product(text):
     """
     Tokenize tên sản phẩm: lowercase, chỉ giữ chữ cái/số, unigram + bigram,
     loại bỏ stopword.
-    Thuần Python (regex-based), nhanh vì chỉ ~50K sản phẩm, không phải bottleneck.
     """
     text = re.sub(r'[^a-z0-9 ]', ' ', text.lower()).strip()
     tokens = text.split()
@@ -49,11 +46,11 @@ def build_cb_vectors(products_df, prior_df):
     """
     Xây dựng CB vectors từ tên sản phẩm (content-based).
     Chỉ xây cho sản phẩm có xuất hiện trong prior (frequent items).
-    
+
     Quy trình:
         1. Tokenize tên sản phẩm → unigram + bigram
         2. Đếm Document Frequency (DF) cho mỗi term
-        3. Build vocabulary: lọc term bằng numpy arrays, sắp xếp theo DF
+        3. Build vocabulary: sorted theo DF giảm dần, lọc bằng Python thuần
         4. Tính IDF smooth: idf = log((1+N)/(1+df)) + 1
         5. TF sublinear: tf = 1 + log(count)
         6. TF-IDF = tf * idf, sau đó L2-normalize
@@ -69,38 +66,29 @@ def build_cb_vectors(products_df, prior_df):
     # Bước 1: Tokenize mỗi sản phẩm
     doc_tokens = {}
     doc_freq = Counter()
-    for pid in tqdm(pids, desc="  Tokenizing"):
+    for pid in tqdm(pids, desc="  Tokenizing", ncols=80):
         raw = str(prod_info.loc[pid, 'product_name'])
         ngrams = _tokenize_product(raw)
         doc_tokens[pid] = ngrams
         for t in set(ngrams):
             doc_freq[t] += 1
 
-    # Bước 2: Build vocabulary dùng numpy filtering
+    # Bước 2: Build vocabulary — sorted theo DF giảm dần, filter min/max
     n_docs = len(pids)
-    # Convert counter → arrays để xử lý nhanh
-    terms = np.array(list(doc_freq.keys()))
-    dfs = np.array([doc_freq[t] for t in terms], dtype=np.int32)
-    
-    # Filter theo min_df và max_df
-    mask = (dfs >= CB_MIN_DF) & (dfs.astype(float) / n_docs <= CB_MAX_DF)
-    filtered_terms = terms[mask]
-    filtered_dfs = dfs[mask]
-    
-    # Sắp xếp theo DF giảm dần, giữ max_features
-    sort_order = np.argsort(-filtered_dfs)
-    n_keep = min(len(filtered_terms), CB_MAX_FEATURES)
-    final_terms = filtered_terms[sort_order[:n_keep]]
-    
-    vocab = {t: i for i, t in enumerate(final_terms)}
-    del terms, dfs, mask, filtered_terms, filtered_dfs, sort_order
-    gc.collect()
+    vocab = {}
+    idx = 0
+    for t, df in sorted(doc_freq.items(), key=lambda x: -x[1]):
+        if df >= CB_MIN_DF and (df / n_docs) <= CB_MAX_DF:
+            vocab[t] = idx
+            idx += 1
+            if idx >= CB_MAX_FEATURES:
+                break
 
     # Bước 3: Tính IDF cho mỗi term
     idf = {t: math.log((1 + n_docs) / (1 + doc_freq[t])) + 1.0 for t in vocab}
 
     # Bước 4: TF-IDF + L2 normalize cho từng sản phẩm
-    for pid in tqdm(pids, desc="  TF-IDF"):
+    for pid in tqdm(pids, desc="  TF-IDF", ncols=80):
         tokens = doc_tokens[pid]
         cnt = Counter(tokens)
         vec = {}
@@ -120,7 +108,7 @@ def build_cb_vectors(products_df, prior_df):
     del doc_tokens, doc_freq, vocab, idf, prod_info
     gc.collect()
     print(f"  [CB] Done: {len(cb_vectors):,} vectors, "
-          f"vocab_size={n_keep:,}")
+          f"vocab_size={len(vocab):,}")
 
 
 def cb_similarity(pid_a, pid_b):

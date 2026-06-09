@@ -233,11 +233,21 @@ if __name__ == "__main__":
     # Tạo test cases (chạy 1 lần, tốn ~30s)
     dl.test_cases, model_df = load_temporal_test_cases(train_ratio=0.8)
 
-    # Định nghĩa các rec_func từ ma trận similarity có sẵn
-    from scipy.sparse import load_npz
     from src.config import MODELS_DIR, EVAL_KS
 
-    def _make_rec_func(matrix, name):
+    def _make_rec_func_from_dict(score_dict, name):
+        """Tạo rec_func từ dict[pid, dict[npid, score]]"""
+        def rec_func(seed, top_k):
+            edges = score_dict.get(seed)
+            if not edges:
+                return []
+            sorted_pids = sorted(edges, key=lambda p: -edges[p])
+            return sorted_pids[:top_k]
+        rec_func.__name__ = name
+        return rec_func
+
+    def _make_rec_func_from_csr(matrix, name):
+        """Tạo rec_func từ CSR matrix (cho KG nếu còn dạng npz)"""
         def rec_func(seed, top_k):
             if seed >= matrix.shape[0]:
                 return []
@@ -249,26 +259,35 @@ if __name__ == "__main__":
         rec_func.__name__ = name
         return rec_func
 
+    import json
+
     models = {}
 
-    # Confidence (trước đây là SPMI)
+    # Confidence (dict json)
     try:
-        m = load_npz(MODELS_DIR / "confidence_matrix.npz")
-        models["Confidence"] = _make_rec_func(m, "Confidence")
+        with open(MODELS_DIR / "confidence_dict.json", "r") as f:
+            raw = json.load(f)
+        conf_dict = {int(pid): {int(npid): float(s) for npid, s in edges.items()}
+                     for pid, edges in raw.items()}
+        models["Confidence"] = _make_rec_func_from_dict(conf_dict, "Confidence")
     except Exception as e:
         print(f"  Skip Confidence: {e}")
 
-    # KG
+    # KG (vẫn dùng CSR matrix .npz)
+    from scipy.sparse import load_npz
     try:
         m = load_npz(MODELS_DIR / "kg_similarity.npz")
-        models["KG"] = _make_rec_func(m, "KG")
+        models["KG"] = _make_rec_func_from_csr(m, "KG")
     except Exception as e:
         print(f"  Skip KG: {e}")
 
-    # Hybrid
+    # Hybrid (dict json)
     try:
-        m = load_npz(MODELS_DIR / "hybrid_matrix.npz")
-        models["Hybrid"] = _make_rec_func(m, "Hybrid")
+        with open(MODELS_DIR / "hybrid_dict.json", "r") as f:
+            raw = json.load(f)
+        hybrid_dict = {int(pid): {int(npid): float(s) for npid, s in edges.items()}
+                       for pid, edges in raw.items()}
+        models["Hybrid"] = _make_rec_func_from_dict(hybrid_dict, "Hybrid")
     except Exception as e:
         print(f"  Skip Hybrid: {e}")
 
