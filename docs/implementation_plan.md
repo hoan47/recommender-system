@@ -21,12 +21,21 @@ src/
 │
 └── models/
     ├── __init__.py
-    ├── cb_filter.py                # Content-Based Diversity Filter (Bước 1)
-    ├── ochiai.py                   # Ochiai + Confidence Score (Bước 2)
-    ├── item2vec.py                 # Item2Vec Word2Vec Skip-gram (Bước 3)
-    ├── node2vec.py                 # Node2Vec graph embedding (Bước 4)
-    ├── assoc_rules.py              # Association Rules từ co-occurrence matrix (Bước 5)
-    └── ensemble.py                 # Co-occurrence Ensemble + CB Filter (Bước 6-7)
+    ├── cb_filter.py                # Content-Based Diversity Filter
+    ├── ochiai.py                   # Ochiai + Confidence Score
+    ├── item2vec.py                 # Item2Vec Word2Vec Skip-gram
+    ├── node2vec.py                 # Node2Vec graph embedding
+    ├── assoc_rules.py              # Association Rules từ co-occurrence matrix
+    └── ensemble.py                 # Co-occurrence Ensemble + CB Filter
+
+scripts/                        # (không commit lên git)
+├── 01_load_data.py              # Load & cache dữ liệu (parquet)
+├── 02_cb_filter.py              # Train CB Filter
+├── 03_ochiai.py                 # Train Ochiai
+├── 04_item2vec.py               # Train Item2Vec
+├── 05_node2vec.py               # Train Node2Vec
+├── 06_assoc_rules.py            # Train Association Rules
+└── 07_ensemble.py               # Ensemble + test recommend
 ```
 
 ---
