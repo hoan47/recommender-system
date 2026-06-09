@@ -1,101 +1,88 @@
 """
-Cấu hình tập trung cho toàn bộ dự án
-Chứa đường dẫn thư mục và hằng số cho từng model
+Cấu hình tập trung cho toàn bộ dự án.
+Mọi hyperparameter, đường dẫn, hằng số đặt tại 1 file.
 """
+import os
 
-from pathlib import Path
+# ============================================================
+# Đường dẫn thư mục
+# ============================================================
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+PROCESSED_DIR = os.path.join(DATA_DIR, "processed")
+MODEL_DIR = os.path.join(PROJECT_ROOT, "models")
+RESULT_DIR = os.path.join(PROJECT_ROOT, "results")
 
-# Đường dẫn thư mục gốc, data, models, results
-# PROJECT_ROOT tự động tính từ vị trí file này (src/config.py → lên 2 cấp)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = PROJECT_ROOT / "data"       # Chứa file CSV gốc (đã .gitignore)
-MODELS_DIR = PROJECT_ROOT / "models"    # Chứa output model (đã .gitignore)
-RESULTS_DIR = PROJECT_ROOT / "results"  # Chứa kết quả evaluation (đã .gitignore)
+# ============================================================
+# Files dữ liệu gốc
+# ============================================================
+ORDERS_FILE = os.path.join(DATA_DIR, "orders.csv")
+PRODUCTS_FILE = os.path.join(DATA_DIR, "products.csv")
+ORDER_PRODUCTS_PRIOR = os.path.join(DATA_DIR, "order_products__prior.csv")
+ORDER_PRODUCTS_TRAIN = os.path.join(DATA_DIR, "order_products__train.csv")
+AISLES_FILE = os.path.join(DATA_DIR, "aisles.csv")
+DEPARTMENTS_FILE = os.path.join(DATA_DIR, "departments.csv")
 
-# Tự động tạo thư mục models/ và results/ nếu chưa có
-for _d in [MODELS_DIR, RESULTS_DIR]:
-    _d.mkdir(parents=True, exist_ok=True)
+# ============================================================
+# Files processed (lưu sau khi preprocess)
+# ============================================================
+PRODUCT_VECTORS_FILE = os.path.join(PROCESSED_DIR, "product_vectors.npz")
 
-# ===== Content-Based (CB) =====
-# CB_MIN_DF: Term phải xuất hiện ít nhất trong N sản phẩm (loại bỏ term quá hiếm)
-CB_MIN_DF = 5
-# CB_MAX_DF: Term xuất hiện trong tối đa N% sản phẩm (loại bỏ term quá phổ biến)
-CB_MAX_DF = 0.8
-# CB_MAX_FEATURES: Số lượng term tối đa trong vocabulary (kiểm soát bộ nhớ)
-CB_MAX_FEATURES = 10000
-# CB_STOPWORDS_PATH: Đường dẫn file stopword tiếng Anh (1 từ/dòng, có thể trùng)
-CB_STOPWORDS_PATH = PROJECT_ROOT / "english_stopwords.txt"
-# TOP_K: Chỉ giữ K sản phẩm tương tự nhất mỗi dòng trong ma trận similarity
-TOP_K = 100
+# ============================================================
+# Hyperparameters — CB Filter
+# ============================================================
+CB_THRESHOLD = 0.8          # cosine similarity >= threshold → substitute → loại
+CB_N_GRAM_RANGE = (1, 2)    # TF-IDF: unigram + bigram
+CB_MAX_FEATURES = 5000      # TF-IDF: max số features từ tên sản phẩm
 
-# ===== Confidence (Item-based Collaborative Filtering - Unified Scoring) =====
-# CONF_FREQ_MIN: Sản phẩm phải xuất hiện trong ít nhất N đơn mới được recommend
-# Loại bỏ nhiễu từ sản phẩm quá hiếm (ví dụ: 2-5 đơn)
-CONF_FREQ_MIN = 30
-# CONF_TOP_K: Chỉ giữ K sản phẩm mua kèm mạnh nhất mỗi sản phẩm
-# Unified scoring = ochiai * confidence * log1p
-CONF_TOP_K = 100
+# ============================================================
+# Hyperparameters — Ochiai
+# ============================================================
+OCHIAI_MIN_SUPPORT = 30     # pair xuất hiện < 30 lần → bỏ qua
+OCHIAI_TOP_K = 100          # số candidate giữ lại cho mỗi product (trước ensemble)
 
-# ===== Reorder rate bonus =====
-# RORDER_BONUS: Hệ số ưu tiên sản phẩm có reorder rate cao
-# rr_bonus = 1.0 + RORDER_BONUS * avg(reorder_rate(A), reorder_rate(B))
-REORDER_BONUS = 0.3
+# ============================================================
+# Hyperparameters — Item2Vec
+# ============================================================
+I2V_VECTOR_SIZE = 128
+I2V_WINDOW = 10
+I2V_MIN_COUNT = 10
+I2V_NEGATIVE = 10
+I2V_EPOCHS = 20
+I2V_WORKERS = 4
+I2V_TOP_K = 100
 
-# ===== Knowledge Graph (KG) =====
-# KG_DIM: Kích thước embedding vector cho mỗi node (product + department)
-KG_DIM = 64
-# KG_WALK_LENGTH: Độ dài mỗi random walk trên đồ thị
-KG_WALK_LENGTH = 20
-# KG_NUM_WALKS: Số lượng random walk cho mỗi node
-KG_NUM_WALKS = 50
-# KG_EPOCHS: Số epoch huấn luyện skip-gram (1 là đủ vì dữ liệu lớn)
-KG_EPOCHS = 1
+# ============================================================
+# Hyperparameters — Node2Vec
+# ============================================================
+N2V_EMBEDDING_DIM = 128
+N2V_WALK_LENGTH = 40
+N2V_NUM_WALKS = 20
+N2V_P = 1.0
+N2V_Q = 1.0
+N2V_WORKERS = 4
+N2V_EDGE_THRESHOLD = 5      # edge giữa 2 product nếu co-occur count >= threshold
+N2V_TOP_K = 100
 
-# ===== Hybrid =====
-# HYBRID_ALPHA: Trọng số cho SPMI score (0.0 ~ 1.0)
-# SPMI recall ~1-4% (yếu) → trọng số thấp
-HYBRID_ALPHA = 0.2
-# HYBRID_BETA: Trọng số cho KG score (0.0 ~ 1.0)
-# KG recall ~11-25% (mạnh) → trọng số cao
-HYBRID_BETA = 0.8
-# HYBRID_CB_THRESH: Ngưỡng CB similarity để loại sản phẩm substitute
-# Nếu CB_sim(A,B) > threshold → A và B quá giống → loại khỏi gợi ý
-# Giảm từ 0.85 xuống 0.45 để lọc substitute hiệu quả hơn
-HYBRID_CB_THRESH = 0.45
+# ============================================================
+# Hyperparameters — Association Rules (từ co-occurrence matrix)
+# ============================================================
+ARM_MIN_SUPPORT = 0.0001        # support threshold (tỷ lệ)
+ARM_MIN_CONFIDENCE = 0.1        # confidence threshold
+ARM_MIN_LIFT = 1.5              # lift threshold
+ARM_TOP_K = 100
 
-# ===== Diversity filter =====
-# MAX_PER_DEPT: Tối đa số sản phẩm cùng department được gợi ý
-MAX_PER_DEPT = 5
-# SAME_DEPT_MAX: Tối đa số sản phẩm cùng department với seed được gợi ý
-SAME_DEPT_MAX = 3
+# ============================================================
+# Hyperparameters — Ensemble
+# ============================================================
+ENS_ALPHA = 0.5                 # trọng số Ochiai
+ENS_BETA = 0.25                 # trọng số Item2Vec
+ENS_GAMMA = 0.25                # trọng số Node2Vec
+ENS_TOP_K = 100                 # top-K sau ensemble (trước CB filter)
+ENS_FINAL_K = 10                # top-K cuối cùng output
 
-# ===== Department direction =====
-# MIN_CONF: Ngưỡng confidence tối thiểu để xác định direction
-MIN_CONF = 30.0
-# MIN_LIFT: Ngưỡng lift tối thiểu
-MIN_LIFT = 1.05
-# ASYMMETRY_RATIO: Tỉ lệ asymmetry để xác định 1 chiều vs 2 chiều
-ASYMMETRY_RATIO = 1.15
-
-# Hàm load stopwords (dùng set để dedup)
-def _load_stopwords():
-    """Đọc file stopword, trả về set các stopword (đã strip, lowercase, dedup)"""
-    stopwords = set()
-    try:
-        with open(CB_STOPWORDS_PATH, "r", encoding="utf-8") as f:
-            for line in f:
-                w = line.strip().lower()
-                if w:  # bỏ dòng rỗng
-                    stopwords.add(w)
-        print(f"  [Config] Loaded {len(stopwords):,} stopwords from {CB_STOPWORDS_PATH}")
-    except FileNotFoundError:
-        print(f"  [Config] WARNING: {CB_STOPWORDS_PATH} not found, stopword removal disabled")
-    return stopwords
-
-CB_STOPWORDS = _load_stopwords()
-
-# ===== Evaluation =====
-# EVAL_KS: Các giá trị K để đánh giá
-EVAL_KS = (5, 10, 20)
-# PATH_OUTPUT_CSV: File lưu kết quả evaluation dạng DataFrame
-PATH_OUTPUT_CSV = RESULTS_DIR / "metrics.csv"
+# ============================================================
+# IO
+# ============================================================
+CHUNKSIZE = 500000              # chunksize cho đọc CSV lớn
+RANDOM_SEED = 42                # seed cho reproducibility
