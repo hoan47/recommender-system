@@ -33,19 +33,19 @@ PRODUCT_VECTORS_FILE = os.path.join(PROCESSED_DIR, "product_vectors.npz")
 # ============================================================
 CB_THRESHOLD = 0.8          # cosine similarity >= threshold → substitute → loại
 CB_N_GRAM_RANGE = (1, 2)    # TF-IDF: unigram + bigram
-CB_MAX_FEATURES = 5000      # TF-IDF: max số features từ tên sản phẩm
+CB_MAX_FEATURES = 15000      # TF-IDF: max số features từ tên sản phẩm
 
 # ============================================================
 # Hyperparameters — Ochiai
 # ============================================================
-OCHIAI_MIN_SUPPORT = 30     # pair xuất hiện < 30 lần → bỏ qua
+OCHIAI_MIN_SUPPORT = 10     # pair xuất hiện < 30 lần → bỏ qua
 OCHIAI_TOP_K = 100          # số candidate giữ lại cho mỗi product (trước ensemble)
 
 # ============================================================
 # Hyperparameters — Item2Vec
 # ============================================================
 I2V_VECTOR_SIZE = 128
-I2V_WINDOW = 10
+I2V_WINDOW = 5
 I2V_MIN_COUNT = 10
 I2V_NEGATIVE = 10
 I2V_EPOCHS = 20
@@ -56,12 +56,12 @@ I2V_TOP_K = 100
 # Hyperparameters — Node2Vec
 # ============================================================
 N2V_EMBEDDING_DIM = 128
-N2V_WALK_LENGTH = 40
+N2V_WALK_LENGTH = 25
 N2V_NUM_WALKS = 20
 N2V_P = 1.0
 N2V_Q = 1.0
 N2V_WORKERS = 4
-N2V_EDGE_THRESHOLD = 5      # edge giữa 2 product nếu co-occur count >= threshold
+N2V_EDGE_THRESHOLD = 10      # edge giữa 2 product nếu co-occur count >= threshold
 N2V_TOP_K = 100
 
 # ============================================================

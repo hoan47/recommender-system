@@ -71,6 +71,36 @@ python scripts/05_node2vec.py
 python scripts/06_assoc_rules.py
 python scripts/07_ensemble.py
 python scripts/08_evaluate_assoc_rules.py
+
+# Chạy toàn bộ bằng cmd ngoài không dùng vscode đỡ nóng máy (nhớ xóa dữ liệu trong models)
+cd C:\Users\b2h16\OneDrive\Máy tính\recommender-system
+
+# Kích hoạt môi trường ảo (nếu có)
+.venv\Scripts\activate
+
+# Bước 1: Load data (nếu chưa làm)
+python scripts/01_load_data.py
+
+# Bước 2: Train CB Filter (nếu chưa làm)
+python scripts/02_cb_filter.py
+
+# Bước 3: Train Ochiai (nếu chưa làm)
+python scripts/03_ochiai.py
+
+# Bước 4: Train Item2Vec (~5-10 phút)
+python scripts/04_item2vec.py
+
+# Bước 5: Train Node2Vec (~15-30 phút) — nặng nhất
+python scripts/05_node2vec.py
+
+# Bước 6: Train Association Rules (~2-5 phút)
+python scripts/06_assoc_rules.py
+
+# Bước 7: Test Ensemble + CB Filter
+python scripts/07_ensemble.py
+
+# Bước 8: Đánh giá Association Rules
+python scripts/08_evaluate_assoc_rules.py
 ```
 
 ## Lưu Ý

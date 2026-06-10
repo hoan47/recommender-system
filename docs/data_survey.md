@@ -133,6 +133,35 @@ Dựa trên mẫu 100,000 dòng từ `order_products__prior.csv`:
 
 Điều này cho thấy người dùng có xu hướng mua lại các sản phẩm quen thuộc, là tín hiệu tốt cho bài toán gợi ý mua kèm.
 
+### 3.8 Thống kê Kích thước Giỏ hàng (Basket Size)
+
+Dựa trên toàn bộ `order_products__prior.csv` (3,214,874 đơn hàng):
+
+| Chỉ số | Giá trị |
+|--------|---------|
+| Số đơn hàng | **3,214,874** |
+| Trung bình (mean) | **~10.09 sản phẩm/đơn** |
+| Độ lệch chuẩn (std) | **7.53** |
+| Nhỏ nhất (min) | **1** |
+| 25th percentile | **5** |
+| Trung vị (50%) | **8** |
+| 75th percentile | **14** |
+| Lớn nhất (max) | **145** |
+
+> Phân bố lệch phải (right-skewed): đa số đơn hàng có 5–14 sản phẩm, nhưng tồn tại đơn hàng rất lớn (tới 145 sản phẩm). Trung vị 8 cho thấy một nửa số đơn hàng có ≤ 8 sản phẩm.
+
+### 3.9 Thống kê Tần suất Sản phẩm (Product Frequency)
+
+Dựa trên 49,677 sản phẩm trong `order_products__prior.csv`:
+
+| Ngưỡng xuất hiện | Số sản phẩm | Tỷ lệ |
+|------------------|-------------|-------|
+| < 10 lần | **7,165** | ~14.4% |
+| < 30 lần | **17,850** | ~35.9% |
+| < 50 lần | **22,991** | ~46.3% |
+
+> **Nhận xét:** Gần một nửa số sản phẩm (46.3%) xuất hiện dưới 50 lần trong toàn bộ tập prior — đây là hiện tượng **long-tail** điển hình. Các sản phẩm hiếm gặp sẽ gây khó khăn cho các phương pháp gợi ý dựa trên đồng xuất hiện (co-occurrence), cần có chiến lược xử lý riêng (ví dụ: fallback sang department/aisle level, hoặc dùng content-based filtering).
+
 ---
 
 ## 4. Phân Tích Chi Tiết
