@@ -174,21 +174,21 @@ class DeepWalkModel:
             start_node = int(nodes_with_edges[walk_idx % n_nodes])
             cur = start_node
             walks_arr[walk_idx, 0] = cur
+            wlen = 1
             
             for step in range(1, walk_length):
                 s = int(indptr[cur])
                 e = int(indptr[cur + 1])
                 n_nb = e - s
                 if n_nb == 0:
-                    walk_lengths[walk_idx] = step
                     break
                 # Dùng random number đã pre-generate
                 nb_idx = int(rand_matrix[walk_idx, step]) % n_nb
                 cur = int(neighbors[s + nb_idx])
                 walks_arr[walk_idx, step] = cur
-            else:
-                # Walk đầy đủ
-                walk_lengths[walk_idx] = walk_length
+                wlen = step + 1
+            
+            walk_lengths[walk_idx] = wlen
         
         walks = walks_arr
         self._walks_cache = (walks, walk_lengths)
