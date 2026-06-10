@@ -9,7 +9,6 @@ Cải tiến Numba:
 """
 import os
 import json
-import random
 import numpy as np
 from tqdm import tqdm
 import pandas as pd
@@ -149,43 +148,47 @@ class DeepWalkModel:
         print(f"  Đang random walk (num_walks={self.params['num_walks']}, "
             f"walk_length={self.params['walk_length']})...")
         
-        random.seed(RANDOM_SEED)
+        np.random.seed(RANDOM_SEED)
         nodes_with_edges = np.array(
             [node for node, v in graph.items() if len(v) > 0],
             dtype=np.int32
         )
         n_nodes = len(nodes_with_edges)
         total_walks = n_nodes * self.params['num_walks']
+        walk_length = self.params['walk_length']
         
-        all_walks = []
-        all_lengths = []
+        # Pre-generate toàn bộ random numbers — nhanh hơn random.randint từng bước
+        max_possible_degree = int(np.max(np.diff(indptr)))
+        rand_matrix = np.random.randint(
+            0, max(max_possible_degree, 10000),
+            size=(total_walks, walk_length),
+            dtype=np.int32
+        )
+        
+        # Pre-allocate walks array — bỏ list trung gian
+        walks_arr = np.full((total_walks, walk_length), -1, dtype=np.int32)
+        walk_lengths = np.zeros(total_walks, dtype=np.int32)
         
         for walk_idx in tqdm(range(total_walks), desc="  Random walks"):
             # Uniform: chọn node bắt đầu ngẫu nhiên
             start_node = int(nodes_with_edges[walk_idx % n_nodes])
-            walk = [start_node]
             cur = start_node
+            walks_arr[walk_idx, 0] = cur
             
-            for step in range(1, self.params['walk_length']):
+            for step in range(1, walk_length):
                 s = int(indptr[cur])
                 e = int(indptr[cur + 1])
                 n_nb = e - s
                 if n_nb == 0:
+                    walk_lengths[walk_idx] = step
                     break
-                # Uniform random neighbor — không p/q, không alias sampling
-                nb_idx = random.randint(0, n_nb - 1)
+                # Dùng random number đã pre-generate
+                nb_idx = int(rand_matrix[walk_idx, step]) % n_nb
                 cur = int(neighbors[s + nb_idx])
-                walk.append(cur)
-            
-            all_walks.append(walk)
-            all_lengths.append(len(walk))
-        
-        # Chuyển thành numpy array
-        walks_arr = np.full((total_walks, self.params['walk_length']), -1, dtype=np.int32)
-        walk_lengths = np.zeros(total_walks, dtype=np.int32)
-        for i, (w, l) in enumerate(zip(all_walks, all_lengths)):
-            walks_arr[i, :l] = w
-            walk_lengths[i] = l
+                walks_arr[walk_idx, step] = cur
+            else:
+                # Walk đầy đủ
+                walk_lengths[walk_idx] = walk_length
         
         walks = walks_arr
         self._walks_cache = (walks, walk_lengths)
