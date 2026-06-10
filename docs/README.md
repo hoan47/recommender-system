@@ -32,13 +32,10 @@ recommender-system/
 │   ├── 04_item2vec.py       # Train Item2Vec
 │   ├── 05_node2vec.py       # Train Node2Vec
 │   ├── 06_assoc_rules.py    # Train Association Rules
-│   ├── 07_ensemble.py       # Ensemble + test
-│   └── 08_evaluate_assoc_rules.py  # Evaluation: survey + metrics
+│   └── 07_ensemble.py       # Ensemble + test
 ├── src/                     # Source code
 │   ├── config.py            # Cấu hình tập trung
-│   ├── evaluation/          # Đánh giá model
-│   │   ├── metrics.py       # Precision@K, Recall@K, F1@K, Hit@K
-│   │   └── survey_generator.py  # Sinh mẫu khảo sát
+│   ├── evaluation/          # (dự trữ cho đánh giá sau)
 │   ├── features/            # Xử lý dữ liệu & vector hóa
 │   ├── utils/               # Hàm tiện ích dùng chung
 │   │   ├── __init__.py
@@ -80,7 +77,6 @@ python scripts/04_item2vec.py
 python scripts/05_node2vec.py
 python scripts/06_assoc_rules.py
 python scripts/07_ensemble.py
-python scripts/08_evaluate_assoc_rules.py
 
 # Chạy toàn bộ bằng cmd ngoài không dùng vscode đỡ nóng máy (nhớ xóa dữ liệu trong models)
 cd C:\Users\b2h16\OneDrive\Máy tính\recommender-system
@@ -108,9 +104,6 @@ python scripts/06_assoc_rules.py
 
 # Bước 7: Test Ensemble + CB Filter
 python scripts/07_ensemble.py
-
-# Bước 8: Đánh giá Association Rules
-python scripts/08_evaluate_assoc_rules.py
 ```
 
 ## Lưu Ý

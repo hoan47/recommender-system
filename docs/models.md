@@ -353,14 +353,12 @@ Node2Vec thực hiện random walk có kiểm soát trên đồ thị, tạo ra 
 
 ### 4.5 Association Rule Mining (Baseline)
 
-> ⚠️ **Vai trò**: Chỉ dùng làm **baseline đối chứng thực nghiệm**, không tham gia vào tầng ensemble.
+> ⚠️ **Vai trò**: Mô hình baseline — cùng được đánh giá bằng tập ground truth sinh từ LLM, dùng để so sánh với các model đề xuất.
 
 **Mục tiêu:**
-Mô hình Khai phá luật kết hợp (ARM) đóng vai trò là hệ quy chiếu kinh điển để đánh giá hiệu năng định lượng của các cấu phần đề xuất trên tập thực nghiệm:
+ARM đóng vai trò điểm tham chiếu (baseline). Tất cả các model — ARM, Ochiai, Item2Vec, Ensemble — đều được chấm điểm bằng **cùng một bộ ground truth do LLM sinh ra**, sau đó so sánh kết quả với nhau.
 
-1. **Đối chứng với tầng toán học thống kê cải tiến (Mục 4.1):** So sánh trực tiếp với bộ đôi `Ochiai + Confidence Score`. Qua đó, chứng minh lợi thế của hệ số đối xứng Ochiai và cơ chế lọc nhiễu Confidence cải tiến so với các chỉ số luật một chiều truyền thống (Support, Confidence gốc).
-2. **Đối chứng với tầng học không gian nhúng (Mục 4.2 & 4.3):** Làm cột mốc so sánh với `Item2Vec` và `Node2Vec` nhằm chứng minh năng lực biểu diễn tri thức trong không gian Vector nhiều chiều vượt trội hơn hẳn phương pháp đếm tần suất phẳng.
-3. **Đối chứng với toàn bộ kiến trúc lai hợp (Mục 4.6):** Kết quả Top-K từ ARM (vốn dễ bị dính nhiễu dữ liệu rác và không thể loại bỏ sản phẩm thay thế) sẽ được đặt lên bàn cân cùng mô hình `Co-occurrence Ensemble + CB Filter`. Thực nghiệm này nhằm khẳng định bộ lọc thuộc tính (CB Filter) có khả năng tối ưu hóa độ chính xác và đa dạng hóa giỏ hàng mà mô hình luật kết hợp kinh điển hoàn toàn bất lực.
+ARM không phải công cụ đánh giá. ARM là thí sinh.
 
 **Ý tưởng**: Tìm các luật dạng `{A} → {B}` — nếu mua A thì có khả năng cao mua B.
 
