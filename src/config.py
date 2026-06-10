@@ -31,7 +31,7 @@ PRODUCT_VECTORS_FILE = os.path.join(PROCESSED_DIR, "product_vectors.npz")
 # ============================================================
 # Hyperparameters — CB Filter
 # ============================================================
-CB_THRESHOLD = 0.8          # cosine similarity >= threshold → substitute → loại
+CB_THRESHOLD = 0.3          # cosine similarity >= threshold → substitute → loại
 CB_N_GRAM_RANGE = (1, 2)    # TF-IDF: unigram + bigram
 CB_MAX_FEATURES = 15000      # TF-IDF: max số features từ tên sản phẩm
 

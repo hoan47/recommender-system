@@ -5,24 +5,25 @@ Dữ liệu tiếng Việt từ data/processed/*_vi.csv
 
 Chạy: streamlit run scripts/08_streamlit_app.py
 """
+
+import json
 import os
 import sys
-import json
 import time
-import pandas as pd
 import numpy as np
+import pandas as pd
 import scipy.sparse
 import streamlit as st
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.config import MODEL_DIR, PROCESSED_DIR
-from src.models.cb_filter import CBFilter
-from src.models.ochiai import OchiaiModel
-from src.models.item2vec import Item2VecModel
-from src.models.deepwalk import DeepWalkModel
 from src.models.assoc_rules import AssocRulesModel
+from src.models.cb_filter import CBFilter
+from src.models.deepwalk import DeepWalkModel
 from src.models.ensemble import EnsembleModel
+from src.models.item2vec import Item2VecModel
+from src.models.ochiai import OchiaiModel
 
 # ============================================================
 # CẤU HÌNH TRANG
@@ -38,10 +39,11 @@ st.set_page_config(
 # HÀM LOAD DỮ LIỆU (CACHE)
 # ============================================================
 
+
 @st.cache_data
 def _read_csv_vi(filename):
     """Đọc CSV tiếng Việt dùng pandas (xử lý BOM, dấu phẩy trong tên, Unicode encoding)."""
-    return pd.read_csv(filename, encoding='utf-8-sig')
+    return pd.read_csv(filename, encoding="utf-8-sig")
 
 
 @st.cache_data
@@ -54,25 +56,28 @@ def load_products_vi():
     depts_vi = _read_csv_vi(os.path.join(PROCESSED_DIR, "departments_vi.csv"))
 
     # Ép kiểu product_id cho cả hai bảng để đồng bộ kiểu dữ liệu trước merge
-    products['product_id'] = products['product_id'].astype(int)
-    products_vi['product_id'] = products_vi['product_id'].astype(int)
-    
+    products["product_id"] = products["product_id"].astype(int)
+    products_vi["product_id"] = products_vi["product_id"].astype(int)
+
     # Đồng bộ tương tự cho aisle và department
-    products['aisle_id'] = products['aisle_id'].astype(int)
-    aisles_vi['aisle_id'] = aisles_vi['aisle_id'].astype(int)
-    
-    products['department_id'] = products['department_id'].astype(int)
-    depts_vi['department_id'] = depts_vi['department_id'].astype(int)
+    products["aisle_id"] = products["aisle_id"].astype(int)
+    aisles_vi["aisle_id"] = aisles_vi["aisle_id"].astype(int)
+
+    products["department_id"] = products["department_id"].astype(int)
+    depts_vi["department_id"] = depts_vi["department_id"].astype(int)
 
     # Merge lần lượt từng bảng
-    products = products.merge(products_vi, on='product_id', how='left')
-    products = products.merge(aisles_vi, on='aisle_id', how='left')
-    products = products.merge(depts_vi, on='department_id', how='left')
-    
+    products = products.merge(products_vi, on="product_id", how="left")
+    products = products.merge(aisles_vi, on="aisle_id", how="left")
+    products = products.merge(depts_vi, on="department_id", how="left")
+
     # Dùng tên tiếng Việt, fallback về tiếng Anh nếu chưa có bản dịch
-    products['display_name'] = products['product_name_vi'].fillna(products['product_name'])
+    products["display_name"] = products["product_name_vi"].fillna(
+        products["product_name"]
+    )
 
     return products
+
 
 @st.cache_resource
 def load_models():
@@ -84,34 +89,36 @@ def load_models():
         cb.product_vectors = scipy.sparse.load_npz(
             os.path.join(MODEL_DIR, "cb_filter", "product_vectors.npz")
         )
-        with open(os.path.join(MODEL_DIR, "cb_filter", "product_id_to_idx.json")) as f:
+        with open(
+            os.path.join(MODEL_DIR, "cb_filter", "product_id_to_idx.json")
+        ) as f:
             cb.product_id_to_idx = {int(k): v for k, v in json.load(f).items()}
-    models['cb'] = cb
+    models["cb"] = cb
 
     with st.spinner("Đang load Ochiai..."):
         ochiai = OchiaiModel()
         ochiai.load(os.path.join(MODEL_DIR, "ochiai"))
-    models['ochiai'] = ochiai
+    models["ochiai"] = ochiai
 
     with st.spinner("Đang load Item2Vec..."):
         i2v = Item2VecModel()
         i2v.load(os.path.join(MODEL_DIR, "item2vec"))
-    models['i2v'] = i2v
+    models["i2v"] = i2v
 
     with st.spinner("Đang load DeepWalk..."):
         dw = DeepWalkModel()
         dw.load(os.path.join(MODEL_DIR, "deepwalk"))
-    models['dw'] = dw
+    models["dw"] = dw
 
     with st.spinner("Đang load Association Rules..."):
         arm = AssocRulesModel()
         arm.load(os.path.join(MODEL_DIR, "assoc_rules"))
-    models['arm'] = arm
+    models["arm"] = arm
 
     with st.spinner("Đang khởi tạo Ensemble..."):
         ensemble = EnsembleModel()
         ensemble.fit(ochiai, i2v, dw, cb)
-    models['ensemble'] = ensemble
+    models["ensemble"] = ensemble
 
     return models
 
@@ -119,6 +126,7 @@ def load_models():
 # ============================================================
 # HÀM ENSEMBLE WRAPPER (vì recommend() không nhận top_k param)
 # ============================================================
+
 
 def recommend_ensemble_with_topk(ensemble, product_id, top_k, use_cb_filter):
     """Wrapper: set final_k + top_k tạm thời để lấy đúng số lượng gợi ý."""
@@ -139,35 +147,39 @@ def get_all_recommendations(product_id, top_k, models):
     results = {}
 
     t0 = time.time()
-    recs = models['ochiai'].recommend(product_id, top_k=top_k)
-    results['Ochiai'] = {'recs': recs, 'time': time.time() - t0}
+    recs = models["ochiai"].recommend(product_id, top_k=top_k)
+    results["Ochiai"] = {"recs": recs, "time": time.time() - t0}
 
     t0 = time.time()
-    recs = models['i2v'].recommend(product_id, top_k=top_k)
-    results['Item2Vec'] = {'recs': recs, 'time': time.time() - t0}
+    recs = models["i2v"].recommend(product_id, top_k=top_k)
+    results["Item2Vec"] = {"recs": recs, "time": time.time() - t0}
 
     t0 = time.time()
-    recs = models['dw'].recommend(product_id, top_k=top_k)
-    results['DeepWalk'] = {'recs': recs, 'time': time.time() - t0}
+    recs = models["dw"].recommend(product_id, top_k=top_k)
+    results["DeepWalk"] = {"recs": recs, "time": time.time() - t0}
 
     t0 = time.time()
-    recs = models['arm'].recommend(product_id, top_k=top_k)
-    results['AssocRules'] = {'recs': recs, 'time': time.time() - t0}
+    recs = models["arm"].recommend(product_id, top_k=top_k)
+    results["AssocRules"] = {"recs": recs, "time": time.time() - t0}
 
     t0 = time.time()
-    recs = recommend_ensemble_with_topk(models['ensemble'], product_id, top_k, use_cb_filter=False)
-    results['Ensemble (w/o CB)'] = {'recs': recs, 'time': time.time() - t0}
+    recs = recommend_ensemble_with_topk(
+        models["ensemble"], product_id, top_k, use_cb_filter=False
+    )
+    results["Ensemble (w/o CB)"] = {"recs": recs, "time": time.time() - t0}
 
     t0 = time.time()
-    recs = recommend_ensemble_with_topk(models['ensemble'], product_id, top_k, use_cb_filter=True)
-    results['Ensemble + CB'] = {'recs': recs, 'time': time.time() - t0}
+    recs = recommend_ensemble_with_topk(
+        models["ensemble"], product_id, top_k, use_cb_filter=True
+    )
+    results["Ensemble + CB"] = {"recs": recs, "time": time.time() - t0}
 
     return results
 
 
 def get_cb_detail(product_id, candidates, models):
     """Lấy chi tiết CB Filter cho từng candidate."""
-    cb = models['cb']
+    cb = models["cb"]
     if product_id not in cb.product_id_to_idx:
         return None
 
@@ -183,6 +195,7 @@ def get_cb_detail(product_id, candidates, models):
         return None
 
     from src.features.vectorizer import cb_similarity
+
     similarities = cb_similarity(cb.product_vectors, idx_a, valid_indices)
     return list(zip(valid_candidates, similarities))
 
@@ -190,6 +203,7 @@ def get_cb_detail(product_id, candidates, models):
 # ============================================================
 # MAIN APP
 # ============================================================
+
 
 def main():
     st.title("🛒 Hệ Thống Gợi Ý Mua Kèm (Bundle Recommendation)")
@@ -212,7 +226,9 @@ def main():
     # ========================================================
     st.sidebar.header("🔍 Tìm kiếm sản phẩm")
 
-    search_method = st.sidebar.radio("Chọn phương thức:", ["Nhập product_id", "Chọn từ danh sách"])
+    search_method = st.sidebar.radio(
+        "Chọn phương thức:", ["Nhập product_id", "Chọn từ danh sách"]
+    )
 
     product_id = None
     if search_method == "Nhập product_id":
@@ -223,17 +239,23 @@ def main():
             st.sidebar.error("Vui lòng nhập số")
             product_id = None
     else:
-        options = products['product_id'].tolist()
+        options = products["product_id"].tolist()
         labels = [
             f"[{pid}] {name[:60]}..." if len(name) > 60 else f"[{pid}] {name}"
-            for pid, name in zip(products['product_id'], products['display_name'])
+            for pid, name in zip(
+                products["product_id"], products["display_name"]
+            )
         ]
         selected = st.sidebar.selectbox(
-            "Chọn sản phẩm:", options=range(len(options)), format_func=lambda i: labels[i],
+            "Chọn sản phẩm:",
+            options=range(len(options)),
+            format_func=lambda i: labels[i],
         )
         product_id = options[selected]
 
-    top_k = st.sidebar.slider("Số lượng gợi ý:", min_value=5, max_value=50, value=10)
+    top_k = st.sidebar.slider(
+        "Số lượng gợi ý:", min_value=5, max_value=50, value=10
+    )
 
     st.sidebar.header("📊 Hiển thị model")
     show_ochiai = st.sidebar.checkbox("Ochiai", value=True)
@@ -254,26 +276,33 @@ def main():
         st.warning("Vui lòng chọn sản phẩm")
         return
 
-    product_row = products[products['product_id'] == product_id]
+    product_row = products[products["product_id"] == product_id]
     if product_row.empty:
         st.error(f"❌ Không tìm thấy sản phẩm ID = {product_id}")
         return
 
     product_row = product_row.iloc[0]
 
-    # ---- Thẻ sản phẩm mục tiêu ----
+    # ---- Thẻ sản phẩm mục tiêu (Tối ưu hóa màu hiển thị theo Theme hệ thống) ----
     st.markdown("---")
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown(f"""
-        <div style="padding: 15px; border: 2px solid #4CAF50; border-radius: 10px; background-color: #f0fff0; color: #111111;">
-            <h3 style="margin:0; color: #2E7D32;">📦 SẢN PHẨM MỤC TIÊU</h3>
+        st.markdown(
+            f"""
+        <div style="padding: 15px; 
+                    border: 2px solid #4CAF50; 
+                    border-radius: 10px; 
+                    background-color: var(--secondary-background-color); 
+                    color: var(--text-color);">
+            <h3 style="margin:0; color: #4CAF50;">📦 SẢN PHẨM MỤC TIÊU</h3>
             <p style="margin:5px 0;"><b>ID:</b> {product_id}</p>
             <p style="margin:5px 0;"><b>Tên:</b> {product_row['display_name']}</p>
             <p style="margin:5px 0;"><b>Gian hàng:</b> {product_row.get('aisle_vi', product_row.get('aisle', '?'))}</p>
             <p style="margin:5px 0;"><b>Ngành hàng:</b> {product_row.get('department_vi', product_row.get('department', '?'))}</p>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     # ---- Lấy gợi ý ----
     with st.spinner("Đang tính toán gợi ý..."):
@@ -283,54 +312,70 @@ def main():
     st.markdown("## 📊 So Sánh Các Model")
 
     model_names = []
-    if show_ochiai: model_names.append('Ochiai')
-    if show_i2v: model_names.append('Item2Vec')
-    if show_dw: model_names.append('DeepWalk')
-    if show_arm: model_names.append('AssocRules')
-    if show_ensemble_no_cb: model_names.append('Ensemble (w/o CB)')
-    if show_ensemble_cb: model_names.append('Ensemble + CB')
+    if show_ochiai:
+        model_names.append("Ochiai")
+    if show_i2v:
+        model_names.append("Item2Vec")
+    if show_dw:
+        model_names.append("DeepWalk")
+    if show_arm:
+        model_names.append("AssocRules")
+    if show_ensemble_no_cb:
+        model_names.append("Ensemble (w/o CB)")
+    if show_ensemble_cb:
+        model_names.append("Ensemble + CB")
 
     tabs = st.tabs(model_names)
 
     for tab_idx, model_name in enumerate(model_names):
         with tabs[tab_idx]:
             data = results.get(model_name)
-            if data is None or not data['recs']:
+            if data is None or not data["recs"]:
                 st.warning(f"❌ Model {model_name} không có gợi ý.")
                 continue
 
-            recs = data['recs']
-            elapsed = data['time']
+            recs = data["recs"]
+            elapsed = data["time"]
 
             st.caption(f"⏱ Thời gian: {elapsed:.3f}s")
 
             rows = []
             for rank, (rid, score) in enumerate(recs, 1):
-                rrow = products[products['product_id'] == rid]
+                rrow = products[products["product_id"] == rid]
                 if not rrow.empty:
                     rrow = rrow.iloc[0]
-                    rows.append({
-                        'Xếp hạng': rank,
-                        'ID': rid,
-                        'Tên sản phẩm': rrow['display_name'],
-                        'Gian hàng': rrow.get('aisle_vi', rrow.get('aisle', '?')),
-                        'Điểm số': f"{score:.4f}",
-                    })
+                    rows.append(
+                        {
+                            "Xếp hạng": rank,
+                            "ID": rid,
+                            "Tên sản phẩm": rrow["display_name"],
+                            "Gian hàng": rrow.get(
+                                "aisle_vi", rrow.get("aisle", "?")
+                            ),
+                            "Ngành hàng": rrow.get(
+                                "department_vi", rrow.get("department", "?")
+                            ),  # THÊM CỘT
+                            "Điểm số": f"{score:.4f}",
+                        }
+                    )
                 else:
-                    rows.append({
-                        'Xếp hạng': rank,
-                        'ID': rid,
-                        'Tên sản phẩm': '?',
-                        'Gian hàng': '?',
-                        'Điểm số': f"{score:.4f}",
-                    })
+                    rows.append(
+                        {
+                            "Xếp hạng": rank,
+                            "ID": rid,
+                            "Tên sản phẩm": "?",
+                            "Gian hàng": "?",
+                            "Ngành hàng": "?",  # THÊM CỘT
+                            "Điểm số": f"{score:.4f}",
+                        }
+                    )
 
             df = pd.DataFrame(rows)
-            st.dataframe(df, width='stretch', hide_index=True)
+            st.dataframe(df, width="stretch", hide_index=True)
 
     # ---- CB Filter chi tiết ----
     if show_cb_detail and show_ensemble_cb:
-        ensemble_recs = results.get('Ensemble + CB', {}).get('recs', [])
+        ensemble_recs = results.get("Ensemble + CB", {}).get("recs", [])
         if ensemble_recs:
             st.markdown("---")
             st.markdown("## 🎯 CB Filter Chi Tiết (Ensemble + CB)")
@@ -339,19 +384,34 @@ def main():
             if detail:
                 rows = []
                 for cid, sim in detail:
-                    rrow = products[products['product_id'] == cid]
-                    name = rrow.iloc[0]['display_name'] if not rrow.empty else '?'
-                    label = "❌ **Substitute**" if sim >= 0.8 else "✅ Complementary"
-                    rows.append({
-                        'ID': cid,
-                        'Tên sản phẩm': name,
-                        'CB Similarity': f"{sim:.4f}",
-                        'Kết luận': label,
-                    })
+                    rrow = products[products["product_id"] == cid]
+                    if not rrow.empty:
+                        rrow = rrow.iloc[0]
+                        name = rrow["display_name"]
+                        dept = rrow.get(
+                            "department_vi", rrow.get("department", "?")
+                        )  # THÊM CỘT
+                    else:
+                        name = "?"
+                        dept = "?"
+
+                    label = (
+                        "❌ **Substitute**"
+                        if sim >= 0.8
+                        else "✅ Complementary"
+                    )
+                    rows.append(
+                        {
+                            "ID": cid,
+                            "Tên sản phẩm": name,
+                            "Ngành hàng": dept,  # THÊM CỘT
+                            "CB Similarity": f"{sim:.4f}",
+                            "Kết luận": label,
+                        }
+                    )
 
                 df_detail = pd.DataFrame(rows)
-                st.dataframe(df_detail, width='stretch', hide_index=True)
-                st.caption("ℹ️ CB Similarity ≥ 0.8 → Substitute (bị loại khỏi gợi ý)")
+                st.dataframe(df_detail, width="stretch", hide_index=True)
             else:
                 st.info("ℹ️ Không có dữ liệu CB Filter cho sản phẩm này.")
 
@@ -360,8 +420,8 @@ def main():
         st.markdown("---")
         st.markdown("## 🔄 So Sánh Ensemble: Có CB vs Không CB")
 
-        recs_cb = results.get('Ensemble + CB', {}).get('recs', [])
-        recs_no_cb = results.get('Ensemble (w/o CB)', {}).get('recs', [])
+        recs_cb = results.get("Ensemble + CB", {}).get("recs", [])
+        recs_no_cb = results.get("Ensemble (w/o CB)", {}).get("recs", [])
 
         set_cb = set(pid for pid, _ in recs_cb)
         set_no_cb = set(pid for pid, _ in recs_no_cb)
@@ -372,11 +432,15 @@ def main():
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown("**❌ Bị CB Filter loại (trong w/o CB nhưng không có trong +CB):**")
+            st.markdown(
+                "**❌ Bị CB Filter loại (trong w/o CB nhưng không có trong +CB):**"
+            )
             if only_in_no_cb:
                 for pid in only_in_no_cb:
-                    rrow = products[products['product_id'] == pid]
-                    name = rrow.iloc[0]['display_name'] if not rrow.empty else '?'
+                    rrow = products[products["product_id"] == pid]
+                    name = (
+                        rrow.iloc[0]["display_name"] if not rrow.empty else "?"
+                    )
                     st.write(f"- [{pid}] {name}")
             else:
                 st.write("*(Không có)*")
@@ -385,8 +449,10 @@ def main():
             st.markdown("**✅ Chỉ xuất hiện trong Ensemble + CB:**")
             if only_in_cb:
                 for pid in only_in_cb:
-                    rrow = products[products['product_id'] == pid]
-                    name = rrow.iloc[0]['display_name'] if not rrow.empty else '?'
+                    rrow = products[products["product_id"] == pid]
+                    name = (
+                        rrow.iloc[0]["display_name"] if not rrow.empty else "?"
+                    )
                     st.write(f"- [{pid}] {name}")
             else:
                 st.write("*(Không có)*")

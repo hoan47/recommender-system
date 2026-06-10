@@ -1,6 +1,6 @@
 # Bảng Theo Dõi Tiến Độ (Progress Tracking)
 
-Cập nhật lần cuối: 2026-06-10 02:30
+Cập nhật lần cuối: 2026-06-10 17:40
 
 ---
 
@@ -13,7 +13,7 @@ Cập nhật lần cuối: 2026-06-10 02:30
 | `src/features/vectorizer.py` | ✅ Hoàn tất | TF-IDF + one-hot, cosine similarity on-demand |
 | `src/utils/__init__.py` | ✅ Hoàn tất | Package init |
 | `src/utils/_numba_ops.py` | ✅ Hoàn tất | Numba-accelerated ops (counting, adjacency CSR) |
-| `src/models/cb_filter.py` | ✅ Hoàn tất | CB Diversity Filter, threshold=0.8 |
+| `src/models/cb_filter.py` | ✅ Hoàn tất | CB Diversity Filter, threshold=0.3 |
 | `src/models/ochiai.py` | ✅ Hoàn tất | Ochiai + Confidence Score, CSR sparse matrix — dùng Numba counting |
 | `src/models/item2vec.py` | ✅ Hoàn tất | Word2Vec Skip-gram (gensim) |
 | `src/models/deepwalk.py` | ✅ Hoàn tất | Graph embedding + uniform random walk — dùng Numba counting + adjacency CSR |
@@ -52,7 +52,8 @@ Cập nhật lần cuối: 2026-06-10 02:30
 - [x] Chạy `scripts/07_ensemble.py` — test ensemble + CB Filter
 - [x] Tạo `scripts/08_streamlit_app.py` — Dashboard trực quan
 - [ ] Chạy `streamlit run scripts/08_streamlit_app.py` — mở Dashboard
-- [ ] CB Filter đang không lọc được (threshold 0.8 quá cao) — cần debug
+- [x] ~~CB Filter đang không lọc được (threshold 0.8 quá cao) — cần debug~~
+- [x] ~~Tối ưu threshold CB Filter~~ ✅ CB_THRESHOLD=0.3 đã hoạt động
 - [ ] Evaluation pipeline (survey + LLM + metrics)
 - [ ] Đánh giá model qua survey
-- [ ] Tối ưu threshold CB Filter
+- [ ] Chạy `streamlit run scripts/08_streamlit_app.py` — mở Dashboard
