@@ -13,13 +13,15 @@ def compute_precision_at_k(
     k: int = 10
 ) -> float:
     """
-    Precision@K = số lượng gợi ý đúng (complementary) trong top-K / K
-    
+    Precision@K — tỷ lệ gợi ý đúng trong top-K.
+
+    Công thức: số gợi ý complementary trong top-K / K
+
     Args:
         ground_truth: dict {product_A_id: [list product_B_id complementary]}
         predictions: dict {product_A_id: [list product_B_id top-K gợi ý]}
         k: int
-    
+
     Returns:
         float: Precision@K trung bình trên tất cả sản phẩm đầu vào
     """
@@ -49,13 +51,15 @@ def compute_recall_at_k(
     k: int = 10
 ) -> float:
     """
-    Recall@K = số lượng gợi ý đúng trong top-K / tổng số complementary trong ground truth
-    
+    Recall@K — tỷ lệ ground truth được phủ bởi top-K.
+
+    Công thức: số gợi ý đúng trong top-K / tổng số complementary trong ground truth
+
     Args:
         ground_truth: dict {product_A_id: [list product_B_id complementary]}
         predictions: dict {product_A_id: [list product_B_id top-K gợi ý]}
         k: int
-    
+
     Returns:
         float: Recall@K trung bình trên tất cả sản phẩm đầu vào
     """
@@ -83,12 +87,14 @@ def compute_f1_at_k(
     recall: float
 ) -> float:
     """
-    F1@K = 2 × (Precision@K × Recall@K) / (Precision@K + Recall@K)
-    
+    F1@K — trung bình điều hòa giữa Precision và Recall.
+
+    Công thức: 2 × (Precision@K × Recall@K) / (Precision@K + Recall@K)
+
     Args:
         precision: float — Precision@K
         recall: float — Recall@K
-    
+
     Returns:
         float: F1@K
     """
@@ -103,13 +109,13 @@ def compute_hit_at_k(
     k: int = 10
 ) -> float:
     """
-    Hit@K = tỷ lệ product_A có ít nhất 1 gợi ý đúng trong top-K
-    
+    Hit@K — tỷ lệ product_A có ít nhất 1 gợi ý đúng trong top-K.
+
     Args:
         ground_truth: dict {product_A_id: [list product_B_id complementary]}
         predictions: dict {product_A_id: [list product_B_id top-K gợi ý]}
         k: int
-    
+
     Returns:
         float: Hit@K (tỷ lệ 0.0 - 1.0)
     """
@@ -136,13 +142,13 @@ def compute_all_metrics(
     k: int = 10
 ) -> Dict[str, float]:
     """
-    Tính tất cả các metrics cho 1 model.
-    
+    Tính tất cả các metrics (Precision, Recall, F1, Hit) cho 1 model.
+
     Args:
         ground_truth: dict {product_A_id: [list product_B_id complementary]}
         predictions: dict {product_A_id: [list product_B_id top-K gợi ý]}
         k: int
-    
+
     Returns:
         dict: {'precision': float, 'recall': float, 'f1': float, 'hit': float}
     """

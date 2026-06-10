@@ -14,7 +14,7 @@ from src.config import (
 def load_products() -> pd.DataFrame:
     """
     Đọc products.csv, merge với aisles.csv và departments.csv.
-    
+
     Returns:
         DataFrame columns: [product_id, product_name, aisle_id,
                            aisle, department_id, department]
@@ -32,13 +32,12 @@ def load_products() -> pd.DataFrame:
 def load_order_products(use_prior: bool = True,
                         use_train: bool = True) -> pd.DataFrame:
     """
-    Đọc order_products__prior.csv + order_products__train.csv.
-    Dùng chunksize để xử lý file lớn.
-    
+    Đọc order_products__prior.csv + order_products__train.csv (chunk-based).
+
     Args:
         use_prior: có đọc file prior không
         use_train: có đọc file train không
-    
+
     Returns:
         DataFrame columns: [order_id, product_id, add_to_cart_order, reordered]
     """
@@ -71,10 +70,10 @@ def load_order_products(use_prior: bool = True,
 def load_orders(eval_set: str = None) -> pd.DataFrame:
     """
     Đọc orders.csv, lọc theo eval_set nếu có.
-    
+
     Args:
         eval_set: None → trả về tất cả, hoặc 'prior'/'train'/'test'
-    
+
     Returns:
         DataFrame columns: [order_id, user_id, eval_set, order_number, ...]
     """
@@ -87,10 +86,10 @@ def load_orders(eval_set: str = None) -> pd.DataFrame:
 def get_product_name_map(products_df: pd.DataFrame = None) -> dict:
     """
     Tạo mapping product_id → product_name.
-    
+
     Args:
         products_df: DataFrame từ load_products(), nếu None thì tự load
-    
+
     Returns:
         dict: {product_id: product_name}
     """

@@ -4,7 +4,6 @@ Pairwise co-occurrence model với score có hướng.
 """
 import os
 import json
-import math
 from collections import defaultdict
 from itertools import combinations
 import numpy as np
@@ -122,12 +121,12 @@ class OchiaiModel:
     def _compute_scores(self, product_idx: int):
         """
         Tính score cho product_idx với tất cả các product khác.
-        
+
         score(i→j) = ochiai(i,j) * conf(i→j) * log1p(cnt(i,j))
-        
+
         Args:
-            product_idx: int, index của sản phẩm đầu vào
-        
+            product_idx: int — index của sản phẩm đầu vào
+
         Returns:
             numpy array (n_products,) — score từ product_idx đến mọi product
         """
@@ -162,14 +161,14 @@ class OchiaiModel:
     
     def recommend(self, product_id: int, top_k: int = None):
         """
-        Trả về top-K product có score cao nhất cho product_id đầu vào.
-        
+        Trả về top-K product có score cao nhất cho product_id đầu vào — gợi ý mua kèm.
+
         Args:
-            product_id: int
-            top_k: int, số lượng gợi ý (default: OCHIAI_TOP_K)
-        
+            product_id: int — ID sản phẩm đầu vào
+            top_k: int — số lượng gợi ý (default: OCHIAI_TOP_K)
+
         Returns:
-            list (product_id, score) sorted giảm dần
+            list (product_id, score) — sorted giảm dần theo score
         """
         if top_k is None:
             top_k = OCHIAI_TOP_K
@@ -197,10 +196,10 @@ class OchiaiModel:
     
     def save(self, path: str):
         """
-        Lưu model ra file.
-        
+        Lưu model ra file (cooc matrix + metadata + product counts).
+
         Args:
-            path: đường dẫn thư mục (vd: models/ochiai/)
+            path: đường dẫn thư mục đầu ra (vd: models/ochiai/)
         """
         os.makedirs(path, exist_ok=True)
         
@@ -230,10 +229,10 @@ class OchiaiModel:
     
     def load(self, path: str):
         """
-        Load model từ file.
-        
+        Load model từ file (cooc matrix + metadata + product counts).
+
         Args:
-            path: đường dẫn thư mục (vd: models/ochiai/)
+            path: đường dẫn thư mục đã lưu (vd: models/ochiai/)
         """
         self.cooc_matrix = sparse.load_npz(os.path.join(path, "cooc_matrix.npz"))
         

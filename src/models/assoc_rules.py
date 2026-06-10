@@ -5,7 +5,6 @@ Chạy được trên full dataset.
 """
 import os
 import json
-import math
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -39,8 +38,8 @@ class AssocRulesModel:
     
     def fit(self, ochiai_model, order_products: pd.DataFrame):
         """
-        Xây rules từ co-occurrence matrix.
-        
+        Xây rules từ co-occurrence matrix của OchiaiModel.
+
         Args:
             ochiai_model: OchiaiModel đã train (có cooc_matrix + product_counts)
             order_products: DataFrame [order_id, product_id, ...] (để tính total_orders)
@@ -111,15 +110,15 @@ class AssocRulesModel:
     
     def recommend(self, product_id: int, top_k: int = None):
         """
-        Tìm rules có antecedent = product_id.
+        Tìm rules có antecedent = product_id — gợi ý mua kèm.
         Sort theo lift descending.
-        
+
         Args:
-            product_id: int
-            top_k: int
-        
+            product_id: int — ID sản phẩm đầu vào
+            top_k: int — số lượng gợi ý
+
         Returns:
-            list (product_id, lift)
+            list (product_id, lift) — các sản phẩm gợi ý kèm lift score
         """
         if top_k is None:
             top_k = self.top_k
@@ -148,10 +147,10 @@ class AssocRulesModel:
     
     def save(self, path: str):
         """
-        Lưu rules ra CSV.
-        
+        Lưu rules ra CSV + metadata.
+
         Args:
-            path: đường dẫn thư mục
+            path: đường dẫn thư mục đầu ra
         """
         os.makedirs(path, exist_ok=True)
         
@@ -176,10 +175,10 @@ class AssocRulesModel:
     
     def load(self, path: str):
         """
-        Load rules từ CSV.
-        
+        Load rules từ CSV + metadata.
+
         Args:
-            path: đường dẫn thư mục
+            path: đường dẫn thư mục đã lưu
         """
         filepath = os.path.join(path, "rules.csv")
         self.rules_df = pd.read_csv(filepath)

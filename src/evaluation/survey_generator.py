@@ -24,16 +24,16 @@ def generate_survey_samples(
     seed: int = None
 ) -> pd.DataFrame:
     """
-    Sinh mẫu khảo sát cho 1 model.
-    
+    Sinh mẫu khảo sát cho 1 model — top-5 + noise.
+
     Args:
         model: model có method recommend(product_id, top_k) -> list (product_id, score)
         products_df: DataFrame [product_id, product_name, ...]
-        model_name: str, tên model
-        n_samples: int, số lượng product_A cần lấy mẫu
-        top_k: int, số lượng top-K recommend để lấy noise candidates
-        seed: int, random seed
-    
+        model_name: str — tên model
+        n_samples: int — số lượng product_A cần lấy mẫu
+        top_k: int — số lượng top-K recommend để lấy noise candidates
+        seed: int — random seed
+
     Returns:
         DataFrame columns: [product_A_id, product_B_id, model_name, source]
     """
@@ -95,16 +95,16 @@ def generate_assoc_rules_survey(
 ) -> str:
     """
     Sinh survey samples cho Association Rules và lưu ra CSV.
-    
+
     Args:
         model: AssocRulesModel instance
         products_df: DataFrame products
         model_name: str
-        n_samples: int, số product_A
-        top_k: int, top-K để lấy noise candidates
-        seed: int
-        output_dir: str, đường dẫn thư mục output (default: data/survey/)
-    
+        n_samples: int — số product_A
+        top_k: int — top-K để lấy noise candidates
+        seed: int — random seed
+        output_dir: str — đường dẫn thư mục output (default: data/survey/)
+
     Returns:
         str: đường dẫn file CSV đã lưu
     """

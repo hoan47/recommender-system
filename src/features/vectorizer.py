@@ -14,9 +14,9 @@ from src.config import CB_N_GRAM_RANGE, CB_MAX_FEATURES, PROJECT_ROOT
 
 def _load_stop_words():
     """
-    Load stop words: dung sklearn's ENGLISH_STOP_WORDS + tu custom trong file.
-    File english_stopwords.txt: them tu moi vao day, moi tu 1 dong.
-    Tra ve list de tuong thich voi sklearn TfidfVectorizer.
+    Load stop words: dùng sklearn's ENGLISH_STOP_WORDS + từ custom trong file.
+    File english_stopwords.txt: thêm từ mới vào đây, mỗi từ 1 dòng.
+    Trả về list để tương thích với sklearn TfidfVectorizer.
     """
     stop_words = set(ENGLISH_STOP_WORDS)
     stop_file = os.path.join(PROJECT_ROOT, "english_stopwords.txt")
@@ -31,17 +31,13 @@ def _load_stop_words():
 
 def build_product_vectors(products_df, ngram_range=None, max_features=None):
     """
-    Vector hóa sản phẩm:
-      - TF-IDF trên product_name (unigram + bigram)
-      - One-hot aisle_id
-      - One-hot department_id
-    Ghép dọc 3 vector lại bằng hstack.
-    
+    Vector hóa sản phẩm (TF-IDF + one-hot aisle + one-hot department).
+
     Args:
         products_df: DataFrame [product_id, product_name, aisle_id, department_id, ...]
         ngram_range: tuple (min_n, max_n) cho TF-IDF
         max_features: int, max features cho TF-IDF
-    
+
     Returns:
         product_vectors: sparse.csr_matrix shape (n_products, D)
         vectorizer: TfidfVectorizer đã fit
@@ -98,14 +94,13 @@ def build_product_vectors(products_df, ngram_range=None, max_features=None):
 
 def cb_similarity(product_vectors, product_a_idx, candidate_indices):
     """
-    Tính cosine similarity giữa product_a và từng candidate.
-    Chỉ tính on-demand, không pre-compute full matrix.
-    
+    Tính cosine similarity giữa product_a và từng candidate — on-demand.
+
     Args:
         product_vectors: sparse.csr_matrix (n_products, D)
-        product_a_idx: int, index của product A
-        candidate_indices: list[int], indices của các candidate
-    
+        product_a_idx: int — index của product A
+        candidate_indices: list[int] — indices của các candidate
+
     Returns:
         numpy array shape (len(candidate_indices),) — similarity scores [0,1]
     """

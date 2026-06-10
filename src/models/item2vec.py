@@ -93,14 +93,14 @@ class Item2VecModel:
     
     def recommend(self, product_id: int, top_k: int = None):
         """
-        Lấy top-K sản phẩm gần nhất với product_id trong không gian embedding.
-        
+        Lấy top-K sản phẩm gần nhất với product_id trong không gian embedding — gợi ý mua kèm.
+
         Args:
-            product_id: int
-            top_k: int
-        
+            product_id: int — ID sản phẩm đầu vào
+            top_k: int — số lượng gợi ý
+
         Returns:
-            list (product_id, cosine_similarity)
+            list (product_id, cosine_similarity) — các sản phẩm gợi ý kèm similarity
         """
         if top_k is None:
             top_k = I2V_TOP_K
@@ -118,10 +118,10 @@ class Item2VecModel:
     
     def save(self, path: str):
         """
-        Lưu model ra file.
-        
+        Lưu model ra file (word2vec model + mapping).
+
         Args:
-            path: đường dẫn thư mục
+            path: đường dẫn thư mục đầu ra
         """
         os.makedirs(path, exist_ok=True)
         
@@ -140,10 +140,10 @@ class Item2VecModel:
     
     def load(self, path: str):
         """
-        Load model từ file.
-        
+        Load model từ file (word2vec model + mapping).
+
         Args:
-            path: đường dẫn thư mục
+            path: đường dẫn thư mục đã lưu
         """
         self.model = Word2Vec.load(os.path.join(path, "word2vec.model"))
         

@@ -16,17 +16,5 @@ scikit-learn>=1.0.0
 # Word2Vec (Item2Vec, Node2Vec)
 gensim>=4.2.0
 
-# Knowledge Graph (graph building)
-networkx>=2.6.0
-
 # Progress bars (cho chunk processing)
 tqdm>=4.62.0
-
-# RAM monitoring
-psutil>=5.8.0
-
-# JIT compilation for hot loops (co-occurrence)
-numba>=0.56.0
-
-# Node2Vec random walk (C implementation, faster than Python loop for 25K nodes)
-pecanpy>=2.1.0

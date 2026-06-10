@@ -22,7 +22,7 @@ class CBFilter:
     def __init__(self, threshold: float = None):
         """
         Args:
-            threshold: cosine similarity >= threshold → substitute → loại bỏ
+            threshold: cosine similarity >= threshold → substitute → loại bỏ (default: CB_THRESHOLD)
         """
         self.threshold = threshold if threshold is not None else CB_THRESHOLD
         self.product_vectors = None  # sparse.csr_matrix (n_products, D)
@@ -30,9 +30,8 @@ class CBFilter:
     
     def fit(self, products_df, ngram_range=None, max_features=None):
         """
-        Pre-compute product vectors 1 lần.
-        Lưu product_vectors và mapping product_id → idx.
-        
+        Pre-compute product vectors 1 lần — vector hóa sản phẩm.
+
         Args:
             products_df: DataFrame [product_id, product_name, aisle_id, department_id, ...]
             ngram_range: tuple (min_n, max_n) cho TF-IDF
@@ -56,13 +55,13 @@ class CBFilter:
     
     def filter(self, product_a_id: int, candidates):
         """
-        Lọc substitute khỏi danh sách candidate.
-        
+        Lọc substitute khỏi danh sách candidate — giữ lại complementary.
+
         Args:
             product_a_id: product_id đầu vào
             candidates: list (product_id, score) đã sort giảm dần theo score,
                        hoặc list product_id đơn thuần
-        
+
         Returns:
             list (product_id, score) đã loại bỏ substitute,
             hoặc list product_id nếu đầu vào là list đơn thuần
@@ -134,13 +133,13 @@ class CBFilter:
     
     def filter_df(self, product_a_id: int, candidate_df, score_col: str = "score"):
         """
-        Version trả về DataFrame thay vì list.
-        
+        Version trả về DataFrame thay vì list — lọc substitute.
+
         Args:
             product_a_id: product_id đầu vào
             candidate_df: DataFrame [product_id, score, ...]
             score_col: tên cột chứa score
-        
+
         Returns:
             DataFrame đã loại bỏ substitute
         """
