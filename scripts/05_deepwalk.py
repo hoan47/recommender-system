@@ -37,7 +37,7 @@ if os.path.exists(os.path.join(save_path, "embeddings.npy")):
     model = DeepWalkModel()
     model.load(save_path)
 else:
-    print("\n2. Training DeepWalk (co the mat vai phut)...")
+    print("\n2. Training DeepWalk...")
     model = DeepWalkModel()
     model.fit(order_products, products)
     model.save(save_path)
