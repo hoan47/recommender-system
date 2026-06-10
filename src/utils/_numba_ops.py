@@ -404,7 +404,7 @@ def _is_common_neighbor_numba(node, prev, cur, indptr, neighbors):
     return False
 
 
-@njit(parallel=True)
+@njit
 def generate_walks_numba(indptr, neighbors, weights, p, q, walk_length,
                          num_walks, nodes, rng_seed):
     """
@@ -432,7 +432,7 @@ def generate_walks_numba(indptr, neighbors, weights, p, q, walk_length,
     walks = np.full((total_walks, walk_length), -1, dtype=np.int32)
     walk_lengths = np.zeros(total_walks, dtype=np.int32)
 
-    for walk_idx in prange(total_walks):
+    for walk_idx in range(total_walks):
         node_idx = walk_idx % n_nodes
         start_node = nodes[node_idx]
 
