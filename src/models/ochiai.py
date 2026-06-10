@@ -142,14 +142,15 @@ class OchiaiModel:
         
         # Ochiai = cnt / sqrt(count(A) * count(B))
         ochiai = np.zeros(self.n_products)
-        nonzero_mask = row > 0
-        nonzero_indices = np.where(nonzero_mask)[0]
+        nonzero_indices = np.where(row > 0)[0]
         
-        for j in nonzero_indices:
-            cnt = row[j]
-            count_j = self.product_counts[j]
-            if count_j > 0:
-                ochiai[j] = cnt / math.sqrt(cnt_i * count_j)
+        # Vectorized: tính ochiai cho tất cả non-zero entries cùng lúc
+        cnts = row[nonzero_indices]
+        counts_j = self.product_counts[nonzero_indices]
+        mask = counts_j > 0
+        if mask.any():
+            valid_indices = nonzero_indices[mask]
+            ochiai[valid_indices] = cnts[mask] / np.sqrt(cnt_i * counts_j[mask])
         
         # Confidence: conf(A→B) = cnt / count(A)
         conf = row / cnt_i

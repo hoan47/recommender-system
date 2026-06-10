@@ -99,21 +99,17 @@ class CBFilter:
         mask = similarities < self.threshold
         
         if is_tuple_list:
-            # Trả về list tuple, giữ nguyên score
-            filtered = [
-                candidates[i] for i, cid in enumerate(candidate_ids)
-                if cid in valid_candidates
-            ]
-            # Lọc theo mask
+            # Tra cứu similarity nhanh bằng dict, giữ nguyên thứ tự
+            valid_set = set(self.product_id_to_idx.keys())
+            sim_map = dict(zip(valid_candidates, similarities))
+            
             result = []
-            valid_idx = 0
-            for i, cid in enumerate(candidate_ids):
-                if cid in valid_candidates:
-                    if mask[valid_idx]:
-                        result.append(candidates[i])
-                    valid_idx += 1
-                else:
-                    result.append(candidates[i])
+            for cid, score in candidates:
+                if cid not in valid_set:
+                    result.append((cid, score))      # cold-start: giữ lại
+                elif sim_map.get(cid, 0) < self.threshold:
+                    result.append((cid, score))      # complementary: giữ lại
+                # else: substitute (similarity >= threshold) → bỏ
             return result
         else:
             # Trả về list product_id

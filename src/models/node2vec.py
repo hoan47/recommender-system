@@ -12,7 +12,7 @@ import pandas as pd
 
 from src.config import (
     N2V_EMBEDDING_DIM, N2V_WALK_LENGTH, N2V_NUM_WALKS,
-    N2V_P, N2V_Q, N2V_WORKERS, N2V_EDGE_THRESHOLD, N2V_TOP_K,
+    N2V_P, N2V_Q, N2V_WORKERS, N2V_WINDOW, N2V_EDGE_THRESHOLD, N2V_TOP_K,
     RANDOM_SEED
 )
 
@@ -27,7 +27,7 @@ class Node2VecModel:
     """
     
     def __init__(self, embedding_dim=None, walk_length=None, num_walks=None,
-                 p=None, q=None, edge_threshold=None, workers=None):
+                 p=None, q=None, edge_threshold=None, workers=None, window=None):
         self.params = {
             'embedding_dim': embedding_dim if embedding_dim is not None else N2V_EMBEDDING_DIM,
             'walk_length': walk_length if walk_length is not None else N2V_WALK_LENGTH,
@@ -36,6 +36,7 @@ class Node2VecModel:
             'q': q if q is not None else N2V_Q,
             'edge_threshold': edge_threshold if edge_threshold is not None else N2V_EDGE_THRESHOLD,
             'workers': workers if workers is not None else N2V_WORKERS,
+            'window': window if window is not None else N2V_WINDOW,
         }
         self.graph = None          # adjacency list {node: [(neighbor, weight), ...]}
         self.model = None          # Word2Vec model sẽ train sau
@@ -107,7 +108,7 @@ class Node2VecModel:
         self.model = Word2Vec(
             sentences=sentences,
             vector_size=self.params['embedding_dim'],
-            window=10,
+            window=self.params['window'],
             min_count=1,  # giữ tất cả nodes
             negative=10,
             epochs=20,
