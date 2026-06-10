@@ -32,7 +32,8 @@ recommender-system/
 │   ├── 04_item2vec.py       # Train Item2Vec
 │   ├── 05_deepwalk.py       # Train DeepWalk
 │   ├── 06_assoc_rules.py    # Train Association Rules
-│   └── 07_ensemble.py       # Ensemble + test
+│   ├── 07_ensemble.py       # Ensemble + test
+│   └── 08_streamlit_app.py  # Streamlit Dashboard UI
 ├── src/                     # Source code
 │   ├── config.py            # Cấu hình tập trung
 │   ├── evaluation/          # (dự trữ cho đánh giá sau)
@@ -104,6 +105,9 @@ python scripts/06_assoc_rules.py
 
 # Bước 7: Test Ensemble + CB Filter
 python scripts/07_ensemble.py
+
+# Bước 8: Streamlit Dashboard
+streamlit run scripts/08_streamlit_app.py
 ```
 
 ## Lưu Ý

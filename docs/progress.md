@@ -32,6 +32,7 @@ Cập nhật lần cuối: 2026-06-10 02:30
 | `scripts/05_deepwalk.py` | ✅ Hoàn tất | Train DeepWalk |
 | `scripts/06_assoc_rules.py` | ✅ Hoàn tất | Train Association Rules + test recommend |
 | `scripts/07_ensemble.py` | ✅ Hoàn tất | Ensemble + test recommend |
+| `scripts/08_streamlit_app.py` | ✅ Hoàn tất | Streamlit Dashboard UI |
 
 ## Model đã train (cached)
 
@@ -39,13 +40,19 @@ Cập nhật lần cuối: 2026-06-10 02:30
 |-------|------|-----------|----------|
 | CB Filter | `models/cb_filter/product_vectors.npz` | ~35 MB | ✅ Có |
 | Ochiai | `models/ochiai/cooc_matrix.npz` | ~28 MB | ✅ Có (metadata.json đã fix) |
-| Item2Vec | `models/item2vec/` | - | ❌ Chưa |
-| DeepWalk | `models/deepwalk/` | - | ❌ Chưa |
-| Assoc Rules | `models/assoc_rules/` | - | ❌ Chưa |
+| Item2Vec | `models/item2vec/` | - | ✅ Có |
+| DeepWalk | `models/deepwalk/` | - | ✅ Có |
+| Assoc Rules | `models/assoc_rules/` | - | ✅ Có |
 
 ## Còn lại
 
-- [ ] Chạy `scripts/04_item2vec.py` — train Item2Vec (mất ~5-10 phút)
-- [ ] Chạy `scripts/05_deepwalk.py` — train DeepWalk (mất ~3-5 phút)
-- [ ] Chạy `scripts/06_assoc_rules.py` — train Assoc Rules (mất ~2-5 phút)
-- [ ] Chạy `scripts/07_ensemble.py` — test ensemble + CB Filter
+- [x] Chạy `scripts/04_item2vec.py` — train Item2Vec
+- [x] Chạy `scripts/05_deepwalk.py` — train DeepWalk
+- [x] Chạy `scripts/06_assoc_rules.py` — train Assoc Rules
+- [x] Chạy `scripts/07_ensemble.py` — test ensemble + CB Filter
+- [x] Tạo `scripts/08_streamlit_app.py` — Dashboard trực quan
+- [ ] Chạy `streamlit run scripts/08_streamlit_app.py` — mở Dashboard
+- [ ] CB Filter đang không lọc được (threshold 0.8 quá cao) — cần debug
+- [ ] Evaluation pipeline (survey + LLM + metrics)
+- [ ] Đánh giá model qua survey
+- [ ] Tối ưu threshold CB Filter

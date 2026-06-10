@@ -16,6 +16,13 @@ import streamlit as st
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Fix Windows terminal encoding for Unicode
+import io
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+elif hasattr(sys.stdout, 'buffer'):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
 from src.config import MODEL_DIR, PROCESSED_DIR
 from src.models.cb_filter import CBFilter
 from src.models.ochiai import OchiaiModel
@@ -39,27 +46,40 @@ st.set_page_config(
 # ============================================================
 
 @st.cache_resource
+def _read_csv_vi(filename):
+    """Đọc CSV tiếng Việt dùng pandas (xử lý BOM, dấu phẩy trong tên, Unicode encoding)."""
+    return pd.read_csv(filename, encoding='utf-8-sig')
+
+
+@st.cache_resource
 def load_products_vi():
     """Load dữ liệu sản phẩm tiếng Việt + merge với products.parquet."""
     products = pd.read_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
 
-    products_vi = pd.read_csv(
-        os.path.join(PROCESSED_DIR, "products_vi.csv"), encoding='utf-8'
-    )
-    aisles_vi = pd.read_csv(
-        os.path.join(PROCESSED_DIR, "aisles_vi.csv"), encoding='utf-8'
-    )
-    depts_vi = pd.read_csv(
-        os.path.join(PROCESSED_DIR, "departments_vi.csv"), encoding='utf-8'
-    )
+    products_vi = _read_csv_vi(os.path.join(PROCESSED_DIR, "products_vi.csv"))
+    aisles_vi = _read_csv_vi(os.path.join(PROCESSED_DIR, "aisles_vi.csv"))
+    depts_vi = _read_csv_vi(os.path.join(PROCESSED_DIR, "departments_vi.csv"))
 
+    # FIX CHÍ MẠNG: Ép kiểu product_id cho CẢ HAI bảng để đồng bộ bộ nhớ
+    products['product_id'] = products['product_id'].astype(int)
+    products_vi['product_id'] = products_vi['product_id'].astype(int)
+    
+    # Đồng bộ tương tự cho aisle và department
+    products['aisle_id'] = products['aisle_id'].astype(int)
+    aisles_vi['aisle_id'] = aisles_vi['aisle_id'].astype(int)
+    
+    products['department_id'] = products['department_id'].astype(int)
+    depts_vi['department_id'] = depts_vi['department_id'].astype(int)
+
+    # Thực hiện merge sau khi đã đồng bộ kiểu dữ liệu
     products = products.merge(products_vi, on='product_id', how='left')
     products = products.merge(aisles_vi, on='aisle_id', how='left')
     products = products.merge(depts_vi, on='department_id', how='left')
+    
+    # Dùng tên tiếng Việt (đã pha Anh-Việt hợp lý), fallback về tiếng Anh
     products['display_name'] = products['product_name_vi'].fillna(products['product_name'])
 
     return products
-
 
 @st.cache_resource
 def load_models():
@@ -253,8 +273,8 @@ def main():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown(f"""
-        <div style="padding: 15px; border: 2px solid #4CAF50; border-radius: 10px; background-color: #f0fff0;">
-            <h3 style="margin:0;">📦 SẢN PHẨM MỤC TIÊU</h3>
+        <div style="padding: 15px; border: 2px solid #4CAF50; border-radius: 10px; background-color: #f0fff0; color: #111111;">
+            <h3 style="margin:0; color: #2E7D32;">📦 SẢN PHẨM MỤC TIÊU</h3>
             <p style="margin:5px 0;"><b>ID:</b> {product_id}</p>
             <p style="margin:5px 0;"><b>Tên:</b> {product_row['display_name']}</p>
             <p style="margin:5px 0;"><b>Gian hàng:</b> {product_row.get('aisle_vi', product_row.get('aisle', '?'))}</p>
@@ -313,7 +333,7 @@ def main():
                     })
 
             df = pd.DataFrame(rows)
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, width='stretch', hide_index=True)
 
     # ---- CB Filter chi tiết ----
     if show_cb_detail and show_ensemble_cb:
@@ -337,7 +357,7 @@ def main():
                     })
 
                 df_detail = pd.DataFrame(rows)
-                st.dataframe(df_detail, use_container_width=True, hide_index=True)
+                st.dataframe(df_detail, width='stretch', hide_index=True)
                 st.caption("ℹ️ CB Similarity ≥ 0.8 → Substitute (bị loại khỏi gợi ý)")
             else:
                 st.info("ℹ️ Không có dữ liệu CB Filter cho sản phẩm này.")
