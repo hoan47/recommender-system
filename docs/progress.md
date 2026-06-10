@@ -1,6 +1,6 @@
 # Bảng Theo Dõi Tiến Độ (Progress Tracking)
 
-Cập nhật lần cuối: 2026-06-10 17:40
+Cập nhật lần cuối: 2026-06-10 18:36
 
 ---
 
@@ -8,8 +8,9 @@ Cập nhật lần cuối: 2026-06-10 17:40
 
 | File | Trạng thái | Ghi chú |
 |------|-----------|---------|
-| `src/config.py` | ✅ Hoàn tất | Hyperparameters, paths |
+| `src/config.py` | ✅ Hoàn tất | Hyperparameters, paths + Product Filter Strategy |
 | `src/features/loader.py` | ✅ Hoàn tất | Load CSV (chunksize=500K), merge aisle/department |
+| `src/features/product_filter.py` | ✅ Hoàn tất | Bộ lọc non-food departments/aisles khỏi train data |
 | `src/features/vectorizer.py` | ✅ Hoàn tất | TF-IDF + one-hot, cosine similarity on-demand |
 | `src/utils/__init__.py` | ✅ Hoàn tất | Package init |
 | `src/utils/_numba_ops.py` | ✅ Hoàn tất | Numba-accelerated ops (counting, adjacency CSR) |
@@ -25,7 +26,7 @@ Cập nhật lần cuối: 2026-06-10 17:40
 
 | Script | Trạng thái | Ghi chú |
 |--------|-----------|---------|
-| `scripts/01_load_data.py` | ✅ Hoàn tất | Load + cache parquet |
+| `scripts/01_load_data.py` | ✅ Hoàn tất | Load + cache parquet + Product Filter Strategy |
 | `scripts/02_cb_filter.py` | ✅ Hoàn tất | Train CB Filter |
 | `scripts/03_ochiai.py` | ✅ Hoàn tất | Train Ochiai |
 | `scripts/04_item2vec.py` | ✅ Hoàn tất | Train Item2Vec |
@@ -43,6 +44,18 @@ Cập nhật lần cuối: 2026-06-10 17:40
 | Item2Vec | `models/item2vec/` | - | ✅ Có |
 | DeepWalk | `models/deepwalk/` | - | ✅ Có |
 | Assoc Rules | `models/assoc_rules/` | - | ✅ Có |
+
+## Product Filter Strategy (mới thêm)
+
+| Cấu hình | Giá trị | Ghi chú |
+|----------|--------|---------|
+| `EXCLUDED_DEPARTMENTS` | `[8, 11, 17, 2, 21]` | pets, personal care, household, other, missing |
+| `EXCLUDED_AISLES` | `[82, 102]` | baby accessories, baby bath body care (babies dept) |
+| Aisle giữ lại | `92` | baby food formula |
+
+- Filter áp dụng trong `scripts/01_load_data.py` — loại non-food products khỏi `order_products.parquet`
+- `products.parquet` **không** bị lọc (CB Filter cần toàn bộ products để vectorize)
+- Các scripts model (02-07) không cần sửa vì đọc parquet đã lọc sẵn
 
 ## Còn lại
 
