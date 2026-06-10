@@ -6,6 +6,7 @@ import os
 import json
 import math
 from collections import defaultdict
+from itertools import combinations
 import numpy as np
 from scipy import sparse
 from tqdm import tqdm
@@ -72,12 +73,9 @@ class OchiaiModel:
                 product_counts[idx] += 1
             
             # Đếm pair counts (i < j)
-            n = len(product_ids_in_order)
-            for i in range(n):
-                for j in range(i + 1, n):
-                    a, b = product_ids_in_order[i], product_ids_in_order[j]
-                    if a != b:
-                        pair_counts[(a, b)] += 1
+            for a, b in combinations(product_ids_in_order, 2):
+                if a != b:
+                    pair_counts[(a, b)] += 1
         
         print(f"  Tổng số pairs (raw): {len(pair_counts)}")
         

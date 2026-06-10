@@ -129,6 +129,10 @@ class Node2VecModel:
             if pid_str in self.model.wv:
                 self.embeddings[node] = self.model.wv[pid_str]
         
+        # Cache embedding norms để dùng trong recommend
+        self._embedding_norms = np.linalg.norm(self.embeddings, axis=1)
+        self._embedding_norms[self._embedding_norms == 0] = 1e-9
+        
         print(f"  Embeddings shape: {self.embeddings.shape}")
         print("Node2Vec: Fit hoàn tất.")
     
@@ -245,10 +249,10 @@ class Node2VecModel:
         if np.linalg.norm(vec_a) == 0:
             return []
         
-        # Cosine similarity với tất cả nodes
-        norms = np.linalg.norm(self.embeddings, axis=1)
-        norms[norms == 0] = 1e-9
-        similarities = (self.embeddings @ vec_a) / (norms * np.linalg.norm(vec_a))
+        # Cosine similarity với tất cả nodes (dùng cached norms)
+        similarities = (self.embeddings @ vec_a) / (
+            self._embedding_norms * np.linalg.norm(vec_a)
+        )
         
         # Bỏ qua chính nó
         similarities[idx] = -1
@@ -305,6 +309,10 @@ class Node2VecModel:
         """
         # Load embeddings
         self.embeddings = np.load(os.path.join(path, "embeddings.npy"))
+        
+        # Cache embedding norms
+        self._embedding_norms = np.linalg.norm(self.embeddings, axis=1)
+        self._embedding_norms[self._embedding_norms == 0] = 1e-9
         
         # Load metadata
         with open(os.path.join(path, "metadata.json"), 'r') as f:
