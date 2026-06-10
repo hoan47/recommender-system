@@ -16,5 +16,8 @@ scikit-learn>=1.0.0
 # Word2Vec (Item2Vec, Node2Vec)
 gensim>=4.2.0
 
+# Parquet read/write (bat buoc cho pandas read_parquet/to_parquet)
+pyarrow>=14.0.0
+
 # Progress bars (cho chunk processing)
 tqdm>=4.62.0
