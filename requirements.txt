@@ -27,3 +27,6 @@ psutil>=5.8.0
 
 # JIT compilation for hot loops (co-occurrence)
 numba>=0.56.0
+
+# Node2Vec random walk (C implementation, faster than Python loop for 25K nodes)
+pecanpy>=2.1.0
