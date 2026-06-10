@@ -1,9 +1,9 @@
 """
-Node2Vec: Graph-based embedding.
-Xây đồ thị sản phẩm dựa trên co-occurrence, học embedding qua random walk.
-Chạy riêng: python scripts/05_node2vec.py
+DeepWalk: Graph-based embedding.
+Xây đồ thị sản phẩm dựa trên co-occurrence, học embedding qua uniform random walk.
+Chạy riêng: python scripts/05_deepwalk.py
 Yêu cầu: scripts/01_load_data.py đã chạy
-Output: models/node2vec/ (embeddings.npy + metadata.json + word2vec.model)
+Output: models/deepwalk/ (embeddings.npy + metadata.json + word2vec.model)
 """
 import os
 import sys
@@ -12,10 +12,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd
 
 from src.config import MODEL_DIR, PROCESSED_DIR
-from src.models.node2vec import Node2VecModel
+from src.models.deepwalk import DeepWalkModel
 
 print("="*60)
-print("  BUOC 5: NODE2VEC (GRAPH EMBEDDING)")
+print("  BUOC 5: DEEPWALK (GRAPH EMBEDDING)")
 print("="*60)
 
 # Load data da cache
@@ -31,14 +31,14 @@ products = pd.read_parquet(products_path)
 print(f"   -> {len(order_products)} records, {len(products)} products")
 
 # Kiem tra neu da train
-save_path = os.path.join(MODEL_DIR, "node2vec")
+save_path = os.path.join(MODEL_DIR, "deepwalk")
 if os.path.exists(os.path.join(save_path, "embeddings.npy")):
-    print("\n2. Node2Vec da train, loading...")
-    model = Node2VecModel()
+    print("\n2. DeepWalk da train, loading...")
+    model = DeepWalkModel()
     model.load(save_path)
 else:
-    print("\n2. Training Node2Vec (co the mat vai phut)...")
-    model = Node2VecModel()
+    print("\n2. Training DeepWalk (co the mat vai phut)...")
+    model = DeepWalkModel()
     model.fit(order_products, products)
     model.save(save_path)
     print(f"   -> Saved to {save_path}")

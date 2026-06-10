@@ -1,50 +1,49 @@
 """
-Node2Vec: Graph-based embedding.
-Xây đồ thị sản phẩm dựa trên co-occurrence, học embedding qua random walk.
+DeepWalk: Graph-based embedding.
+Xây đồ thị sản phẩm dựa trên co-occurrence, học embedding qua uniform random walk.
+Không có p/q parameters (khác Node2Vec).
 
 Cải tiến Numba:
   - Đếm co-occurrence pairs: count_pairs_numba()
   - Xây adjacency CSR: _build_adjacency_csr()
-  - Random walk + alias sampling: generate_walks_numba()
 """
 import os
 import json
+import random
 import numpy as np
 from tqdm import tqdm
 import pandas as pd
 
 from src.config import (
-    N2V_EMBEDDING_DIM, N2V_WALK_LENGTH, N2V_NUM_WALKS,
-    N2V_P, N2V_Q, N2V_WORKERS, N2V_WINDOW, N2V_EDGE_THRESHOLD, N2V_TOP_K,
+    DW_EMBEDDING_DIM, DW_WALK_LENGTH, DW_NUM_WALKS,
+    DW_WORKERS, DW_WINDOW, DW_EDGE_THRESHOLD, DW_TOP_K,
     RANDOM_SEED
 )
 from src.utils._numba_ops import (
     count_pairs_numba,
     _build_adjacency_csr,
-    generate_walks_numba,
 )
 
 
-class Node2VecModel:
+class DeepWalkModel:
     """
-    Node2Vec: Graph embedding với random walk.
+    DeepWalk: Graph embedding với uniform random walk.
     
     - Node: mỗi sản phẩm
     - Edge: co-occurrence count >= threshold
     - Weight: co-occurrence count (raw)
+    - Walk: uniform random (không p/q bias)
     """
     
     def __init__(self, embedding_dim=None, walk_length=None, num_walks=None,
-                 p=None, q=None, edge_threshold=None, workers=None, window=None):
+                 edge_threshold=None, workers=None, window=None):
         self.params = {
-            'embedding_dim': embedding_dim if embedding_dim is not None else N2V_EMBEDDING_DIM,
-            'walk_length': walk_length if walk_length is not None else N2V_WALK_LENGTH,
-            'num_walks': num_walks if num_walks is not None else N2V_NUM_WALKS,
-            'p': p if p is not None else N2V_P,
-            'q': q if q is not None else N2V_Q,
-            'edge_threshold': edge_threshold if edge_threshold is not None else N2V_EDGE_THRESHOLD,
-            'workers': workers if workers is not None else N2V_WORKERS,
-            'window': window if window is not None else N2V_WINDOW,
+            'embedding_dim': embedding_dim if embedding_dim is not None else DW_EMBEDDING_DIM,
+            'walk_length': walk_length if walk_length is not None else DW_WALK_LENGTH,
+            'num_walks': num_walks if num_walks is not None else DW_NUM_WALKS,
+            'edge_threshold': edge_threshold if edge_threshold is not None else DW_EDGE_THRESHOLD,
+            'workers': workers if workers is not None else DW_WORKERS,
+            'window': window if window is not None else DW_WINDOW,
         }
         self.graph = None            # adjacency list {node: [(neighbor, weight), ...]}
         self.graph_csr = None        # tuple (indptr, neighbors, weights) — CSR format
@@ -56,18 +55,17 @@ class Node2VecModel:
     
     def fit(self, order_products: pd.DataFrame, products_df: pd.DataFrame):
         """
-        Build co-occurrence graph + random walk + train Word2Vec.
+        Build co-occurrence graph + uniform random walk + train Word2Vec.
         
         Dùng Numba cho:
           1. count_pairs_numba() — đếm pairs nhanh
           2. _build_adjacency_csr() — xây graph CSR
-          3. generate_walks_numba() — random walk parallel
         
         Args:
             order_products: DataFrame [order_id, product_id, ...]
             products_df: DataFrame [product_id, ...]
         """
-        print("Node2Vec: Bắt đầu fit...")
+        print("DeepWalk: Bắt đầu fit...")
         
         # Mapping product_id
         all_product_ids = sorted(products_df['product_id'].unique())
@@ -147,83 +145,51 @@ class Node2VecModel:
         print(f"  Nodes với ít nhất 1 edge: {n_nodes_with_edges:,}")
         print(f"  Tổng edges (undirected): {len(pair_rows):,}")
 
-        # --- Bước 4: Random Walk ---
+        # --- Bước 4: Uniform Random Walk (DeepWalk style) ---
         print(f"  Đang random walk (num_walks={self.params['num_walks']}, "
             f"walk_length={self.params['walk_length']})...")
-
-        nodes = np.array(list(self.graph.keys()), dtype=np.int32)
-
-        # Python thuần — không bị treo Numba compile
-        import random
+        
         random.seed(RANDOM_SEED)
-
-        n_nodes = len(nodes)
+        nodes_with_edges = np.array(
+            [node for node, v in graph.items() if len(v) > 0],
+            dtype=np.int32
+        )
+        n_nodes = len(nodes_with_edges)
         total_walks = n_nodes * self.params['num_walks']
+        
         all_walks = []
         all_lengths = []
-        node_list = list(nodes)
-
+        
         for walk_idx in tqdm(range(total_walks), desc="  Random walks"):
-            start_node = int(node_list[walk_idx % n_nodes])
+            # Uniform: chọn node bắt đầu ngẫu nhiên
+            start_node = int(nodes_with_edges[walk_idx % n_nodes])
             walk = [start_node]
             cur = start_node
+            
             for step in range(1, self.params['walk_length']):
-                s = int(indptr[cur]); e = int(indptr[cur+1]); n_nb = e - s
-                if n_nb == 0: break
-                if step == 1:
-                    cur = int(neighbors[s + random.randint(0, n_nb-1)])
-                else:
-                    prev = walk[-2]
-                    adj = []
-                    for i in range(n_nb):
-                        nb = int(neighbors[s+i]); w = float(weights[s+i])
-                        if nb == prev:
-                            adj.append(w / self.params['p'])
-                        else:
-                            # binary search trong neighbors của prev
-                            ps = int(indptr[prev]); pe = int(indptr[prev+1])
-                            lo, hi = ps, pe-1; found = False
-                            while lo <= hi:
-                                mid = (lo+hi)//2
-                                if neighbors[mid] == nb: found=True; break
-                                elif neighbors[mid] < nb: lo=mid+1
-                                else: hi=mid-1
-                            adj.append(w if found else w / self.params['q'])
-                    total_w = sum(adj)
-                    if total_w <= 0: break
-                    r = random.random() * total_w; cumsum = 0.0; chosen = n_nb-1
-                    for i, a in enumerate(adj):
-                        cumsum += a
-                        if r <= cumsum: chosen=i; break
-                    cur = int(neighbors[s+chosen])
+                s = int(indptr[cur])
+                e = int(indptr[cur + 1])
+                n_nb = e - s
+                if n_nb == 0:
+                    break
+                # Uniform random neighbor — không p/q, không alias sampling
+                nb_idx = random.randint(0, n_nb - 1)
+                cur = int(neighbors[s + nb_idx])
                 walk.append(cur)
+            
             all_walks.append(walk)
             all_lengths.append(len(walk))
-
+        
+        # Chuyển thành numpy array
         walks_arr = np.full((total_walks, self.params['walk_length']), -1, dtype=np.int32)
         walk_lengths = np.zeros(total_walks, dtype=np.int32)
         for i, (w, l) in enumerate(zip(all_walks, all_lengths)):
-            walks_arr[i, :l] = w; walk_lengths[i] = l
-
+            walks_arr[i, :l] = w
+            walk_lengths[i] = l
+        
         walks = walks_arr
         self._walks_cache = (walks, walk_lengths)
-
-# Tạm thời dùng cách tqmd        
-        # # --- Bước 4: Random Walk bằng Numba ---
-        # print(f"  Đang random walk (num_walks={self.params['num_walks']}, "
-        #       f"walk_length={self.params['walk_length']})...")
         
-        # nodes = np.array(list(self.graph.keys()), dtype=np.int32)
-        # walks, walk_lengths = generate_walks_numba(
-        #     indptr, neighbors, weights,
-        #     float(self.params['p']), float(self.params['q']),
-        #     int(self.params['walk_length']),
-        #     int(self.params['num_walks']),
-        #     nodes,
-        #     RANDOM_SEED,
-        # )
-        
-        # self._walks_cache = (walks, walk_lengths)
         print(f"  Tổng walks: {walks.shape[0]:,}")
         print(f"  Walk length trung bình: {walk_lengths.mean():.1f}")
         
@@ -266,7 +232,7 @@ class Node2VecModel:
         self._embedding_norms[self._embedding_norms == 0] = 1e-9
         
         print(f"  Embeddings shape: {self.embeddings.shape}")
-        print("Node2Vec: Fit hoàn tất.")
+        print("DeepWalk: Fit hoàn tất.")
     
     def recommend(self, product_id: int, top_k: int = None):
         """
@@ -280,7 +246,7 @@ class Node2VecModel:
             list (product_id, similarity) — các sản phẩm gợi ý kèm similarity
         """
         if top_k is None:
-            top_k = N2V_TOP_K
+            top_k = DW_TOP_K
         
         if product_id not in self.product_id_to_idx:
             return []
@@ -340,7 +306,7 @@ class Node2VecModel:
         if self.model is not None:
             self.model.save(os.path.join(path, "word2vec.model"))
         
-        print(f"Node2Vec: Đã lưu tại {path}")
+        print(f"DeepWalk: Đã lưu tại {path}")
     
     def load(self, path: str):
         """
@@ -378,6 +344,6 @@ class Node2VecModel:
         # Nhưng không bắt buộc vì không cần walk lại sau load
         self.graph_csr = None
         
-        print(f"Node2Vec: Đã load từ {path}")
+        print(f"DeepWalk: Đã load từ {path}")
         print(f"  Embeddings shape: {self.embeddings.shape}")
         print(f"  Số nodes trong graph: {len(self.graph)}")

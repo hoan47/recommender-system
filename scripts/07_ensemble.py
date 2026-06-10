@@ -16,7 +16,7 @@ from src.config import MODEL_DIR, PROCESSED_DIR
 from src.models.cb_filter import CBFilter
 from src.models.ochiai import OchiaiModel
 from src.models.item2vec import Item2VecModel
-from src.models.node2vec import Node2VecModel
+from src.models.deepwalk import DeepWalkModel
 from src.models.ensemble import EnsembleModel
 
 print("="*60)
@@ -28,7 +28,7 @@ checks = [
     ("CB Filter", os.path.join(MODEL_DIR, "cb_filter", "product_vectors.npz")),
     ("Ochiai",    os.path.join(MODEL_DIR, "ochiai", "cooc_matrix.npz")),
     ("Item2Vec",  os.path.join(MODEL_DIR, "item2vec", "word2vec.model")),
-    ("Node2Vec",  os.path.join(MODEL_DIR, "node2vec", "embeddings.npy")),
+    ("DeepWalk",  os.path.join(MODEL_DIR, "deepwalk", "embeddings.npy")),
 ]
 for name, path in checks:
     if not os.path.exists(path):
@@ -60,13 +60,13 @@ print("   Item2Vec...")
 i2v = Item2VecModel()
 i2v.load(os.path.join(MODEL_DIR, "item2vec"))
 
-print("   Node2Vec...")
-n2v = Node2VecModel()
-n2v.load(os.path.join(MODEL_DIR, "node2vec"))
+print("   DeepWalk...")
+deepwalk = DeepWalkModel()
+deepwalk.load(os.path.join(MODEL_DIR, "deepwalk"))
 
 print("\n3. Initializing Ensemble...")
 ensemble = EnsembleModel()
-ensemble.fit(ochiai, i2v, n2v, cb)
+ensemble.fit(ochiai, i2v, deepwalk, cb)
 
 print("\n4. Testing recommendations cho 4 san pham mau:")
 test_products = [1, 250, 5000, 25000]

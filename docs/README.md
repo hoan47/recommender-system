@@ -30,7 +30,7 @@ recommender-system/
 │   ├── 02_cb_filter.py      # Train CB Filter
 │   ├── 03_ochiai.py         # Train Ochiai + Confidence
 │   ├── 04_item2vec.py       # Train Item2Vec
-│   ├── 05_node2vec.py       # Train Node2Vec
+│   ├── 05_deepwalk.py       # Train DeepWalk
 │   ├── 06_assoc_rules.py    # Train Association Rules
 │   └── 07_ensemble.py       # Ensemble + test
 ├── src/                     # Source code
@@ -39,14 +39,14 @@ recommender-system/
 │   ├── features/            # Xử lý dữ liệu & vector hóa
 │   ├── utils/               # Hàm tiện ích dùng chung
 │   │   ├── __init__.py
-│   │   └── _numba_ops.py    # Numba-accelerated operations (co-occurrence counting, random walk)
+│   │   └── _numba_ops.py    # Numba-accelerated operations (co-occurrence counting, adjacency CSR)
 │   └── models/              # Các model recommendation
 │       ├── __init__.py
 │       ├── assoc_rules.py
 │       ├── cb_filter.py
+│       ├── deepwalk.py
 │       ├── ensemble.py
 │       ├── item2vec.py
-│       ├── node2vec.py
 │       └── ochiai.py
 └── .gitignore               # Loại trừ data/, models/, results/
 ```
@@ -74,7 +74,7 @@ python scripts/01_load_data.py
 python scripts/02_cb_filter.py
 python scripts/03_ochiai.py
 python scripts/04_item2vec.py
-python scripts/05_node2vec.py
+python scripts/05_deepwalk.py
 python scripts/06_assoc_rules.py
 python scripts/07_ensemble.py
 
@@ -96,8 +96,8 @@ python scripts/03_ochiai.py
 # Bước 4: Train Item2Vec (~5-10 phút)
 python scripts/04_item2vec.py
 
-# Bước 5: Train Node2Vec (~15-30 phút) — nặng nhất
-python scripts/05_node2vec.py
+# Bước 5: Train DeepWalk (~3-5 phút)
+python scripts/05_deepwalk.py
 
 # Bước 6: Train Association Rules (~2-5 phút)
 python scripts/06_assoc_rules.py

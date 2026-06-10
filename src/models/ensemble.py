@@ -1,6 +1,6 @@
 """
 Co-occurrence Ensemble + CB Filter.
-Kết hợp Ochiai, Item2Vec, Node2Vec bằng weighted score, sau đó lọc substitute bằng CB.
+Kết hợp Ochiai, Item2Vec, DeepWalk bằng weighted score, sau đó lọc substitute bằng CB.
 """
 import numpy as np
 import pandas as pd
@@ -18,7 +18,7 @@ class EnsembleModel:
     
     final_score(A → B) = α × Ochiai_score(A, B)
                         + β × Item2Vec_sim(A, B)
-                        + γ × Node2Vec_sim(A, B)
+                        + γ × DeepWalk_sim(A, B)
     """
     
     def __init__(self, alpha=None, beta=None, gamma=None,
@@ -31,22 +31,22 @@ class EnsembleModel:
         
         self.ochiai = None
         self.item2vec = None
-        self.node2vec = None
+        self.deepwalk = None
         self.cb_filter = None
     
-    def fit(self, ochiai, item2vec, node2vec, cb_filter: CBFilter = None):
+    def fit(self, ochiai, item2vec, deepwalk, cb_filter: CBFilter = None):
         """
         Gán các model đã train.
         
         Args:
             ochiai: OchiaiModel instance
             item2vec: Item2VecModel instance
-            node2vec: Node2VecModel instance
+            deepwalk: DeepWalkModel instance
             cb_filter: CBFilter instance (optional)
         """
         self.ochiai = ochiai
         self.item2vec = item2vec
-        self.node2vec = node2vec
+        self.deepwalk = deepwalk
         self.cb_filter = cb_filter
         
         print(f"Ensemble: Đã gán models (α={self.alpha}, β={self.beta}, γ={self.gamma})")
@@ -86,7 +86,7 @@ class EnsembleModel:
         """
         Ensemble recommendation.
         
-        1. Lấy top-K candidate từ mỗi model (O, I, N)
+        1. Lấy top-K candidate từ mỗi model (O, I, D)
         2. Union các candidate lại
         3. Tính weighted score cho mỗi candidate
         4. Sort descending
@@ -103,7 +103,7 @@ class EnsembleModel:
         # --- Bước 1: Lấy recommendations từ từng model ---
         ochiai_recs = self.ochiai.recommend(product_id, top_k=self.top_k) if self.ochiai else []
         i2v_recs = self.item2vec.recommend(product_id, top_k=self.top_k) if self.item2vec else []
-        n2v_recs = self.node2vec.recommend(product_id, top_k=self.top_k) if self.node2vec else []
+        dw_recs = self.deepwalk.recommend(product_id, top_k=self.top_k) if self.deepwalk else []
         
         # --- Bước 2: Union candidates ---
         candidate_ids = set()
@@ -111,7 +111,7 @@ class EnsembleModel:
             candidate_ids.add(pid)
         for pid, _ in i2v_recs:
             candidate_ids.add(pid)
-        for pid, _ in n2v_recs:
+        for pid, _ in dw_recs:
             candidate_ids.add(pid)
         
         if not candidate_ids:
@@ -120,7 +120,7 @@ class EnsembleModel:
         # --- Bước 3: Score dicts ---
         ochiai_dict = self._build_score_dict(ochiai_recs)
         i2v_dict = self._build_score_dict(i2v_recs)
-        n2v_dict = self._build_score_dict(n2v_recs)
+        dw_dict = self._build_score_dict(dw_recs)
         
         # --- Bước 4: Tính weighted score ---
         candidate_list = list(candidate_ids)
@@ -128,17 +128,17 @@ class EnsembleModel:
         # Lấy scores từ từng model (0 nếu không có)
         ochiai_scores = [ochiai_dict.get(pid, 0) for pid in candidate_list]
         i2v_scores = [i2v_dict.get(pid, 0) for pid in candidate_list]
-        n2v_scores = [n2v_dict.get(pid, 0) for pid in candidate_list]
+        dw_scores = [dw_dict.get(pid, 0) for pid in candidate_list]
         
         # Normalize từng model
         ochiai_norm = self._normalize(ochiai_scores)
         i2v_norm = self._normalize(i2v_scores)
-        n2v_norm = self._normalize(n2v_scores)
+        dw_norm = self._normalize(dw_scores)
         
         # Weighted sum
         final_scores = [
-            self.alpha * o + self.beta * i + self.gamma * n
-            for o, i, n in zip(ochiai_norm, i2v_norm, n2v_norm)
+            self.alpha * o + self.beta * i + self.gamma * d
+            for o, i, d in zip(ochiai_norm, i2v_norm, dw_norm)
         ]
         
         # Sort descending

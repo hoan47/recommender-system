@@ -53,18 +53,15 @@ I2V_WORKERS = 4
 I2V_TOP_K = 100
 
 # ============================================================
-# Hyperparameters — Node2Vec
+# Hyperparameters — DeepWalk (graph embedding, uniform random walk)
 # ============================================================
-N2V_EMBEDDING_DIM = 128
-N2V_WALK_LENGTH = 25
-N2V_NUM_WALKS = 20
-N2V_P = 1.0
-N2V_Q = 1.0
-N2V_WORKERS = 4
-N2V_EPOCHS = 1  # =1 để test nhanh, =20 để train kỹ hơn
-N2V_WINDOW = 10                 # Word2Vec window size
-N2V_EDGE_THRESHOLD = 10      # edge giữa 2 product nếu co-occur count >= threshold
-N2V_TOP_K = 100
+DW_EMBEDDING_DIM = 128
+DW_WALK_LENGTH = 25
+DW_NUM_WALKS = 20
+DW_WORKERS = 4
+DW_WINDOW = 10                 # Word2Vec window size
+DW_EDGE_THRESHOLD = 10         # edge giữa 2 product nếu co-occur count >= threshold
+DW_TOP_K = 100
 
 # ============================================================
 # Hyperparameters — Association Rules (từ co-occurrence matrix)
@@ -79,7 +76,7 @@ ARM_TOP_K = 100
 # ============================================================
 ENS_ALPHA = 0.5                 # trọng số Ochiai
 ENS_BETA = 0.25                 # trọng số Item2Vec
-ENS_GAMMA = 0.25                # trọng số Node2Vec
+ENS_GAMMA = 0.25                # trọng số DeepWalk (graph embedding)
 ENS_TOP_K = 100                 # top-K sau ensemble (trước CB filter)
 ENS_FINAL_K = 10                # top-K cuối cùng output
 

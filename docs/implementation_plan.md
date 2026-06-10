@@ -24,7 +24,7 @@ src/
     ├── cb_filter.py                # Content-Based Diversity Filter
     ├── ochiai.py                   # Ochiai + Confidence Score
     ├── item2vec.py                 # Item2Vec Word2Vec Skip-gram
-    ├── node2vec.py                 # Node2Vec graph embedding
+    ├── deepwalk.py                 # DeepWalk graph embedding (uniform random walk)
     ├── assoc_rules.py              # Association Rules từ co-occurrence matrix
     └── ensemble.py                 # Co-occurrence Ensemble + CB Filter
 
@@ -33,7 +33,7 @@ scripts/                        # (không commit lên git)
 ├── 02_cb_filter.py              # Train CB Filter
 ├── 03_ochiai.py                 # Train Ochiai
 ├── 04_item2vec.py               # Train Item2Vec
-├── 05_node2vec.py               # Train Node2Vec
+├── 05_deepwalk.py               # Train DeepWalk
 ├── 06_assoc_rules.py            # Train Association Rules
 └── 07_ensemble.py               # Ensemble + test recommend
 ```
@@ -85,15 +85,14 @@ I2V_EPOCHS = 20
 I2V_WORKERS = 4
 I2V_TOP_K = 100
 
-# Hyperparameters — Node2Vec
-N2V_EMBEDDING_DIM = 128
-N2V_WALK_LENGTH = 40
-N2V_NUM_WALKS = 20
-N2V_P = 1.0
-N2V_Q = 1.0
-N2V_WORKERS = 4
-N2V_EDGE_THRESHOLD = 5          # edge giữa 2 product nếu co-occur ≥ threshold (count raw)
-N2V_TOP_K = 100
+# Hyperparameters — DeepWalk
+DW_EMBEDDING_DIM = 128
+DW_WALK_LENGTH = 25
+DW_NUM_WALKS = 20
+DW_WORKERS = 4
+DW_WINDOW = 10
+DW_EDGE_THRESHOLD = 10          # edge giữa 2 product nếu co-occur ≥ threshold (count raw)
+DW_TOP_K = 100
 
 # Hyperparameters — Association Rules (tự implement từ co-occurrence matrix)
 ARM_MIN_SUPPORT = 0.0001        # support threshold (tỷ lệ, không phải số tuyệt đối)
@@ -104,7 +103,7 @@ ARM_TOP_K = 100
 # Hyperparameters — Ensemble
 ENS_ALPHA = 0.5                 # trọng số Ochiai
 ENS_BETA  = 0.25                # trọng số Item2Vec
-ENS_GAMMA = 0.25                # trọng số Node2Vec
+ENS_GAMMA = 0.25                # trọng số DeepWalk (graph embedding)
 ENS_TOP_K = 100                 # top-K sau ensemble (trước CB filter)
 ENS_FINAL_K = 10                # top-K cuối cùng output
 ```
@@ -337,7 +336,7 @@ class Item2VecModel:
 
 ---
 
-### 2.6 `src/models/node2vec.py` — Node2Vec
+### 2.6 `src/models/deepwalk.py` — DeepWalk
 
 **Input:** 
   - order_products DataFrame (để xây graph)
@@ -345,17 +344,18 @@ class Item2VecModel:
 **Output:** Node embeddings + wrapper
 
 **Thiết kế:**
-- Xây graph dùng networkx
+- Xây graph từ co-occurrence count (dùng Numba)
 - Edge weight = co-occurrence count raw (≥ edge_threshold)
-- Edge threshold: chỉ giữ edge >= 5 (co-occurrence count raw)
-- Random walk + Word2Vec
+- Uniform random walk (không p/q bias như Node2Vec)
+- Word2Vec trên các chuỗi random walk
 
 ```python
-class Node2VecModel:
-    def __init__(self, embedding_dim=128, walk_length=40, num_walks=20,
-                 p=1.0, q=1.0, edge_threshold=5, workers=4):
+class DeepWalkModel:
+    def __init__(self, embedding_dim=128, walk_length=25, num_walks=20,
+                 edge_threshold=10, workers=4, window=10):
         self.params = {...}
         self.graph = None
+        self.graph_csr = None     # CSR adjacency cho random walk nhanh
         self.model = None
         self.product_id_to_idx = {}
         self.idx_to_product_id = {}
@@ -367,13 +367,10 @@ class Node2VecModel:
            - Node: mỗi sản phẩm
            - Edge: nếu co-occurrence count >= edge_threshold
            - Weight: co-occurrence count (raw)
-        2. Random walk trên graph (tạo sentences)
+        2. Uniform random walk trên graph (tạo sentences)
         3. Train Word2Vec trên các sentences
         
-        ⚠️ 49K nodes:
-          - Edge count có thể rất lớn (hàng triệu)
-          - Dùng networkx Graph, cần kiểm tra memory
-          - Edge threshold = 5 giúp giảm số edge
+        Dùng Numba: count_pairs_numba(), _build_adjacency_csr()
         """
     
     def recommend(self, product_id: int, top_k: int = 100) -> list[tuple[int, float]]
@@ -450,7 +447,7 @@ class AssocRulesModel:
 
 ### 2.8 `src/models/ensemble.py` — Co-occurrence Ensemble + CB Filter
 
-**Input:** Các model đã train (Ochiai, Item2Vec, Node2Vec) + CB Filter
+**Input:** Các model đã train (Ochiai, Item2Vec, DeepWalk) + CB Filter
 **Output:** Top-K gợi ý cuối cùng
 
 ```python
@@ -464,12 +461,12 @@ class EnsembleModel:
         self.final_k = final_k     # số output cuối cùng
         self.ochiai = None
         self.item2vec = None
-        self.node2vec = None
+        self.deepwalk = None
         self.cb_filter = None
     
     def fit(self, ochiai: OchiaiModel, 
             item2vec: Item2VecModel,
-            node2vec: Node2VecModel,
+            deepwalk: DeepWalkModel,
             cb_filter: CBFilter) -> None
         """Gán các model đã train."""
     
@@ -479,7 +476,7 @@ class EnsembleModel:
     def recommend(self, product_id: int, 
                   use_cb_filter: bool = True) -> list[tuple[int, float]]
         """
-        1. Lấy top-K candidate từ mỗi model (O, I, N)
+        1. Lấy top-K candidate từ mỗi model (O, I, D)
         2. Union các candidate lại
         3. Tính weighted score cho mỗi candidate
         4. Sort descending
@@ -516,9 +513,9 @@ Bước 3: src/models/ochiai.py → fit()
 Bước 4: src/models/item2vec.py → fit()
         → Lưu: models/item2vec/ (word2vec.model + mapping.json)
 
-Bước 5: src/models/node2vec.py → fit()
-        → Xây graph từ co-occurrence count, edge threshold=5
-        → Lưu: models/node2vec/ (embeddings.npy + mapping.json)
+Bước 5: src/models/deepwalk.py → fit()
+        → Xây graph từ co-occurrence count, edge threshold=10
+        → Lưu: models/deepwalk/ (embeddings.npy + metadata.json + word2vec.model)
 
 Bước 6: src/models/assoc_rules.py → fit()
         → Dùng cooc_matrix từ OchiaiModel
@@ -544,7 +541,7 @@ Bước 8: Chạy thử recommend() với một số sản phẩm mẫu
 | `models/ochiai/product_counts.csv` | Số lần xuất hiện của mỗi product | ~1 MB |
 | `models/item2vec/word2vec.model` | Gensim model | ~100 MB |
 | `models/item2vec/mapping.json` | product_id ↔ idx | ~1 MB |
-| `models/node2vec/embeddings.npy` | Node embeddings (49K × 128) | ~25 MB |
+| `models/deepwalk/embeddings.npy` | Node embeddings (49K × 128) | ~25 MB |
 | `models/assoc_rules/rules.csv` | Association rules (filtered) | ~100 MB |
 
 ---
@@ -595,10 +592,11 @@ gensim>=4.2.0                # Word2Vec
 - **Ưu điểm:** Không cần FP-Growth, không cần subsample, chạy được trên full dataset
 - Chỉ duyệt non-zero cells của CSR matrix — hiệu quả với sparse matrix
 
-### 6.5 Node2Vec — edge weight = co-occurrence count raw
-- Edge threshold = 5 (co-occurrence count ≥ 5)
+### 6.5 DeepWalk — uniform random walk, edge weight = co-occurrence count raw
+- Edge threshold = 10 (co-occurrence count ≥ 10)
 - Weight = count raw (không dùng Ochiai score)
-- Đơn giản, trực quan, không phụ thuộc vào OchiaiModel
+- Không có p/q parameters — uniform random walk nhanh hơn Node2Vec nhiều lần
+- Random walk dùng Python `random.randint()`, không cần Numba alias sampling
 
 ---
 
@@ -613,7 +611,7 @@ gensim>=4.2.0                # Word2Vec
 | 4 | `src/models/cb_filter.py` | ⬜ |
 | 5 | `src/models/ochiai.py` | ⬜ |
 | 6 | `src/models/item2vec.py` | ⬜ |
-| 7 | `src/models/node2vec.py` | ⬜ |
+| 7 | `src/models/deepwalk.py` | ⬜ |
 | 8 | `src/models/assoc_rules.py` | ⬜ |
 | 9 | `src/models/ensemble.py` | ⬜ |
 
@@ -626,6 +624,6 @@ gensim>=4.2.0                # Word2Vec
 | `[backup] config + features: loader và vectorizer` | Sau bước 1-3 |
 | `[feat] cb filter + ochiai model` | Sau bước 4-5 |
 | `[feat] item2vec model: gensim word2vec` | Sau bước 6 |
-| `[feat] node2vec model: graph embedding` | Sau bước 7 |
+| `[feat] deepwalk model: graph embedding` | Sau bước 7 |
 | `[feat] assoc_rules baseline: from cooc matrix` | Sau bước 8 |
 | `[feat] ensemble + cb filter integration` | Sau bước 9 |
