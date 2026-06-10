@@ -16,13 +16,6 @@ import streamlit as st
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Fix Windows terminal encoding for Unicode
-import io
-if hasattr(sys.stdout, 'reconfigure'):
-    sys.stdout.reconfigure(encoding='utf-8')
-elif hasattr(sys.stdout, 'buffer'):
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-
 from src.config import MODEL_DIR, PROCESSED_DIR
 from src.models.cb_filter import CBFilter
 from src.models.ochiai import OchiaiModel
