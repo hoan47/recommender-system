@@ -48,7 +48,7 @@ I2V_VECTOR_SIZE = 128
 I2V_WINDOW = 5
 I2V_MIN_COUNT = 10
 I2V_NEGATIVE = 10
-I2V_EPOCHS = 1  # =1 để test nhanh, =20 để train kỹ hơn
+I2V_EPOCHS = 20
 I2V_WORKERS = 4
 I2V_TOP_K = 100
 
@@ -59,8 +59,8 @@ DW_EMBEDDING_DIM = 128
 DW_WALK_LENGTH = 25
 DW_NUM_WALKS = 20
 DW_WORKERS = 4
-DW_WINDOW = 10                 # Word2Vec window size
-DW_EDGE_THRESHOLD = 10         # edge giữa 2 product nếu co-occur count >= threshold
+DW_WINDOW = 10
+DW_EDGE_THRESHOLD = 10
 DW_TOP_K = 100
 
 # ============================================================
