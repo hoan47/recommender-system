@@ -133,44 +133,43 @@ class Node2VecModel:
         print("Node2Vec: Fit hoàn tất.")
     
     def _generate_walks_pecanpy(self):
-        """
-        Sinh random walks bằng pecanpy (C implementation).
-        
-        Returns:
-            list of list: [ [node1, node2, ...], ... ]
-        """
+        import tempfile
         import pecanpy as pc
-        
-        # Tạo graph trong pecanpy
-        # Dùng SparseOTF: tính transition probabilities on-the-fly (tiết kiệm RAM)
-        g = pc.SparseOTF()
-        
-        # Thêm nodes và edges (có weight)
-        nodes_set = set(self.graph.keys())
-        for node in nodes_set:
-            g.G.add_node(node)
-        for node, neighbors in self.graph.items():
-            for neighbor, weight in neighbors:
-                g.G.add_edge(node, neighbor, weight)
-        
-        print(f"  Pecanpy graph: {g.G.number_of_nodes()} nodes, {g.G.number_of_edges()} edges")
-        
-        # Precompute transition probabilities
-        g.preprocess_transition_probs(
+
+        # Bước 1: Xuất graph ra file edge list tạm
+        # Format: node_a \t node_b \t weight
+        with tempfile.NamedTemporaryFile(
+            mode='w', suffix='.edg', delete=False
+        ) as f:
+            tmp_path = f.name
+            for node, neighbors in self.graph.items():
+                for neighbor, weight in neighbors:
+                    if node < neighbor:  # tránh duplicate edge
+                        f.write(f"{node}\t{neighbor}\t{weight}\n")
+
+        print(f"  Đã xuất edge list tạm: {tmp_path}")
+
+        # Bước 2: Load vào pecanpy SparseOTF
+        g = pc.SparseOTF(
             p=self.params['p'],
             q=self.params['q'],
-            workers=self.params['workers']
+            workers=self.params['workers'],
+            verbose=True,
+            extend=False,
         )
-        print("  Preprocess done, starting walks...")
-        
-        # Sinh walks
+        g.read_edg(tmp_path, weighted=True, directed=False)
+
+        # Bước 3: Sinh walks
         walks = g.simulate_walks(
             num_walks=self.params['num_walks'],
             walk_length=self.params['walk_length'],
-            workers=self.params['workers']
         )
-        
-        return walks
+
+        # Dọn file tạm
+        os.remove(tmp_path)
+
+        # pecanpy trả về list of string nodes → convert về int
+        return [[int(n) for n in walk] for walk in walks]
     
     def recommend(self, product_id: int, top_k: int = None):
         """
