@@ -170,7 +170,66 @@ def _build_adjacency_csr(pair_rows, pair_cols, pair_counts, n_products):
         weights[idx_v] = w
         pos[v] += 1
 
+    # Sort neighbors + weights mỗi node để dùng binary search
+    for node in range(n_products):
+        start = indptr[node]
+        end = indptr[node + 1]
+        n = end - start
+        if n <= 1:
+            continue
+        # Sort neighbors và weights đồng thời
+        idx_sorted = np.argsort(neighbors[start:end])
+        neighbors[start:end] = neighbors[start:end][idx_sorted]
+        weights[start:end] = weights[start:end][idx_sorted]
+
     return indptr, neighbors, weights
+
+
+# ===========================================================================
+# Node2Vec: binary search trên neighbor list (đã sort)
+# ===========================================================================
+
+@njit
+def _is_neighbor(node, target_idx, indptr, neighbors):
+    """
+    Binary search kiểm tra node có trong neighbor list của target_idx không.
+    
+    neighbors[target_idx] đã được sort → O(log n).
+    
+    Parameters
+    ----------
+    node : int32 — node cần tìm
+    target_idx : int32 — index của node cần kiểm tra neighbors
+    indptr : np.ndarray (int32)
+    neighbors : np.ndarray (int32) — đã sort theo từng node
+    
+    Returns
+    -------
+    bool
+    """
+    lo = indptr[target_idx]
+    hi = indptr[target_idx + 1] - 1
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if neighbors[mid] == node:
+            return True
+        elif neighbors[mid] < node:
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    return False
+
+
+@njit
+def _is_common_neighbor_numba(node, prev, cur, indptr, neighbors):
+    """
+    Kiểm tra node có phải common neighbor của prev và cur không.
+    
+    Vì `node` đã là neighbor của `cur` (caller đảm bảo),
+    chỉ cần kiểm tra node ∈ N(prev) bằng binary search → O(log deg).
+    """
+    # neighbors[prev] đã sort trong _build_adjacency_csr
+    return _is_neighbor(node, prev, indptr, neighbors)
 
 
 # ===========================================================================
@@ -377,31 +436,6 @@ def random_walk_node2vec(indptr, neighbors, weights, p, q, walk_length,
         walk_len = step + 1
 
     return walk, walk_len, rng_state
-
-
-@njit
-def _is_common_neighbor_numba(node, prev, cur, indptr, neighbors):
-    """
-    Kiểm tra node có phải là common neighbor của prev và cur không.
-    Nghĩa là node ∈ N(prev) ∩ N(cur), ngoại trừ chính node.
-    """
-    # Lấy neighbors của prev
-    start_prev = indptr[prev]
-    end_prev = indptr[prev + 1]
-    # Lấy neighbors của cur
-    start_cur = indptr[cur]
-    end_cur = indptr[cur + 1]
-
-    # Duyệt neighbors của cur, kiểm tra trong neighbors của prev
-    # (tối ưu: luôn duyệt cái ngắn hơn — nhưng để đơn giản duyệt cur)
-    for i in range(start_cur, end_cur):
-        if neighbors[i] == node:
-            # Node là neighbor của cur → kiểm tra có trong prev ko
-            for j in range(start_prev, end_prev):
-                if neighbors[j] == node:
-                    return True
-            return False
-    return False
 
 
 @njit
