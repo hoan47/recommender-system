@@ -106,7 +106,7 @@ class DeepWalkModel:
         print(f"  Tổng items: {total_items:,}, tổng orders: {len(order_lengths):,}")
         
         # --- Bước 2: Đếm co-occurrence pairs bằng Numba ---
-        print(f"  Đang đếm co-occurrence (threshold={self.params['edge_threshold']})...")
+        print(f"  Đang đếm co-occurrence bằng Numba (threshold={self.params['edge_threshold']})...")
         
         rows, cols, counts = count_pairs_numba(
             order_indices, order_ptr, n_products
@@ -121,7 +121,7 @@ class DeepWalkModel:
         print(f"  Sau edge_threshold={self.params['edge_threshold']}: {len(pair_rows):,} edges")
         
         # --- Bước 3: Xây adjacency CSR bằng Numba ---
-        print("  Xây graph adjacency...")
+        print("  Xây graph adjacency bằng Numba...")
         indptr, neighbors, weights = _build_adjacency_csr(
             pair_rows, pair_cols, pair_counts, n_products
         )
