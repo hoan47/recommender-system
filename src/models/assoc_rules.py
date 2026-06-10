@@ -165,8 +165,8 @@ class AssocRulesModel:
                 'min_lift': self.min_lift,
                 'total_orders': int(self.total_orders),
                 'n_rules': len(self.rules_df),
-                'product_id_to_idx': self.product_id_to_idx,
-                'idx_to_product_id': {str(k): v for k, v in self.idx_to_product_id.items()},
+                'product_id_to_idx': {str(k): int(v) for k, v in self.product_id_to_idx.items()},
+                'idx_to_product_id': {str(k): int(v) for k, v in self.idx_to_product_id.items()},
             }
             with open(os.path.join(path, "metadata.json"), 'w') as f:
                 json.dump(metadata, f)

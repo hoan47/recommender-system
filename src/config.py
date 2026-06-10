@@ -61,7 +61,7 @@ N2V_NUM_WALKS = 20
 N2V_P = 1.0
 N2V_Q = 1.0
 N2V_WORKERS = 4
-N2V_EPOCHS = 20                 # Số epoch train Word2Vec trên các walks
+N2V_EPOCHS = 1  # =1 để test nhanh, =20 để train kỹ hơn
 N2V_WINDOW = 10                 # Word2Vec window size
 N2V_EDGE_THRESHOLD = 10      # edge giữa 2 product nếu co-occur count >= threshold
 N2V_TOP_K = 100

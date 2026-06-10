@@ -130,8 +130,8 @@ class Item2VecModel:
         
         # Lưu mapping
         mapping = {
-            'product_id_to_idx': self.product_id_to_idx,
-            'idx_to_product_id': {str(k): v for k, v in self.idx_to_product_id.items()},
+            'product_id_to_idx': {str(k): int(v) for k, v in self.product_id_to_idx.items()},
+            'idx_to_product_id': {str(k): int(v) for k, v in self.idx_to_product_id.items()},
         }
         with open(os.path.join(path, "mapping.json"), 'w') as f:
             json.dump(mapping, f)

@@ -268,8 +268,8 @@ class Node2VecModel:
         metadata = {
             'params': self.params,
             'graph': graph_serializable,
-            'product_id_to_idx': self.product_id_to_idx,
-            'idx_to_product_id': {str(k): v for k, v in self.idx_to_product_id.items()},
+            'product_id_to_idx': {str(k): int(v) for k, v in self.product_id_to_idx.items()},
+            'idx_to_product_id': {str(k): int(v) for k, v in self.idx_to_product_id.items()},
         }
         with open(os.path.join(path, "metadata.json"), 'w') as f:
             json.dump(metadata, f)
