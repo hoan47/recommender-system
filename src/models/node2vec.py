@@ -146,22 +146,84 @@ class Node2VecModel:
         n_nodes_with_edges = sum(1 for v in graph.values() if len(v) > 0)
         print(f"  Nodes với ít nhất 1 edge: {n_nodes_with_edges:,}")
         print(f"  Tổng edges (undirected): {len(pair_rows):,}")
-        
-        # --- Bước 4: Random Walk bằng Numba ---
+
+        # --- Bước 4: Random Walk ---
         print(f"  Đang random walk (num_walks={self.params['num_walks']}, "
-              f"walk_length={self.params['walk_length']})...")
-        
+            f"walk_length={self.params['walk_length']})...")
+
         nodes = np.array(list(self.graph.keys()), dtype=np.int32)
-        walks, walk_lengths = generate_walks_numba(
-            indptr, neighbors, weights,
-            float(self.params['p']), float(self.params['q']),
-            int(self.params['walk_length']),
-            int(self.params['num_walks']),
-            nodes,
-            RANDOM_SEED,
-        )
-        
+
+        # Python thuần — không bị treo Numba compile
+        import random
+        random.seed(RANDOM_SEED)
+
+        n_nodes = len(nodes)
+        total_walks = n_nodes * self.params['num_walks']
+        all_walks = []
+        all_lengths = []
+        node_list = list(nodes)
+
+        for walk_idx in tqdm(range(total_walks), desc="  Random walks"):
+            start_node = int(node_list[walk_idx % n_nodes])
+            walk = [start_node]
+            cur = start_node
+            for step in range(1, self.params['walk_length']):
+                s = int(indptr[cur]); e = int(indptr[cur+1]); n_nb = e - s
+                if n_nb == 0: break
+                if step == 1:
+                    cur = int(neighbors[s + random.randint(0, n_nb-1)])
+                else:
+                    prev = walk[-2]
+                    adj = []
+                    for i in range(n_nb):
+                        nb = int(neighbors[s+i]); w = float(weights[s+i])
+                        if nb == prev:
+                            adj.append(w / self.params['p'])
+                        else:
+                            # binary search trong neighbors của prev
+                            ps = int(indptr[prev]); pe = int(indptr[prev+1])
+                            lo, hi = ps, pe-1; found = False
+                            while lo <= hi:
+                                mid = (lo+hi)//2
+                                if neighbors[mid] == nb: found=True; break
+                                elif neighbors[mid] < nb: lo=mid+1
+                                else: hi=mid-1
+                            adj.append(w if found else w / self.params['q'])
+                    total_w = sum(adj)
+                    if total_w <= 0: break
+                    r = random.random() * total_w; cumsum = 0.0; chosen = n_nb-1
+                    for i, a in enumerate(adj):
+                        cumsum += a
+                        if r <= cumsum: chosen=i; break
+                    cur = int(neighbors[s+chosen])
+                walk.append(cur)
+            all_walks.append(walk)
+            all_lengths.append(len(walk))
+
+        walks_arr = np.full((total_walks, self.params['walk_length']), -1, dtype=np.int32)
+        walk_lengths = np.zeros(total_walks, dtype=np.int32)
+        for i, (w, l) in enumerate(zip(all_walks, all_lengths)):
+            walks_arr[i, :l] = w; walk_lengths[i] = l
+
+        walks = walks_arr
         self._walks_cache = (walks, walk_lengths)
+
+# Tạm thời dùng cách tqmd        
+        # # --- Bước 4: Random Walk bằng Numba ---
+        # print(f"  Đang random walk (num_walks={self.params['num_walks']}, "
+        #       f"walk_length={self.params['walk_length']})...")
+        
+        # nodes = np.array(list(self.graph.keys()), dtype=np.int32)
+        # walks, walk_lengths = generate_walks_numba(
+        #     indptr, neighbors, weights,
+        #     float(self.params['p']), float(self.params['q']),
+        #     int(self.params['walk_length']),
+        #     int(self.params['num_walks']),
+        #     nodes,
+        #     RANDOM_SEED,
+        # )
+        
+        # self._walks_cache = (walks, walk_lengths)
         print(f"  Tổng walks: {walks.shape[0]:,}")
         print(f"  Walk length trung bình: {walk_lengths.mean():.1f}")
         
