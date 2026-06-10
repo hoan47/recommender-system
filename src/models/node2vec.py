@@ -5,6 +5,7 @@ Xây đồ thị sản phẩm dựa trên co-occurrence, học embedding qua ran
 import os
 import json
 import random
+from itertools import combinations
 import numpy as np
 from collections import defaultdict, Counter
 from tqdm import tqdm
@@ -69,12 +70,8 @@ class Node2VecModel:
         for order_id, group in tqdm(grouped, desc="  Duyệt orders", unit="order"):
             items = [self.product_id_to_idx[pid] for pid in group
                      if pid in self.product_id_to_idx]
-            n = len(items)
-            for i in range(n):
-                for j in range(i + 1, n):
-                    a, b = items[i], items[j]
-                    if a != b:
-                        pair_counts[(a, b)] += 1
+            for a, b in combinations(items, 2):
+                pair_counts[(a, b)] += 1
         
         # --- Bước 2: Xây adjacency list ---
         print("  Xây adjacency list...")
@@ -89,6 +86,12 @@ class Node2VecModel:
         self.graph = dict(graph)
         print(f"  Số nodes: {len(self.graph)}")
         print(f"  Số edges: {edge_count}")
+        
+        # Cache neighbor sets cho _is_common_neighbor
+        self.neighbor_sets = {
+            node: set(n for n, w in neighbors)
+            for node, neighbors in self.graph.items()
+        }
         
         # --- Bước 3: Random Walk ---
         print(f"  Đang random walk (num_walks={self.params['num_walks']}, "
@@ -217,8 +220,7 @@ class Node2VecModel:
     
     def _is_common_neighbor(self, cur, prev, neighbor):
         """Kiểm tra neighbor có phải là common neighbor của cur và prev không."""
-        prev_neighbors = set(n for n, w in self.graph.get(prev, []))
-        return neighbor in prev_neighbors
+        return neighbor in self.neighbor_sets.get(prev, set())
     
     def recommend(self, product_id: int, top_k: int = None):
         """
@@ -321,6 +323,12 @@ class Node2VecModel:
         if os.path.exists(model_path):
             from gensim.models import Word2Vec
             self.model = Word2Vec.load(model_path)
+        
+        # Rebuild neighbor_sets cache
+        self.neighbor_sets = {
+            node: set(n for n, w in neighbors)
+            for node, neighbors in self.graph.items()
+        }
         
         print(f"Node2Vec: Đã load từ {path}")
         print(f"  Embeddings shape: {self.embeddings.shape}")
