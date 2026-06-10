@@ -1,13 +1,15 @@
 """
 Node2Vec: Graph-based embedding.
 Xây đồ thị sản phẩm dựa trên co-occurrence, học embedding qua random walk.
+
+Cải tiến Numba:
+  - Đếm co-occurrence pairs: count_pairs_numba()
+  - Xây adjacency CSR: _build_adjacency_csr()
+  - Random walk + alias sampling: generate_walks_numba()
 """
 import os
 import json
-import random
-from itertools import combinations
 import numpy as np
-from collections import defaultdict
 from tqdm import tqdm
 import pandas as pd
 
@@ -15,6 +17,11 @@ from src.config import (
     N2V_EMBEDDING_DIM, N2V_WALK_LENGTH, N2V_NUM_WALKS,
     N2V_P, N2V_Q, N2V_WORKERS, N2V_WINDOW, N2V_EDGE_THRESHOLD, N2V_TOP_K,
     RANDOM_SEED
+)
+from src.utils._numba_ops import (
+    count_pairs_numba,
+    _build_adjacency_csr,
+    generate_walks_numba,
 )
 
 
@@ -39,16 +46,22 @@ class Node2VecModel:
             'workers': workers if workers is not None else N2V_WORKERS,
             'window': window if window is not None else N2V_WINDOW,
         }
-        self.graph = None          # adjacency list {node: [(neighbor, weight), ...]}
-        self.model = None          # Word2Vec model sẽ train sau
-        self.embeddings = None     # numpy array (n_products, embedding_dim)
+        self.graph = None            # adjacency list {node: [(neighbor, weight), ...]}
+        self.graph_csr = None        # tuple (indptr, neighbors, weights) — CSR format
+        self.model = None            # Word2Vec model
+        self.embeddings = None       # numpy array (n_products, embedding_dim)
         self.product_id_to_idx = {}
         self.idx_to_product_id = {}
-        self._walks = None         # cached walks
+        self._walks_cache = None     # cache walks numpy array để debug
     
     def fit(self, order_products: pd.DataFrame, products_df: pd.DataFrame):
         """
         Build co-occurrence graph + random walk + train Word2Vec.
+        
+        Dùng Numba cho:
+          1. count_pairs_numba() — đếm pairs nhanh
+          2. _build_adjacency_csr() — xây graph CSR
+          3. generate_walks_numba() — random walk parallel
         
         Args:
             order_products: DataFrame [order_id, product_id, ...]
@@ -62,49 +75,107 @@ class Node2VecModel:
         self.idx_to_product_id = {i: pid for pid, i in self.product_id_to_idx.items()}
         n_products = len(all_product_ids)
         
-        # --- Bước 1: Đếm co-occurrence ---
-        print(f"  Đang đếm co-occurrence (threshold={self.params['edge_threshold']})...")
-        pair_counts = defaultdict(int)
-        
+        # --- Bước 1: Xây CSR-like order_indices cho Numba counting ---
+        print(f"  Đang xây order_indices cho {len(order_products):,} records...")
         grouped = order_products.groupby('order_id')['product_id']
-        for order_id, group in tqdm(grouped, desc="  Duyệt orders", unit="order"):
-            items = [self.product_id_to_idx[pid] for pid in group
-                     if pid in self.product_id_to_idx]
-            for a, b in combinations(items, 2):
-                pair_counts[(a, b)] += 1
         
-        # --- Bước 2: Xây adjacency list ---
-        print("  Xây adjacency list...")
-        graph = defaultdict(list)
-        edge_count = 0
-        for (a, b), cnt in pair_counts.items():
-            if cnt >= self.params['edge_threshold']:
-                graph[a].append((b, cnt))
-                graph[b].append((a, cnt))
-                edge_count += 1
+        total_items = 0
+        order_lengths = []
+        for order_id, group in tqdm(grouped, desc="  Scan orders", unit="order"):
+            items = [self.product_id_to_idx.get(pid, -1) for pid in group]
+            items = [x for x in items if x >= 0]
+            if items:
+                total_items += len(items)
+                order_lengths.append(len(items))
         
-        self.graph = dict(graph)
-        print(f"  Số nodes: {len(self.graph)}")
-        print(f"  Số edges: {edge_count}")
+        order_indices = np.zeros(total_items, dtype=np.int32)
+        order_ptr = np.zeros(len(order_lengths) + 1, dtype=np.int32)
+        pos = 0
+        for o_idx, length in enumerate(order_lengths):
+            order_ptr[o_idx] = pos
+            pos += length
+        order_ptr[-1] = total_items
         
-        # Cache neighbor sets cho _is_common_neighbor
-        self.neighbor_sets = {
-            node: set(n for n, w in neighbors)
-            for node, neighbors in self.graph.items()
-        }
+        pos = 0
+        for order_id, group in tqdm(grouped, desc="  Fill indices", unit="order"):
+            items = [self.product_id_to_idx.get(pid, -1) for pid in group]
+            items = [x for x in items if x >= 0]
+            n = len(items)
+            if n > 0:
+                order_indices[pos:pos + n] = items
+                pos += n
         
-        # --- Bước 3: Random Walk ---
+        print(f"  Tổng items: {total_items:,}, tổng orders: {len(order_lengths):,}")
+        
+        # --- Bước 2: Đếm co-occurrence pairs bằng Numba ---
+        print(f"  Đang đếm co-occurrence (threshold={self.params['edge_threshold']})...")
+        
+        rows, cols, counts = count_pairs_numba(
+            order_indices, order_ptr, n_products
+        )
+        print(f"  Tổng số pairs (raw, unique): {len(rows):,}")
+        
+        # Lọc edge threshold
+        mask = counts >= self.params['edge_threshold']
+        pair_rows = rows[mask]
+        pair_cols = cols[mask]
+        pair_counts = counts[mask]
+        print(f"  Sau edge_threshold={self.params['edge_threshold']}: {len(pair_rows):,} edges")
+        
+        # --- Bước 3: Xây adjacency CSR bằng Numba ---
+        print("  Xây graph adjacency...")
+        indptr, neighbors, weights = _build_adjacency_csr(
+            pair_rows, pair_cols, pair_counts, n_products
+        )
+        
+        # Lưu graph (CSR + dict version cho Python access)
+        self.graph_csr = (indptr, neighbors, weights)
+        
+        # Xây graph dict (needed for save/load và neighbor sets)
+        graph = {}
+        for node in range(n_products):
+            start = indptr[node]
+            end = indptr[node + 1]
+            if start < end:
+                graph[node] = [
+                    (neighbors[i], int(weights[i]))
+                    for i in range(start, end)
+                ]
+        self.graph = graph
+        
+        n_nodes_with_edges = sum(1 for v in graph.values() if len(v) > 0)
+        print(f"  Nodes với ít nhất 1 edge: {n_nodes_with_edges:,}")
+        print(f"  Tổng edges (undirected): {len(pair_rows):,}")
+        
+        # --- Bước 4: Random Walk bằng Numba ---
         print(f"  Đang random walk (num_walks={self.params['num_walks']}, "
               f"walk_length={self.params['walk_length']})...")
         
-        random.seed(RANDOM_SEED)
-        walks = self._generate_walks()
-        self._walks = walks
+        nodes = np.array(list(self.graph.keys()), dtype=np.int32)
+        walks, walk_lengths = generate_walks_numba(
+            indptr, neighbors, weights,
+            float(self.params['p']), float(self.params['q']),
+            int(self.params['walk_length']),
+            int(self.params['num_walks']),
+            nodes,
+            RANDOM_SEED,
+        )
         
-        # Convert walks sang định dạng string cho Word2Vec
-        sentences = [[str(node) for node in walk] for walk in walks]
+        self._walks_cache = (walks, walk_lengths)
+        print(f"  Tổng walks: {walks.shape[0]:,}")
+        print(f"  Walk length trung bình: {walk_lengths.mean():.1f}")
         
-        # --- Bước 4: Train Word2Vec ---
+        # Convert walks sang sentences cho Word2Vec
+        sentences = []
+        for i in range(walks.shape[0]):
+            wlen = walk_lengths[i]
+            if wlen > 1:
+                sentence = [str(walks[i, j]) for j in range(wlen)]
+                sentences.append(sentence)
+        
+        print(f"  Sentences (walks có độ dài > 1): {len(sentences):,}")
+        
+        # --- Bước 5: Train Word2Vec ---
         print(f"  Đang train Word2Vec (dim={self.params['embedding_dim']})...")
         from gensim.models import Word2Vec
         
@@ -112,7 +183,7 @@ class Node2VecModel:
             sentences=sentences,
             vector_size=self.params['embedding_dim'],
             window=self.params['window'],
-            min_count=1,  # giữ tất cả nodes
+            min_count=1,   # giữ tất cả nodes
             negative=10,
             epochs=20,
             workers=self.params['workers'],
@@ -121,7 +192,6 @@ class Node2VecModel:
         )
         
         # Extract embeddings
-        n_nodes = len(self.graph)
         self.embeddings = np.zeros((n_products, self.params['embedding_dim']))
         for node in self.graph.keys():
             pid = self.idx_to_product_id[node]
@@ -129,102 +199,12 @@ class Node2VecModel:
             if pid_str in self.model.wv:
                 self.embeddings[node] = self.model.wv[pid_str]
         
-        # Cache embedding norms để dùng trong recommend
+        # Cache embedding norms
         self._embedding_norms = np.linalg.norm(self.embeddings, axis=1)
         self._embedding_norms[self._embedding_norms == 0] = 1e-9
         
         print(f"  Embeddings shape: {self.embeddings.shape}")
         print("Node2Vec: Fit hoàn tất.")
-    
-    def _generate_walks(self):
-        """
-        Sinh random walks trên graph.
-        
-        Returns:
-            list of list: [ [node1, node2, ...], ... ]
-        """
-        nodes = list(self.graph.keys())
-        walks = []
-        
-        for _ in tqdm(range(self.params['num_walks']), desc="  Walks"):
-            random.shuffle(nodes)
-            for start_node in nodes:
-                walk = self._random_walk(start_node)
-                walks.append(walk)
-        
-        return walks
-    
-    def _random_walk(self, start_node):
-        """
-        Sinh 1 random walk bắt đầu từ start_node với tham số p, q.
-        
-        Node2Vec random walk: kiểm soát BFS/DFS qua p và q.
-          - p (return): xác suất quay lại node trước
-          - q (in-out): xác suất đi xa (DFS) vs ở gần (BFS)
-        """
-        walk = [start_node]
-        p = self.params['p']
-        q = self.params['q']
-        
-        for _ in range(self.params['walk_length'] - 1):
-            cur = walk[-1]
-            neighbors = self.graph.get(cur, [])
-            if not neighbors:
-                break
-            
-            if len(walk) == 1:
-                # Bước đầu tiên: random uniform
-                next_node = random.choice([n for n, w in neighbors])
-            else:
-                prev = walk[-2]
-                next_node = self._alias_sample(cur, prev, neighbors, p, q)
-            
-            walk.append(next_node)
-        
-        return walk
-    
-    def _alias_sample(self, cur, prev, neighbors, p, q):
-        """
-        Lấy mẫu node kế tiếp dựa trên p và q.
-        
-        Args:
-            cur: node hiện tại
-            prev: node trước đó
-            neighbors: list [(neighbor, weight)]
-            p: return parameter (xác suất quay lại node trước)
-            q: in-out parameter (xác suất đi xa vs ở gần)
-        
-        Returns:
-            next_node: int
-        """
-        weights = []
-        for neighbor, w in neighbors:
-            if neighbor == prev:
-                # Quay lại node trước
-                weights.append(w / p)
-            elif self._is_common_neighbor(cur, prev, neighbor):
-                # Node chung của cur và prev (BFS)
-                weights.append(w)
-            else:
-                # Node xa (DFS)
-                weights.append(w / q)
-        
-        total = sum(weights)
-        if total == 0:
-            return random.choice([n for n, w in neighbors])
-        
-        r = random.random() * total
-        cumsum = 0
-        for (neighbor, w), weight in zip(neighbors, weights):
-            cumsum += weight
-            if r <= cumsum:
-                return neighbor
-        
-        return neighbors[-1][0]
-    
-    def _is_common_neighbor(self, cur, prev, neighbor):
-        """Kiểm tra neighbor có phải là common neighbor của cur và prev không."""
-        return neighbor in self.neighbor_sets.get(prev, set())
     
     def recommend(self, product_id: int, top_k: int = None):
         """
@@ -332,11 +312,9 @@ class Node2VecModel:
             from gensim.models import Word2Vec
             self.model = Word2Vec.load(model_path)
         
-        # Rebuild neighbor_sets cache
-        self.neighbor_sets = {
-            node: set(n for n, w in neighbors)
-            for node, neighbors in self.graph.items()
-        }
+        # Rebuild graph_csr từ graph dict (cần thiết cho Numba nếu sau này gọi lại)
+        # Nhưng không bắt buộc vì không cần walk lại sau load
+        self.graph_csr = None
         
         print(f"Node2Vec: Đã load từ {path}")
         print(f"  Embeddings shape: {self.embeddings.shape}")

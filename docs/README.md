@@ -40,7 +40,17 @@ recommender-system/
 │   │   ├── metrics.py       # Precision@K, Recall@K, F1@K, Hit@K
 │   │   └── survey_generator.py  # Sinh mẫu khảo sát
 │   ├── features/            # Xử lý dữ liệu & vector hóa
+│   ├── utils/               # Hàm tiện ích dùng chung
+│   │   ├── __init__.py
+│   │   └── _numba_ops.py    # Numba-accelerated operations (co-occurrence counting, random walk)
 │   └── models/              # Các model recommendation
+│       ├── __init__.py
+│       ├── assoc_rules.py
+│       ├── cb_filter.py
+│       ├── ensemble.py
+│       ├── item2vec.py
+│       ├── node2vec.py
+│       └── ochiai.py
 └── .gitignore               # Loại trừ data/, models/, results/
 ```
 

@@ -19,5 +19,8 @@ gensim>=4.2.0
 # Parquet read/write (bat buoc cho pandas read_parquet/to_parquet)
 pyarrow>=14.0.0
 
+# Numba JIT compiler (cho tăng tốc co-occurrence counting + random walk)
+numba>=0.56.0
+
 # Progress bars (cho chunk processing)
 tqdm>=4.62.0

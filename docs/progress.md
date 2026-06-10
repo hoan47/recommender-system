@@ -11,10 +11,12 @@ Cập nhật lần cuối: 2026-06-10 02:30
 | `src/config.py` | ✅ Hoàn tất | Hyperparameters, paths |
 | `src/features/loader.py` | ✅ Hoàn tất | Load CSV (chunksize=500K), merge aisle/department |
 | `src/features/vectorizer.py` | ✅ Hoàn tất | TF-IDF + one-hot, cosine similarity on-demand |
+| `src/utils/__init__.py` | ✅ Hoàn tất | Package init |
+| `src/utils/_numba_ops.py` | ✅ Hoàn tất | Numba-accelerated ops (counting, random walk) — mới thêm |
 | `src/models/cb_filter.py` | ✅ Hoàn tất | CB Diversity Filter, threshold=0.8 |
-| `src/models/ochiai.py` | ✅ Hoàn tất | Ochiai + Confidence Score, CSR sparse matrix |
+| `src/models/ochiai.py` | ✅ Hoàn tất | Ochiai + Confidence Score, CSR sparse matrix — dùng Numba counting |
 | `src/models/item2vec.py` | ✅ Hoàn tất | Word2Vec Skip-gram (gensim) |
-| `src/models/node2vec.py` | ✅ Hoàn tất | Graph embedding + random walk p/q |
+| `src/models/node2vec.py` | ✅ Hoàn tất | Graph embedding + random walk p/q — dùng Numba counting + random walk |
 | `src/models/assoc_rules.py` | ✅ Hoàn tất | Association Rules từ co-occurrence matrix |
 | `src/models/ensemble.py` | ✅ Hoàn tất | Weighted ensemble (α=0.5, β=0.25, γ=0.25) + CB Filter |
 | `src/evaluation/__init__.py` | ✅ Hoàn tất | Package init |

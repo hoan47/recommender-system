@@ -1,17 +1,19 @@
 """
 Ochiai + Confidence Score.
 Pairwise co-occurrence model với score có hướng.
+
+Cải tiến Numba: dùng count_pairs_numba() để đếm co-occurrence pairs
+nhanh hơn defaultdict + combinations.
 """
 import os
 import json
-from collections import defaultdict
-from itertools import combinations
 import numpy as np
 from scipy import sparse
 from tqdm import tqdm
 import pandas as pd
 
 from src.config import OCHIAI_MIN_SUPPORT, OCHIAI_TOP_K, RANDOM_SEED
+from src.utils._numba_ops import count_pairs_numba
 
 
 class OchiaiModel:
@@ -50,64 +52,77 @@ class OchiaiModel:
         self.idx_to_product_id = {i: pid for pid, i in self.product_id_to_idx.items()}
         
         print(f"  Số sản phẩm: {self.n_products}")
-        print(f"  Đang đếm co-occurrence pairs...")
+        print(f"  Đang xây order_indices (CSR-like) cho Numba counting...")
         
-        # Đếm cặp (i,j) bằng dictionary
-        pair_counts = defaultdict(int)
-        product_counts = defaultdict(int)
-        
-        # Duyệt theo order_id
-        # Nhóm order_products theo order_id
+        # Xây CSR-like representation của orders để đưa vào Numba
         grouped = order_products.groupby('order_id')['product_id']
         
-        for order_id, group in tqdm(grouped, desc="  Duyệt orders", unit="order"):
-            items = list(group)
-            product_ids_in_order = [
-                self.product_id_to_idx[pid] for pid in items
-                if pid in self.product_id_to_idx
-            ]
-            
-            # Đếm product counts
-            for idx in product_ids_in_order:
-                product_counts[idx] += 1
-            
-            # Đếm pair counts (i < j)
-            for a, b in combinations(product_ids_in_order, 2):
-                if a != b:
-                    pair_counts[(a, b)] += 1
+        # Đếm tổng số items để pre-allocate
+        total_items = 0
+        order_lengths = []
+        for order_id, group in tqdm(grouped, desc="  Scan orders", unit="order"):
+            items = [self.product_id_to_idx.get(pid, -1) for pid in group]
+            items = [x for x in items if x >= 0]
+            if items:
+                total_items += len(items)
+                order_lengths.append(len(items))
         
-        print(f"  Tổng số pairs (raw): {len(pair_counts)}")
+        # Build order_indices và order_ptr
+        order_indices = np.zeros(total_items, dtype=np.int32)
+        order_ptr = np.zeros(len(order_lengths) + 1, dtype=np.int32)
+        
+        pos = 0
+        for o_idx, length in enumerate(order_lengths):
+            order_ptr[o_idx] = pos
+            pos += length
+        order_ptr[-1] = total_items
+        
+        # Fill lại order_indices
+        pos = 0
+        for order_id, group in tqdm(grouped, desc="  Fill indices", unit="order"):
+            items = [self.product_id_to_idx.get(pid, -1) for pid in group]
+            items = [x for x in items if x >= 0]
+            n = len(items)
+            if n > 0:
+                order_indices[pos:pos + n] = items
+                pos += n
+        
+        print(f"  Tổng items: {total_items}, tổng orders: {len(order_lengths)}")
+        print(f"  Đang đếm co-occurrence pairs bằng Numba...")
+        
+        # Numba counting
+        rows, cols, counts = count_pairs_numba(
+            order_indices, order_ptr, self.n_products
+        )
+        
+        print(f"  Tổng số pairs (unique, raw): {len(rows)}")
         
         # Lọc min_support
         if self.min_support > 0:
-            pair_counts = {
-                pair: cnt for pair, cnt in pair_counts.items()
-                if cnt >= self.min_support
-            }
-            print(f"  Sau min_support={self.min_support}: {len(pair_counts)} pairs")
+            mask = counts >= self.min_support
+            rows = rows[mask]
+            cols = cols[mask]
+            counts = counts[mask]
+            print(f"  Sau min_support={self.min_support}: {len(rows)} pairs")
         
-        # Chuyển sang CSR matrix
+        # Xây CSR matrix
         print("  Xây CSR matrix...")
-        rows, cols, data = [], [], []
-        for (a, b), cnt in pair_counts.items():
-            rows.append(a)
-            cols.append(b)
-            data.append(cnt)
-            # Ma trận đối xứng
-            rows.append(b)
-            cols.append(a)
-            data.append(cnt)
+        # Ma trận đối xứng: thêm cả (b, a)
+        rows_all = np.concatenate([rows, cols])
+        cols_all = np.concatenate([cols, rows])
+        data_all = np.concatenate([counts, counts])
         
         self.cooc_matrix = sparse.csr_matrix(
-            (data, (rows, cols)),
+            (data_all, (rows_all, cols_all)),
             shape=(self.n_products, self.n_products),
             dtype=np.int32
         )
         
-        # Product counts array
-        self.product_counts = np.zeros(self.n_products, dtype=np.int32)
-        for idx, cnt in product_counts.items():
-            self.product_counts[idx] = cnt
+        # Product counts array — đếm từ order_indices
+        print("  Đếm product counts...")
+        self.product_counts = np.bincount(
+            order_indices, minlength=self.n_products
+        ).astype(np.int32)
         
         print(f"  CSR matrix shape: {self.cooc_matrix.shape}")
         print(f"  Non-zero entries: {self.cooc_matrix.nnz}")
