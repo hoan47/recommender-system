@@ -47,19 +47,6 @@ Cập nhật lần cuối: 2026-06-10 18:36
 
 ## Product Filter Strategy (mới thêm)
 
-| Cấu hình | Giá trị | Ghi chú |
-|----------|--------|---------|
-| `EXCLUDED_DEPARTMENTS` | `[8, 11, 17, 2, 21]` | pets, personal care, household, other, missing |
-| `EXCLUDED_AISLES` | `[82, 102]` | baby accessories, baby bath body care (babies dept) |
-| Aisle giữ lại | `92` | baby food formula |
-
-- Filter áp dụng trong `scripts/01_load_data.py` — loại non-food products khỏi `order_products.parquet`
-- `products.parquet` **không** bị lọc (CB Filter cần toàn bộ products để vectorize)
-- Các scripts model (02-07) không cần sửa vì đọc parquet đã lọc sẵn
-
-## Còn lại
-
-- [x] Chạy `scripts/04_item2vec.py` — train Item2Vec
 - [x] Chạy `scripts/05_deepwalk.py` — train DeepWalk
 - [x] Chạy `scripts/06_assoc_rules.py` — train Assoc Rules
 - [x] Chạy `scripts/07_ensemble.py` — test ensemble + CB Filter

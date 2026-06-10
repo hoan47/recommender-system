@@ -11,10 +11,8 @@ def get_excluded_product_ids(products_df):
     """
     Xác định product_id cần loại bỏ dựa trên cấu hình filter.
 
-    Quy tắc:
-      1. Loại toàn bộ sản phẩm thuộc EXCLUDED_DEPARTMENTS
-      2. Với department babies (18), loại sản phẩm thuộc EXCLUDED_AISLES
-         Nhưng giữ aisle 92 (baby food formula)
+    Quy tắc: Loại toàn bộ sản phẩm thuộc EXCLUDED_DEPARTMENTS
+
 
     Args:
         products_df: DataFrame [product_id, aisle_id, department_id, ...]
@@ -27,13 +25,6 @@ def get_excluded_product_ids(products_df):
     # --- Lọc theo department ---
     dept_mask = products_df['department_id'].isin(EXCLUDED_DEPARTMENTS)
     excluded.update(products_df.loc[dept_mask, 'product_id'].tolist())
-
-    # --- Lọc theo aisle (chỉ áp dụng cho babies department = 18) ---
-    aisle_mask = (
-        (products_df['department_id'] == 18) &
-        (products_df['aisle_id'].isin(EXCLUDED_AISLES))
-    )
-    excluded.update(products_df.loc[aisle_mask, 'product_id'].tolist())
 
     return excluded
 
@@ -82,20 +73,3 @@ def get_filter_stats(products_df, order_products_df, excluded_product_ids):
         count = dept_excluded[dept_excluded['department_id'] == dept_id].shape[0]
         dept_name = products_df[products_df['department_id'] == dept_id]['department'].iloc[0] if count > 0 else "?"
         print(f"      Dept {dept_id} ({dept_name}): {count:,} sản phẩm")
-
-    # Thống kê babies aisles bị loại
-    aisle_excluded = products_df[
-        (products_df['department_id'] == 18) &
-        (products_df['aisle_id'].isin(EXCLUDED_AISLES))
-    ]
-    for aisle_id in sorted(EXCLUDED_AISLES):
-        count = aisle_excluded[aisle_excluded['aisle_id'] == aisle_id].shape[0]
-        aisle_name = products_df[products_df['aisle_id'] == aisle_id]['aisle'].iloc[0] if count > 0 else "?"
-        print(f"      Aisle {aisle_id} ({aisle_name}): {count:,} sản phẩm (babies)")
-
-    # Số sản phẩm babies giữ lại (aisle 92)
-    kept_babies = products_df[
-        (products_df['department_id'] == 18) &
-        (~products_df['aisle_id'].isin(EXCLUDED_AISLES))
-    ]
-    print(f"    Babies giữ lại (bao gồm aisle 92 baby food formula): {len(kept_babies):,} sản phẩm")
