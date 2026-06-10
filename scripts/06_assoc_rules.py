@@ -55,7 +55,7 @@ else:
 # Test thu
 sample_id = products['product_id'].iloc[0]
 pname = products[products['product_id'] == sample_id]['product_name'].values[0]
-print(f"\n3. Test recommend cho [{sample_id}] {pname}:")
+print(f"\n4. Test recommend cho [{sample_id}] {pname}:")
 recs = arm.recommend(sample_id, top_k=5)
 for pid, lift in recs:
     rname = products[products['product_id'] == pid]['product_name'].values

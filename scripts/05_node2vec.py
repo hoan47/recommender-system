@@ -1,8 +1,9 @@
 """
-Bước 5: Node2Vec — Graph embedding với random walk.
+Node2Vec: Graph-based embedding.
+Xây đồ thị sản phẩm dựa trên co-occurrence, học embedding qua random walk.
 Chạy riêng: python scripts/05_node2vec.py
 Yêu cầu: scripts/01_load_data.py đã chạy
-Output: models/node2vec/ (embeddings.npy + metadata.json)
+Output: models/node2vec/ (embeddings.npy + metadata.json + word2vec.model)
 """
 import os
 import sys
@@ -33,22 +34,23 @@ print(f"   -> {len(order_products)} records, {len(products)} products")
 save_path = os.path.join(MODEL_DIR, "node2vec")
 if os.path.exists(os.path.join(save_path, "embeddings.npy")):
     print("\n2. Node2Vec da train, loading...")
-    n2v = Node2VecModel()
-    n2v.load(save_path)
+    model = Node2VecModel()
+    model.load(save_path)
 else:
-    print("\n2. Training Node2Vec (co the mat nhieu phut)...")
-    n2v = Node2VecModel()
-    n2v.fit(order_products, products)
-    n2v.save(save_path)
+    print("\n2. Training Node2Vec (co the mat vai phut)...")
+    model = Node2VecModel()
+    model.fit(order_products, products)
+    model.save(save_path)
+    print(f"   -> Saved to {save_path}")
 
 # Test thu
 sample_id = products['product_id'].iloc[0]
 pname = products[products['product_id'] == sample_id]['product_name'].values[0]
 print(f"\n3. Test recommend cho [{sample_id}] {pname}:")
-recs = n2v.recommend(sample_id, top_k=5)
-for pid, sim in recs:
+recs = model.recommend(sample_id, top_k=5)
+for pid, score in recs:
     rname = products[products['product_id'] == pid]['product_name'].values
     rname = rname[0] if len(rname) else "?"
-    print(f"   -> {pid}: {rname} (sim={sim:.4f})")
+    print(f"   -> {pid}: {rname} (score={score:.4f})")
 
 print("\n Done!")

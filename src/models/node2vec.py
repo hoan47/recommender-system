@@ -1,10 +1,10 @@
 """
 Node2Vec: Graph-based embedding.
 Xây đồ thị sản phẩm dựa trên co-occurrence, học embedding qua random walk.
-Dùng pecanpy (C implementation) cho random walk thay vì Python loop.
 """
 import os
 import json
+import random
 from itertools import combinations
 import numpy as np
 from collections import defaultdict
@@ -25,8 +25,6 @@ class Node2VecModel:
     - Node: mỗi sản phẩm
     - Edge: co-occurrence count >= threshold
     - Weight: co-occurrence count (raw)
-    
-    Random walk dùng pecanpy (C) để tăng tốc.
     """
     
     def __init__(self, embedding_dim=None, walk_length=None, num_walks=None,
@@ -50,7 +48,7 @@ class Node2VecModel:
     
     def fit(self, order_products: pd.DataFrame, products_df: pd.DataFrame):
         """
-        Build co-occurrence graph + random walk (pecanpy) + train Word2Vec.
+        Build co-occurrence graph + random walk + train Word2Vec.
         
         Args:
             order_products: DataFrame [order_id, product_id, ...]
@@ -89,12 +87,18 @@ class Node2VecModel:
         print(f"  Số nodes: {len(self.graph)}")
         print(f"  Số edges: {edge_count}")
         
-        # --- Bước 3: Random Walk bằng pecanpy ---
-        print(f"  Đang random walk bằng pecanpy (num_walks={self.params['num_walks']}, "
-              f"walk_length={self.params['walk_length']}, "
-              f"p={self.params['p']}, q={self.params['q']})...")
+        # Cache neighbor sets cho _is_common_neighbor
+        self.neighbor_sets = {
+            node: set(n for n, w in neighbors)
+            for node, neighbors in self.graph.items()
+        }
         
-        walks = self._generate_walks_pecanpy()
+        # --- Bước 3: Random Walk ---
+        print(f"  Đang random walk (num_walks={self.params['num_walks']}, "
+              f"walk_length={self.params['walk_length']})...")
+        
+        random.seed(RANDOM_SEED)
+        walks = self._generate_walks()
         self._walks = walks
         
         # Convert walks sang định dạng string cho Word2Vec
@@ -132,55 +136,106 @@ class Node2VecModel:
         print(f"  Embeddings shape: {self.embeddings.shape}")
         print("Node2Vec: Fit hoàn tất.")
     
-    def _generate_walks_pecanpy(self):
-        import tempfile
-        import pecanpy as pc
-
-        # Bước 1: Xuất graph ra file edge list tạm
-        # Format: node_a \t node_b \t weight
-        with tempfile.NamedTemporaryFile(
-            mode='w', suffix='.edg', delete=False
-        ) as f:
-            tmp_path = f.name
-            for node, neighbors in self.graph.items():
-                for neighbor, weight in neighbors:
-                    if node < neighbor:  # tránh duplicate edge
-                        f.write(f"{node}\t{neighbor}\t{weight}\n")
-
-        print(f"  Đã xuất edge list tạm: {tmp_path}")
-
-        # Bước 2: Load vào pecanpy SparseOTF
-        g = pc.SparseOTF(
-            p=self.params['p'],
-            q=self.params['q'],
-            workers=self.params['workers'],
-            verbose=True,
-            extend=False,
-        )
-        g.read_edg(tmp_path, weighted=True, directed=False)
-
-        # Bước 3: Sinh walks
-        walks = g.simulate_walks(
-            num_walks=self.params['num_walks'],
-            walk_length=self.params['walk_length'],
-        )
-
-        # Dọn file tạm
-        os.remove(tmp_path)
-
-        # pecanpy trả về list of string nodes → convert về int
-        return [[int(n) for n in walk] for walk in walks]
+    def _generate_walks(self):
+        """
+        Sinh random walks trên graph.
+        
+        Returns:
+            list of list: [ [node1, node2, ...], ... ]
+        """
+        nodes = list(self.graph.keys())
+        walks = []
+        
+        for _ in tqdm(range(self.params['num_walks']), desc="  Walks"):
+            random.shuffle(nodes)
+            for start_node in nodes:
+                walk = self._random_walk(start_node)
+                walks.append(walk)
+        
+        return walks
+    
+    def _random_walk(self, start_node):
+        """
+        Sinh 1 random walk bắt đầu từ start_node với tham số p, q.
+        
+        Node2Vec random walk: kiểm soát BFS/DFS qua p và q.
+          - p (return): xác suất quay lại node trước
+          - q (in-out): xác suất đi xa (DFS) vs ở gần (BFS)
+        """
+        walk = [start_node]
+        p = self.params['p']
+        q = self.params['q']
+        
+        for _ in range(self.params['walk_length'] - 1):
+            cur = walk[-1]
+            neighbors = self.graph.get(cur, [])
+            if not neighbors:
+                break
+            
+            if len(walk) == 1:
+                # Bước đầu tiên: random uniform
+                next_node = random.choice([n for n, w in neighbors])
+            else:
+                prev = walk[-2]
+                next_node = self._alias_sample(cur, prev, neighbors, p, q)
+            
+            walk.append(next_node)
+        
+        return walk
+    
+    def _alias_sample(self, cur, prev, neighbors, p, q):
+        """
+        Lấy mẫu node kế tiếp dựa trên p và q.
+        
+        Args:
+            cur: node hiện tại
+            prev: node trước đó
+            neighbors: list [(neighbor, weight)]
+            p: return parameter (xác suất quay lại node trước)
+            q: in-out parameter (xác suất đi xa vs ở gần)
+        
+        Returns:
+            next_node: int
+        """
+        weights = []
+        for neighbor, w in neighbors:
+            if neighbor == prev:
+                # Quay lại node trước
+                weights.append(w / p)
+            elif self._is_common_neighbor(cur, prev, neighbor):
+                # Node chung của cur và prev (BFS)
+                weights.append(w)
+            else:
+                # Node xa (DFS)
+                weights.append(w / q)
+        
+        total = sum(weights)
+        if total == 0:
+            return random.choice([n for n, w in neighbors])
+        
+        r = random.random() * total
+        cumsum = 0
+        for (neighbor, w), weight in zip(neighbors, weights):
+            cumsum += weight
+            if r <= cumsum:
+                return neighbor
+        
+        return neighbors[-1][0]
+    
+    def _is_common_neighbor(self, cur, prev, neighbor):
+        """Kiểm tra neighbor có phải là common neighbor của cur và prev không."""
+        return neighbor in self.neighbor_sets.get(prev, set())
     
     def recommend(self, product_id: int, top_k: int = None):
         """
-        Cosine similarity trên embedding space.
+        Cosine similarity trên embedding space — gợi ý sản phẩm mua kèm.
         
         Args:
-            product_id: int
-            top_k: int
+            product_id: int — ID sản phẩm đầu vào
+            top_k: int — số lượng gợi ý tối đa
         
         Returns:
-            list (product_id, similarity)
+            list (product_id, similarity) — các sản phẩm gợi ý kèm similarity
         """
         if top_k is None:
             top_k = N2V_TOP_K
@@ -215,10 +270,10 @@ class Node2VecModel:
     
     def save(self, path: str):
         """
-        Lưu model ra file.
+        Lưu model ra file (embeddings, metadata, Word2Vec model).
         
         Args:
-            path: đường dẫn thư mục
+            path: đường dẫn thư mục đầu ra
         """
         os.makedirs(path, exist_ok=True)
         
@@ -247,10 +302,10 @@ class Node2VecModel:
     
     def load(self, path: str):
         """
-        Load model từ file.
+        Load model từ file (embeddings, metadata, Word2Vec model).
         
         Args:
-            path: đường dẫn thư mục
+            path: đường dẫn thư mục đã lưu
         """
         # Load embeddings
         self.embeddings = np.load(os.path.join(path, "embeddings.npy"))
@@ -276,6 +331,12 @@ class Node2VecModel:
         if os.path.exists(model_path):
             from gensim.models import Word2Vec
             self.model = Word2Vec.load(model_path)
+        
+        # Rebuild neighbor_sets cache
+        self.neighbor_sets = {
+            node: set(n for n, w in neighbors)
+            for node, neighbors in self.graph.items()
+        }
         
         print(f"Node2Vec: Đã load từ {path}")
         print(f"  Embeddings shape: {self.embeddings.shape}")
