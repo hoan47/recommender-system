@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 from scipy import sparse
 
-from src.config import CB_THRESHOLD, CB_N_GRAM_RANGE, CB_MAX_FEATURES, PRODUCT_VECTORS_FILE
+from src.config import CB_THRESHOLD, CB_N_GRAM_RANGE, CB_MAX_FEATURES
 from src.features.vectorizer import build_product_vectors, cb_similarity
 
 
@@ -19,12 +19,16 @@ class CBFilter:
     không pre-compute full matrix 49K x 49K.
     """
     
-    def __init__(self, threshold: float = None):
+    def __init__(self, threshold: float = None, ngram_range=None, max_features: int = None):
         """
         Args:
             threshold: cosine similarity >= threshold → substitute → loại bỏ (default: CB_THRESHOLD)
+            ngram_range: tuple (min_n, max_n) cho TF-IDF (default: CB_N_GRAM_RANGE)
+            max_features: int, max features cho TF-IDF (default: CB_MAX_FEATURES)
         """
         self.threshold = threshold if threshold is not None else CB_THRESHOLD
+        self.ngram_range = ngram_range if ngram_range is not None else CB_N_GRAM_RANGE
+        self.max_features = max_features if max_features is not None else CB_MAX_FEATURES
         self.product_vectors = None  # sparse.csr_matrix (n_products, D)
         self.product_id_to_idx = {}  # mapping product_id → row index in matrix
     
@@ -34,13 +38,13 @@ class CBFilter:
 
         Args:
             products_df: DataFrame [product_id, product_name, aisle_id, department_id, ...]
-            ngram_range: tuple (min_n, max_n) cho TF-IDF
-            max_features: int, max features cho TF-IDF
+            ngram_range: tuple (min_n, max_n) cho TF-IDF (default: self.ngram_range)
+            max_features: int, max features cho TF-IDF (default: self.max_features)
         """
         if ngram_range is None:
-            ngram_range = CB_N_GRAM_RANGE
+            ngram_range = self.ngram_range
         if max_features is None:
-            max_features = CB_MAX_FEATURES
+            max_features = self.max_features
         
         print("CBFilter: Đang vector hóa sản phẩm...")
         self.product_vectors, _ = build_product_vectors(

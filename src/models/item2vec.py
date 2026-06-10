@@ -10,7 +10,8 @@ import pandas as pd
 
 from src.config import (
     I2V_VECTOR_SIZE, I2V_WINDOW, I2V_MIN_COUNT,
-    I2V_NEGATIVE, I2V_EPOCHS, I2V_WORKERS, I2V_TOP_K
+    I2V_NEGATIVE, I2V_EPOCHS, I2V_WORKERS, I2V_TOP_K,
+    RANDOM_SEED
 )
 
 
@@ -84,7 +85,7 @@ class Item2VecModel:
             epochs=self.params['epochs'],
             workers=self.params['workers'],
             sg=1,  # Skip-gram
-            seed=42,
+            seed=RANDOM_SEED,
             callbacks=[LossLogger()]
         )
         

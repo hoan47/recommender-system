@@ -12,7 +12,7 @@ from scipy import sparse
 from tqdm import tqdm
 import pandas as pd
 
-from src.config import OCHIAI_MIN_SUPPORT, OCHIAI_TOP_K, RANDOM_SEED
+from src.config import OCHIAI_MIN_SUPPORT, OCHIAI_TOP_K
 from src.utils._numba_ops import count_pairs_numba
 
 
@@ -27,8 +27,9 @@ class OchiaiModel:
     - log_ab = log1p(cnt)                       — frequency bonus
     """
     
-    def __init__(self, min_support: int = None):
+    def __init__(self, min_support: int = None, top_k: int = None):
         self.min_support = min_support if min_support is not None else OCHIAI_MIN_SUPPORT
+        self.top_k = top_k if top_k is not None else OCHIAI_TOP_K
         self.cooc_matrix = None          # CSR (n_products, n_products) — co-occurrence counts
         self.product_counts = None       # array (n_products,) — count(A)
         self.n_products = 0
@@ -186,7 +187,7 @@ class OchiaiModel:
             list (product_id, score) — sorted giảm dần theo score
         """
         if top_k is None:
-            top_k = OCHIAI_TOP_K
+            top_k = self.top_k
         
         if product_id not in self.product_id_to_idx:
             return []

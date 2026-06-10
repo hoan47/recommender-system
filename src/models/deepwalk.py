@@ -15,8 +15,8 @@ import pandas as pd
 
 from src.config import (
     DW_EMBEDDING_DIM, DW_WALK_LENGTH, DW_NUM_WALKS,
-    DW_WORKERS, DW_WINDOW, DW_EDGE_THRESHOLD, DW_TOP_K,
-    RANDOM_SEED
+    DW_WORKERS, DW_WINDOW, DW_NEGATIVE, DW_EPOCHS,
+    DW_EDGE_THRESHOLD, DW_TOP_K, RANDOM_SEED
 )
 from src.utils._numba_ops import (
     count_pairs_numba,
@@ -35,7 +35,8 @@ class DeepWalkModel:
     """
     
     def __init__(self, embedding_dim=None, walk_length=None, num_walks=None,
-                 edge_threshold=None, workers=None, window=None):
+                 edge_threshold=None, workers=None, window=None,
+                 negative=None, epochs=None):
         self.params = {
             'embedding_dim': embedding_dim if embedding_dim is not None else DW_EMBEDDING_DIM,
             'walk_length': walk_length if walk_length is not None else DW_WALK_LENGTH,
@@ -43,6 +44,8 @@ class DeepWalkModel:
             'edge_threshold': edge_threshold if edge_threshold is not None else DW_EDGE_THRESHOLD,
             'workers': workers if workers is not None else DW_WORKERS,
             'window': window if window is not None else DW_WINDOW,
+            'negative': negative if negative is not None else DW_NEGATIVE,
+            'epochs': epochs if epochs is not None else DW_EPOCHS,
         }
         self.graph = None            # adjacency list {node: [(neighbor, weight), ...]}
         self.graph_csr = None        # tuple (indptr, neighbors, weights) — CSR format
@@ -215,8 +218,8 @@ class DeepWalkModel:
             vector_size=self.params['embedding_dim'],
             window=self.params['window'],
             min_count=1,   # giữ tất cả nodes
-            negative=10,
-            epochs=20,
+            negative=self.params['negative'],
+            epochs=self.params['epochs'],
             workers=self.params['workers'],
             sg=1,
             seed=RANDOM_SEED,
