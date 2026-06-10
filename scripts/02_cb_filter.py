@@ -4,6 +4,7 @@ Chạy riêng: python scripts/02_cb_filter.py
 Yêu cầu: scripts/01_load_data.py đã chạy (có products.parquet)
 Output: models/cb_filter/ (product_vectors.npz)
 """
+import json
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -36,6 +37,10 @@ cb.fit(products)
 save_path = os.path.join(MODEL_DIR, "cb_filter")
 os.makedirs(save_path, exist_ok=True)
 scipy.sparse.save_npz(os.path.join(save_path, "product_vectors.npz"), cb.product_vectors)
+
+# Lưu product_id_to_idx để 07_ensemble.py load đúng mapping
+with open(os.path.join(save_path, "product_id_to_idx.json"), 'w') as f:
+    json.dump({str(k): v for k, v in cb.product_id_to_idx.items()}, f)
 
 print(f"\n   -> Saved to {save_path}")
 print(f"   -> {len(cb.product_id_to_idx)} products vectorized")

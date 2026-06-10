@@ -4,6 +4,7 @@ Chạy riêng: python scripts/07_ensemble.py
 Yêu cầu: các scripts 01-06 đã chạy
 Output: in kết quả recommend cho 4 sản phẩm mẫu
 """
+import json
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -46,7 +47,9 @@ product_vectors = scipy.sparse.load_npz(
     os.path.join(MODEL_DIR, "cb_filter", "product_vectors.npz")
 )
 cb.product_vectors = product_vectors
-cb.product_id_to_idx = {int(pid): i for i, pid in enumerate(products['product_id'])}
+# Load product_id_to_idx đúng mapping từ file (tránh lệch index so với lúc fit)
+with open(os.path.join(MODEL_DIR, "cb_filter", "product_id_to_idx.json")) as f:
+    cb.product_id_to_idx = {int(k): v for k, v in json.load(f).items()}
 print(f"   -> {len(cb.product_id_to_idx)} products")
 
 print("   Ochiai...")
