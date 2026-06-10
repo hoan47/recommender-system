@@ -293,7 +293,7 @@ class DeepWalkModel:
         
         # Lưu graph
         graph_serializable = {
-            str(k): [(n, w) for n, w in v]
+            str(k): [(int(n), int(w)) for n, w in v]
             for k, v in self.graph.items()
         }
         metadata = {
