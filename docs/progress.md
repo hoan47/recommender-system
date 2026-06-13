@@ -1,6 +1,6 @@
 # Bảng Theo Dõi Tiến Độ (Progress Tracking)
 
-Cập nhật lần cuối: 2026-06-10 17:40
+Cập nhật lần cuối: 2026-06-13 15:00
 
 ---
 
@@ -20,6 +20,7 @@ Cập nhật lần cuối: 2026-06-10 17:40
 | `src/models/assoc_rules.py` | ✅ Hoàn tất | Association Rules từ co-occurrence matrix |
 | `src/models/ensemble.py` | ✅ Hoàn tất | Weighted ensemble (α=0.5, β=0.25, γ=0.25) + CB Filter |
 | `src/evaluation/__init__.py` | ✅ Hoàn tất | Package init (hiện rỗng) |
+| `src/evaluation/cb_evaluator.py` | ✅ Hoàn tất | CB Evaluation — 5 khảo sát: phân bố similarity, candidate similarity, threshold sweep, manual inspection, LLM survey |
 
 ## Scripts chạy từng bước
 
@@ -33,6 +34,7 @@ Cập nhật lần cuối: 2026-06-10 17:40
 | `scripts/06_assoc_rules.py` | ✅ Hoàn tất | Train Association Rules + test recommend |
 | `scripts/07_ensemble.py` | ✅ Hoàn tất | Ensemble + test recommend |
 | `scripts/08_streamlit_app.py` | ✅ Hoàn tất | Streamlit Dashboard UI |
+| `scripts/09_cb_evaluation.py` | ✅ Hoàn tất | CB Evaluation — chạy 5 khảo sát, output PNG + CSV + JSON |
 
 ## Model đã train (cached)
 
@@ -51,9 +53,8 @@ Cập nhật lần cuối: 2026-06-10 17:40
 - [x] Chạy `scripts/06_assoc_rules.py` — train Assoc Rules
 - [x] Chạy `scripts/07_ensemble.py` — test ensemble + CB Filter
 - [x] Tạo `scripts/08_streamlit_app.py` — Dashboard trực quan
+- [x] Tạo CB Evaluation pipeline (scripts/09_cb_evaluation.py + src/evaluation/cb_evaluator.py)
+- [ ] Chạy scripts/09_cb_evaluation.py — xem kết quả thống kê
+- [ ] Đánh giá model qua LLM survey từ file llm_survey_samples.csv
 - [ ] Chạy `streamlit run scripts/08_streamlit_app.py` — mở Dashboard
-- [x] ~~CB Filter đang không lọc được (threshold 0.8 quá cao) — cần debug~~
-- [x] ~~Tối ưu threshold CB Filter~~ ✅ CB_THRESHOLD=0.3 đã hoạt động
-- [ ] Evaluation pipeline (survey + LLM + metrics)
-- [ ] Đánh giá model qua survey
-- [ ] Chạy `streamlit run scripts/08_streamlit_app.py` — mở Dashboard
+- [ ] Cập nhật timestamp cuối
