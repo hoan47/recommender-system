@@ -1,34 +1,55 @@
-import os
-import pandas as pd
+import urllib.request
 
-# 1. Định nghĩa đường dẫn file gốc và file đầu ra
-input_path = r"C:\Users\b2h16\Downloads\products.csv"
-output_path = (
-    r"C:\Users\b2h16\OneDrive\Máy tính\recommender-system\data\processed\products_vi.csv"
-)
+print("🔄 Đang tải và nạp bộ từ dừng từ GitHub bạn cung cấp...")
 
-# Tự động tạo thư mục processed nếu chưa có
-os.makedirs(os.path.dirname(output_path), exist_ok=True)
+# 2. Đường dẫn RAW đến file vietnamese-stopwords-dash.txt trên GitHub của bạn
+url_vi = "https://raw.githubusercontent.com/stopwords/vietnamese-stopwords/master/vietnamese-stopwords-dash.txt"
 
 try:
-    # 2. Đọc file csv và CHỈ LẤY đúng 2 cột bạn yêu cầu
-    # Việc chỉ định usecols ở đây sẽ tự động loại bỏ (xóa) tất cả các cột còn lại
-    df = pd.read_csv(input_path, usecols=["product_id", "product_name_vi"])
+    with urllib.request.urlopen(url_vi) as response:
+        # Đọc dữ liệu và giải mã sang chuỗi UTF-8
+        raw_lines = response.read().decode('utf-8').splitlines()
+    
+    vi_stop_words_raw = []
+    for line in raw_lines:
+        word = line.strip()
+        if word:
+            # Chuyển dấu gạch ngang (-) thành khoảng trắng ( ) để khớp với Tokenizer của scikit-learn
+            word_clean = word.replace('-', ' ')
+            vi_stop_words_raw.append(word_clean)
 
-    # 3. Kiểm tra lại cấu trúc dữ liệu để chắc chắn chỉ còn 2 cột
-    print("--- Xem trước 5 dòng dữ liệu đầu tiên ---")
-    print(df.head())
-    print(f"\nTổng số lượng sản phẩm: {len(df)}")
-
-    # 4. Xuất ra file csv mới vào thư mục processed
-    df.to_csv(output_path, index=False, encoding="utf-8-sig")
-    print(f"\n[Thành công] Đã lọc và lưu file mới tại: {output_path}")
-
-except FileNotFoundError:
-    print(f"[Lỗi] Không tìm thấy file tại đường dẫn: {input_path}")
-except KeyError:
-    print(
-        "[Lỗi] Không tìm thấy cột 'product_id' hoặc 'product_name_vi' trong file gốc. Bạn vui lòng kiểm tra lại tiêu đề cột nhé."
-    )
 except Exception as e:
-    print(f"[Lỗi hệ thống]: {e}")
+    print(f"❌ Lỗi kết nối mạng khi tải từ GitHub: {e}")
+    vi_stop_words_raw = []
+
+
+# --- ĐOẠN ĐỌC FILE TIẾNG ANH CỦA BẠN ---
+english_file_path = r"C:\Users\b2h16\OneDrive\Máy tính\recommender-system\english_stopwords.txt"
+try:
+    with open(english_file_path, "r", encoding="utf-8") as f:
+        en_stop_words = [line.strip() for line in f.readlines() if line.strip()]
+except Exception as e:
+    print(f"❌ Lỗi khi đọc file Tiếng Anh: {e}")
+    en_stop_words = []
+
+
+# 4. Gộp hai bộ từ lại thành Bộ Từ Dừng Song Ngữ duy nhất cho model lai
+hybrid_stop_words = en_stop_words + vi_stop_words_raw
+
+
+# --- ĐOẠN GHI KẾT QUẢ RA FILE MỚI ---
+output_file_path = r"C:\Users\b2h16\OneDrive\Máy tính\recommender-system\hybrid_stopwords.txt"
+try:
+    with open(output_file_path, "w", encoding="utf-8") as f:
+        for word in hybrid_stop_words:
+            f.write(f"{word}\n")
+    print(f"💾 Đã ghi toàn bộ từ dừng lai vào file: {output_file_path}")
+except Exception as e:
+    print(f"❌ Lỗi khi ghi file kết quả: {e}")
+
+
+print(f"✅ THÀNH CÔNG!")
+print(f"Tổng số từ dừng lai Anh - Việt đưa vào mô hình: {len(hybrid_stop_words)} từ.")
+
+print("\nVí dụ 10 từ dừng Tiếng Việt lấy từ file GitHub của bạn (sau khi đổi dấu gạch ngang):")
+print(vi_stop_words_raw[20:30])
