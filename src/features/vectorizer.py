@@ -8,13 +8,12 @@ from scipy import sparse
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
-from src.config import CB_N_GRAM_RANGE, CB_MAX_FEATURES, PROJECT_ROOT, VI_STOPWORDS_FILE
+from src.config import CB_N_GRAM_RANGE, CB_MAX_FEATURES, PROJECT_ROOT
 
 
 def _load_stop_words():
     """
-    Load stop words: sklearn's ENGLISH_STOP_WORDS + file english_stopwords.txt
-    + file vietnamese_stopwords.txt.
+    Load stop words: sklearn's ENGLISH_STOP_WORDS + file english_stopwords.txt.
     Mỗi từ 1 dòng, dòng bắt đầu bằng # được bỏ qua.
     Trả về list để tương thích với sklearn TfidfVectorizer.
     """
@@ -24,14 +23,6 @@ def _load_stop_words():
     en_file = os.path.join(PROJECT_ROOT, "english_stopwords.txt")
     if os.path.exists(en_file):
         with open(en_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                word = line.strip().lower()
-                if word and not word.startswith('#'):
-                    stop_words.add(word)
-    
-    # Đọc file stop words tiếng Việt
-    if os.path.exists(VI_STOPWORDS_FILE):
-        with open(VI_STOPWORDS_FILE, 'r', encoding='utf-8') as f:
             for line in f:
                 word = line.strip().lower()
                 if word and not word.startswith('#'):
@@ -61,14 +52,8 @@ def build_product_vectors(products_df, ngram_range=None, max_features=None):
     n_products = len(products_df)
     print(f"Đang vector hóa {n_products} sản phẩm...")
     
-    # --- Gộp chuỗi: product_name (EN) + product_name_vi (VI) nếu có ---
+    # Chỉ dùng product_name (EN)
     text_data = products_df['product_name'].fillna('')
-    if 'product_name_vi' in products_df.columns:
-        print("  Phát hiện cột 'product_name_vi' — gộp chuỗi EN + VI...")
-        vi_data = products_df['product_name_vi'].fillna('')
-        text_data = text_data + " " + vi_data
-    else:
-        print("  Chỉ dùng product_name (EN).")
     
     # --- TF-IDF ---
     print("  TF-IDF...")
