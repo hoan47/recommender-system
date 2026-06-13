@@ -1,13 +1,12 @@
 """
-TF-IDF + One-hot cho CB Diversity Filter.
-Vector hóa sản phẩm dựa trên product_name, aisle_id, department_id.
+TF-IDF cho CB Diversity Filter.
+Vector hóa sản phẩm dựa trên product_name.
 """
 import os
 import numpy as np
 from scipy import sparse
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
-from sklearn.preprocessing import OneHotEncoder
 
 from src.config import CB_N_GRAM_RANGE, CB_MAX_FEATURES, PROJECT_ROOT
 
@@ -31,10 +30,10 @@ def _load_stop_words():
 
 def build_product_vectors(products_df, ngram_range=None, max_features=None):
     """
-    Vector hóa sản phẩm (TF-IDF + one-hot aisle + one-hot department).
+    Vector hóa sản phẩm (TF-IDF trên product_name).
 
     Args:
-        products_df: DataFrame [product_id, product_name, aisle_id, department_id, ...]
+        products_df: DataFrame [product_id, product_name, ...]
         ngram_range: tuple (min_n, max_n) cho TF-IDF
         max_features: int, max features cho TF-IDF
 
@@ -63,31 +62,10 @@ def build_product_vectors(products_df, ngram_range=None, max_features=None):
     tfidf_matrix = tfidf.fit_transform(products_df['product_name'].fillna(''))
     print(f"    TF-IDF matrix shape: {tfidf_matrix.shape}")
     
-    # --- One-hot aisle_id ---
-    print("  One-hot aisle_id...")
-    aisle_encoder = OneHotEncoder(sparse_output=True, handle_unknown='ignore')
-    aisle_matrix = aisle_encoder.fit_transform(products_df[['aisle_id']])
-    print(f"    Aisle one-hot shape: {aisle_matrix.shape}")
+    product_vectors = tfidf_matrix
     
-    # --- One-hot department_id ---
-    print("  One-hot department_id...")
-    dept_encoder = OneHotEncoder(sparse_output=True, handle_unknown='ignore')
-    dept_matrix = dept_encoder.fit_transform(products_df[['department_id']])
-    print(f"    Department one-hot shape: {dept_matrix.shape}")
-    
-    # --- Ghép dọc ---
-    print("  Ghép vectors...")
-    product_vectors = sparse.hstack([
-        tfidf_matrix,
-        aisle_matrix,
-        dept_matrix
-    ], format='csr')
-    print(f"    Final product vectors shape: {product_vectors.shape}")
-    
-    # Lưu vectorizer và encoders vào attribute để dùng sau (nếu cần)
+    # Lưu vectorizer vào attribute để dùng sau (nếu cần)
     product_vectors._tfidf = tfidf
-    product_vectors._aisle_encoder = aisle_encoder
-    product_vectors._dept_encoder = dept_encoder
     
     return product_vectors, tfidf
 

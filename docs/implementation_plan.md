@@ -17,7 +17,7 @@ src/
 ├── features/
 │   ├── __init__.py
 │   ├── loader.py                   # Đọc CSV, merge dữ liệu
-│   └── vectorizer.py               # TF-IDF + one-hot cho CB Filter
+│   └── vectorizer.py               # TF-IDF cho CB Filter
 │
 └── models/
     ├── __init__.py
@@ -147,7 +147,7 @@ def get_product_name_map() -> dict
 
 ---
 
-### 2.2 `src/features/vectorizer.py` — TF-IDF + One-hot cho CB Filter
+### 2.2 `src/features/vectorizer.py` — TF-IDF cho CB Filter
 
 **Input:** DataFrame products (từ loader.load_products())
 **Output:** Ma trận sparse (n_products × n_features)
@@ -161,9 +161,6 @@ def build_product_vectors(products_df: pd.DataFrame,
     """
     Vector hóa sản phẩm:
       - TF-IDF trên product_name (unigram + bigram)
-      - One-hot aisle_id
-      - One-hot department_id
-    Ghép dọc 3 vector lại bằng hstack.
     
     Return: (product_vectors: sparse.csr_matrix shape (n_products, D),
              vectorizer: TfidfVectorizer)

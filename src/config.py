@@ -8,25 +8,23 @@ import os
 # Đường dẫn thư mục
 # ============================================================
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(PROJECT_ROOT, "data")
-PROCESSED_DIR = os.path.join(DATA_DIR, "processed")
+PROCESSED_DIR = os.path.join(PROJECT_ROOT, "data/processed")
 MODEL_DIR = os.path.join(PROJECT_ROOT, "models")
 RESULT_DIR = os.path.join(PROJECT_ROOT, "results")
 
 # ============================================================
 # Files dữ liệu gốc
 # ============================================================
-ORDERS_FILE = os.path.join(DATA_DIR, "orders.csv")
-PRODUCTS_FILE = os.path.join(DATA_DIR, "products.csv")
-ORDER_PRODUCTS_PRIOR = os.path.join(DATA_DIR, "order_products__prior.csv")
-ORDER_PRODUCTS_TRAIN = os.path.join(DATA_DIR, "order_products__train.csv")
-AISLES_FILE = os.path.join(DATA_DIR, "aisles.csv")
-DEPARTMENTS_FILE = os.path.join(DATA_DIR, "departments.csv")
+ORDERS_FILE = os.path.join(PROJECT_ROOT, "data/orders.csv")
+PRODUCTS_FILE = os.path.join(PROJECT_ROOT, "data/products.csv")
+ORDER_PRODUCTS_PRIOR = os.path.join(PROJECT_ROOT, "data/order_products__prior.csv")
+ORDER_PRODUCTS_TRAIN = os.path.join(PROJECT_ROOT, "data/order_products__train.csv")
+AISLES_FILE = os.path.join(PROJECT_ROOT, "data/aisles.csv")
+DEPARTMENTS_FILE = os.path.join(PROJECT_ROOT, "data/departments.csv")
 
 # ============================================================
 # Files processed (lưu sau khi preprocess)
 # ============================================================
-PRODUCT_VECTORS_FILE = os.path.join(PROCESSED_DIR, "product_vectors.npz")
 
 # ============================================================
 # Hyperparameters — CB Filter
