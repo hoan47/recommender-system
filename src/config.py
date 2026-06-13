@@ -23,6 +23,11 @@ AISLES_FILE = os.path.join(PROJECT_ROOT, "data/aisles.csv")
 DEPARTMENTS_FILE = os.path.join(PROJECT_ROOT, "data/departments.csv")
 
 # ============================================================
+# Files stop words
+# ============================================================
+VI_STOPWORDS_FILE = os.path.join(PROJECT_ROOT, "vietnamese_stopwords.txt")
+
+# ============================================================
 # Files processed (lưu sau khi preprocess)
 # ============================================================
 

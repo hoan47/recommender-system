@@ -27,7 +27,17 @@ if not os.path.exists(products_path):
 
 print("\n1. Loading products...")
 products = pd.read_parquet(products_path)
-print(f"   -> {len(products)} products")
+print(f"   -> {len(products)} products (EN)")
+
+# Gộp thêm tên tiếng Việt nếu có
+products_vi_path = os.path.join(PROCESSED_DIR, "products_vi.csv")
+if os.path.exists(products_vi_path):
+    print("   Gộp thêm product_name_vi từ products_vi.csv...")
+    products_vi = pd.read_csv(products_vi_path, encoding='utf-8')
+    products = products.merge(products_vi, on='product_id', how='left')
+    print(f"   -> Đã gộp {products_vi.shape[0]} bản ghi tiếng Việt")
+else:
+    print("   (Không tìm thấy products_vi.csv — chỉ dùng product_name EN)")
 
 print("\n2. Fitting CBFilter...")
 cb = CBFilter()
