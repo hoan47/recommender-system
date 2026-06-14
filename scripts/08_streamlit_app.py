@@ -17,7 +17,7 @@ import streamlit as st
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.config import MODEL_DIR, PROCESSED_DIR, CB_THRESHOLD
+from src.config import MODEL_DIR, PROCESSED_DIR, ENS_CB_THRESHOLD
 from src.models.assoc_rules import AssocRulesModel
 from src.models.ensemble import EnsembleModel
 
@@ -139,9 +139,12 @@ def get_cb_detail(product_id, candidates, models):
     if not valid_indices:
         return None
 
-    from src.features.vectorizer import cb_similarity
+    from src.features.vectorizer import cb_ensemble_similarity
 
-    similarities = cb_similarity(cb.product_vectors, idx_a, valid_indices)
+    similarities = cb_ensemble_similarity(
+        cb.product_vectors_tfidf, cb.product_vectors_count,
+        idx_a, valid_indices, alpha=cb.alpha, metric=cb.metric,
+    )
     return list(zip(valid_candidates, similarities))
 
 
@@ -292,7 +295,6 @@ def main():
                             "Xếp hạng": rank,
                             "ID": rid,
                             "Tên sản phẩm": rrow["display_name"],
-                            "P_name_en": rrow["product_name"],
                             "Điểm số": f"{score:.4f}",
                         }
                     )
@@ -329,14 +331,14 @@ def main():
 
                     label = (
                         "❌ **Substitute**"
-                        if sim >= CB_THRESHOLD
+                        if sim >= ENS_CB_THRESHOLD
                         else "✅ Complementary"
                     )
                     rows.append(
                         {
                             "ID": cid,
                             "Tên sản phẩm": name,
-                            "P_name_en": rrow["product_name"],
+                            "Tên gốc": rrow["product_name"],
                             "CB Similarity": f"{sim:.4f}",
                             "Kết luận": label,
                         }
