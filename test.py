@@ -1,52 +1,80 @@
-import os
-# Lấy danh sách stopwords tiếng Anh chuẩn của scikit-learn
-from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
+import json
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
 
-# 1. Danh sách stopwords thực tế bạn đã chốt ở bước trước
-YOUR_RETAIL_STOPWORDS = {
-    'organic', 'natural', 'original', 'premium', 'free', 'low', 'sodium',
-    'classic', 'traditional', 'authentic', 'delicious', 'simply', 'pure',
-    'ultra', 'super', 'value', 'wild', 'fresh', 'style', 'fat', 'lowfat',
-    'total', 'light', 'diet', 'with', 'and', 'for', 'whole', 'sweet',
-    'gluten', 'dark', 'roasted', 'creamy', 'soft', 'frozen', 'mini',
-    'medium', 'all', 'extra', 'blend', 'greek', 'ground', 'flavor', 'scent',
-    'liquid', 'hot'
-}
+# 1. Đường dẫn tới các file của bạn
+PATH_JSON = r"C:\Users\b2h16\OneDrive\Máy tính\recommender-system\models\cb_filter\product_id_to_idx.json"
+PATH_NPZ = r"C:\Users\b2h16\OneDrive\Máy tính\recommender-system\models\cb_filter\product_vectors.npz"
 
-# 2. DANH SÁCH BẢO VỆ (Tuyệt đối KHÔNG ĐƯỢC XÓA vì là tên sản phẩm trong dữ liệu thực tế)
-PROTECTED_RETAIL_WORDS = {
-    'chicken', 'cheese', 'chocolate', 'sauce', 'cream', 'yogurt', 'milk', 
-    'tea', 'butter', 'vanilla', 'white', 'bar', 'rice', 'fruit', 'juice', 
-    'food', 'oil', 'coconut', 'chips', 'coffee', 'strawberry', 'apple', 
-    'lemon', 'green', 'salt', 'cheddar', 'black', 'water', 'honey', 'soup', 
-    'ice', 'bread', 'baby', 'almond', 'sugar', 'red', 'grain', 'beef', 
-    'garlic', 'pasta', 'orange', 'drink', 'potato', 'cookies', 'protein', 
-    'peanut', 'bars', 'corn', 'sea', 'mint', 'beans', 'wheat', 'pizza', 
-    'brown', 'turkey', 'crackers', 'vegetable', 'cherry', 'cereal', 'cat', 
-    'dressing', 'blueberry', 'dog', 'body', 'cinnamon', 'italian', 'tomato', 
-    'caramel', 'shampoo', 'snack', 'granola', 'bean', 'raspberry', 'ginger', 
-    'sausage', 'thin'
-}
+def load_data():
+    print("🔄 Đang tải dữ liệu...")
+    # Load file mapping ID -> Index
+    with open(PATH_JSON, 'json', encoding='utf-8') as f:
+        product_id_to_idx = json.load(f)
+    
+    # Đảo ngược mapping để từ Index tìm lại được ID sản phẩm
+    idx_to_product_id = {int(v): k for k, v in product_id_to_idx.items()}
+    
+    # Load ma trận vector sản phẩm (giả sử key trong npz là 'vectors' hoặc 'arr_0')
+    npz_file = np.load(PATH_NPZ)
+    # Lấy key đầu tiên nếu không biết chính xác tên key lưu trữ
+    key = npz_file.files[0]
+    product_vectors = npz_file[key]
+    
+    # Nếu là ma trận thưa từ scipy được lưu dạng npz, cần convert sang dense/csr nếu cần
+    # Thường nếu dùng np.savez thì nó là numpy array thông thường
+    if hasattr(product_vectors, "toarray"):
+        product_vectors = product_vectors.toarray()
+        
+    print(f"✅ Tải thành công! Số lượng sản phẩm: {len(product_id_to_idx)}")
+    print(f"📐 Kích thước ma trận vector: {product_vectors.shape}")
+    return product_id_to_idx, idx_to_product_id, product_vectors
 
-def generate_ultimate_stopwords():
-    # Chuyển ENGLISH_STOP_WORDS của sklearn sang dạng set từ thường
-    sklearn_stopwords = {word.lower() for word in ENGLISH_STOP_WORDS}
+def recommend_sanity_check(target_product_id, idx_to_product_id, product_id_to_idx, product_vectors, top_k=5):
+    if target_product_id not in product_id_to_idx:
+        print(f"❌ Không tìm thấy Product ID: {target_product_id} trong từ điển.")
+        return
     
-    # Gộp danh sách của bạn và sklearn lại làm một
-    combined_stopwords = YOUR_RETAIL_STOPWORDS.union(sklearn_stopwords)
+    # Lấy index và vector của sản phẩm mục tiêu
+    target_idx = product_id_to_idx[target_product_id]
+    target_vector = product_vectors[target_idx].reshape(1, -1)
     
-    # LUẬT BẢO VỆ: Loại bỏ các từ cốt lõi ra khỏi danh sách xóa
-    final_stopwords = combined_stopwords - PROTECTED_RETAIL_WORDS
+    # Tính toán Cosine Similarity giữa sản phẩm này với TOÀN BỘ sản phẩm khác
+    # Kết quả trả về một mảng chứa điểm số tương đồng
+    similarity_scores = cosine_similarity(target_vector, product_vectors).flatten()
     
-    # Ghi đè file cấu hình data/retail_stopwords.txt
-    os.makedirs('data', exist_ok=True)
-    with open('data/retail_stopwords.txt', 'w', encoding='utf-8') as f:
-        for word in sorted(final_stopwords):
-            f.write(f"{word}\n")
-            
-    print(f"[XONG] Đã gộp thành công danh sách tự chọn và Sklearn.")
-    print(f"Tổng số từ khóa hủy diệt đã lọc bảo vệ: {len(final_stopwords)} từ.")
-    print("Mời bạn chạy lại hệ thống đánh giá chính!")
+    # Sắp xếp lấy index của các sản phẩm có điểm cao nhất (giảm dần)
+    # Loại bỏ chính nó (sản phẩm mục tiêu luôn có similarity = 1.0 với chính nó)
+    related_indices = np.argsort(similarity_scores)[::-1]
+    related_indices = [idx for idx in related_indices if idx != target_idx][:top_k]
+    
+    print("\n" + "="*50)
+    print(f"🎯 Sản phẩm gốc (Target): ID {target_product_id} (Index: {target_idx})")
+    print("="*50)
+    print(f"🤖 Top {top_k} sản phẩm tương đồng nhất được gợi ý:")
+    
+    for i, idx in enumerate(related_indices, 1):
+        p_id = idx_to_product_id[idx]
+        score = similarity_scores[idx]
+        print(f"{i}. Product ID: {p_id} | Điểm Cosine: {score:.4f}")
+    print("="*50)
 
 if __name__ == "__main__":
-    generate_ultimate_stopwords()
+    try:
+        product_id_to_idx, idx_to_product_id, product_vectors = load_data()
+        
+        # Lấy thử một ID sản phẩm bất kỳ từ dữ liệu để test
+        sample_product_id = list(product_id_to_idx.keys())[0] 
+        
+        # Chạy thử nghiệm gợi ý
+        recommend_sanity_check(
+            target_product_id=sample_product_id, 
+            idx_to_product_id=idx_to_product_id, 
+            product_id_to_idx=product_id_to_idx, 
+            product_vectors=product_vectors, 
+            top_k=5
+        )
+        
+    except Exception as e:
+        print(f"❌ Có lỗi xảy ra: {e}")
+        print("💡 Gợi ý: Hãy kiểm tra lại định dạng lưu trữ bên trong file .npz xem key chính xác là gì.")

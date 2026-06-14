@@ -17,9 +17,7 @@ n = v.shape[0]
 
 # === Load products để có tên ===
 p = pd.read_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
-idx_to_pid = {v: int(k) for k, v in pid_to_idx.items()}
 pid_to_name = dict(zip(p['product_id'], p['product_name']))
-idx_to_name = {i: pid_to_name.get(pid_to_idx[int(k)], "?") for i, k in enumerate(pid_to_idx)}
 
 # === Thống kê: 200K cặp ngẫu nhiên ===
 rng = np.random.default_rng(42)
