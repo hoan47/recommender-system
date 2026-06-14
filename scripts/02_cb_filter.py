@@ -1,7 +1,7 @@
 """
-Bước 2: CB Filter — Content-Based Diversity Filter.
+Bước 2: CB Filter — Content-Based Diversity Filter (tiếng Việt).
 Chạy riêng: python scripts/02_cb_filter.py
-Yêu cầu: scripts/01_load_data.py đã chạy (có products.parquet)
+Yêu cầu: data/processed/products_vi.csv (phải có sẵn)
 Output: models/cb_filter/ (product_vectors.npz)
 """
 import json
@@ -16,19 +16,20 @@ from src.config import MODEL_DIR, PROCESSED_DIR
 from src.models.cb_filter import CBFilter
 
 print("="*60)
-print("  BƯỚC 2: CB FILTER")
+print("  BƯỚC 2: CB FILTER (tiếng Việt)")
 print("="*60)
 
-# Load data đã cache
-products_path = os.path.join(PROCESSED_DIR, "products.parquet")
+# Load data tiếng Việt
+products_path = os.path.join(PROCESSED_DIR, "products_vi.csv")
 if not os.path.exists(products_path):
-    print("ERROR: Chưa có products.parquet! Chạy scripts/01_load_data.py trước.")
+    print(f"ERROR: Chưa có {products_path}!")
+    print("Yêu cầu: phải có file products_vi.csv với cột product_name_vi")
     sys.exit(1)
 
-print("\n1. Loading products...")
-products = pd.read_parquet(products_path)
-print(f"   -> {len(products)} products (EN)")
-print("   -> Chỉ dùng product_name (EN), không gộp tiếng Việt")
+print("\n1. Loading products (tiếng Việt)...")
+products = pd.read_csv(products_path)
+print(f"   -> {len(products)} products (VI)")
+print(f"   -> Cột product_name_vi có sẵn, dùng làm TF-IDF")
 
 print("\n2. Fitting CBFilter...")
 cb = CBFilter()
