@@ -6,18 +6,17 @@ import os
 import numpy as np
 from scipy import sparse
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
 from src.config import CB_N_GRAM_RANGE, CB_MAX_FEATURES, PROJECT_ROOT
 
 
 def _load_stop_words():
     """
-    Load stop words: sklearn's ENGLISH_STOP_WORDS + file english_stopwords.txt.
+    Đọc file english_stopwords.txt.
     Mỗi từ 1 dòng, dòng bắt đầu bằng # được bỏ qua.
     Trả về list để tương thích với sklearn TfidfVectorizer.
     """
-    stop_words = set(ENGLISH_STOP_WORDS)
+    stop_words = set()
     
     # Đọc file stop words tiếng Anh custom
     en_file = os.path.join(PROJECT_ROOT, "english_stopwords.txt")
@@ -29,7 +28,6 @@ def _load_stop_words():
                     stop_words.add(word)
     
     return list(stop_words)
-
 
 def build_product_vectors(products_df, ngram_range=None, max_features=None):
     """
