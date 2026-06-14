@@ -3,12 +3,13 @@ TF-IDF cho CB Diversity Filter.
 Vector hóa sản phẩm dựa trên product_name_vi dùng word n-gram TF-IDF.
 Giữ nguyên dấu tiếng Việt, không lowercase.
 """
+import os
 import re
 import numpy as np
 from scipy import sparse
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from src.config import CB_N_GRAM_RANGE, CB_MAX_FEATURES, CB_ANALYZER
+from src.config import CB_N_GRAM_RANGE, CB_MAX_FEATURES, CB_ANALYZER, PROJECT_ROOT
 
 # Pattern gom Nhóm đơn vị đo lường và Nhóm kích cỡ (size/cỡ)
 _PATTERN_CLEAN = re.compile(
@@ -16,6 +17,18 @@ _PATTERN_CLEAN = re.compile(
     r"|\b(?:size|cỡ)\s*\d+\b",
     re.IGNORECASE
 )
+
+
+def _load_vietnamese_stopwords():
+    """Load stop words tiếng Việt từ file vietnamese_stopwords.txt."""
+    path = os.path.join(PROJECT_ROOT, "vietnamese_stopwords.txt")
+    if not os.path.exists(path):
+        print(f"[WARN] Không tìm thấy {path}, bỏ qua stop words.")
+        return []
+    with open(path, "r", encoding="utf-8") as f:
+        words = [line.strip() for line in f if line.strip()]
+    print(f"  Đã load {len(words)} stop words tiếng Việt từ {path}")
+    return words
 
 
 def _clean_product_name_vi(text: str) -> str:
@@ -67,13 +80,16 @@ def build_product_vectors(products_df, ngram_range=None, max_features=None, anal
     # Làm sạch tên sản phẩm tiếng Việt — giữ nguyên dấu, không lowercase
     text_data = products_df['product_name_vi'].fillna('').apply(_clean_product_name_vi)
 
-    # TF-IDF với word n-gram (không dùng stop words vì là tiếng Việt)
+    # Load stop words tiếng Việt (nếu có)
+    stop_words = _load_vietnamese_stopwords()
+
+    # TF-IDF với word n-gram
     print(f"  TF-IDF ({analyzer}, ngram_range={ngram_range}, max_features={max_features})...")
     tfidf = TfidfVectorizer(
         ngram_range=ngram_range,
         max_features=max_features,
         analyzer=analyzer,
-        # Không dùng stop words — tiếng Việt không có file stop words chuẩn
+        stop_words=stop_words if stop_words else None,
     )
     tfidf_matrix = tfidf.fit_transform(text_data)
     print(f"    TF-IDF matrix shape: {tfidf_matrix.shape}")
