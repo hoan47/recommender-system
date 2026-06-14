@@ -52,24 +52,13 @@ def load_products_vi():
     products = pd.read_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
 
     products_vi = _read_csv_vi(os.path.join(PROCESSED_DIR, "products_vi.csv"))
-    aisles_vi = _read_csv_vi(os.path.join(PROCESSED_DIR, "aisles_vi.csv"))
-    depts_vi = _read_csv_vi(os.path.join(PROCESSED_DIR, "departments_vi.csv"))
 
-    # Ép kiểu product_id cho cả hai bảng để đồng bộ kiểu dữ liệu trước merge
+    # Ép kiểu product_id cho đồng bộ trước merge
     products["product_id"] = products["product_id"].astype(int)
     products_vi["product_id"] = products_vi["product_id"].astype(int)
 
-    # Đồng bộ tương tự cho aisle và department
-    products["aisle_id"] = products["aisle_id"].astype(int)
-    aisles_vi["aisle_id"] = aisles_vi["aisle_id"].astype(int)
-
-    products["department_id"] = products["department_id"].astype(int)
-    depts_vi["department_id"] = depts_vi["department_id"].astype(int)
-
-    # Merge lần lượt từng bảng
+    # Merge tên tiếng Việt
     products = products.merge(products_vi, on="product_id", how="left")
-    products = products.merge(aisles_vi, on="aisle_id", how="left")
-    products = products.merge(depts_vi, on="department_id", how="left")
 
     # Dùng tên tiếng Việt, fallback về tiếng Anh nếu chưa có bản dịch
     products["display_name"] = products["product_name_vi"].fillna(
@@ -297,8 +286,6 @@ def main():
             <h3 style="margin:0; color: #4CAF50;">📦 SẢN PHẨM MỤC TIÊU</h3>
             <p style="margin:5px 0;"><b>ID:</b> {product_id}</p>
             <p style="margin:5px 0;"><b>Tên:</b> {product_row['display_name']}</p>
-            <p style="margin:5px 0;"><b>Gian hàng:</b> {product_row.get('aisle_vi', product_row.get('aisle', '?'))}</p>
-            <p style="margin:5px 0;"><b>Ngành hàng:</b> {product_row.get('department_vi', product_row.get('department', '?'))}</p>
         </div>
         """,
             unsafe_allow_html=True,
@@ -349,12 +336,6 @@ def main():
                             "Xếp hạng": rank,
                             "ID": rid,
                             "Tên sản phẩm": rrow["display_name"],
-                            "Gian hàng": rrow.get(
-                                "aisle_vi", rrow.get("aisle", "?")
-                            ),
-                            "Ngành hàng": rrow.get(
-                                "department_vi", rrow.get("department", "?")
-                            ),  # THÊM CỘT
                             "Điểm số": f"{score:.4f}",
                         }
                     )
@@ -364,8 +345,6 @@ def main():
                             "Xếp hạng": rank,
                             "ID": rid,
                             "Tên sản phẩm": "?",
-                            "Gian hàng": "?",
-                            "Ngành hàng": "?",  # THÊM CỘT
                             "Điểm số": f"{score:.4f}",
                         }
                     )
@@ -388,12 +367,8 @@ def main():
                     if not rrow.empty:
                         rrow = rrow.iloc[0]
                         name = rrow["display_name"]
-                        dept = rrow.get(
-                            "department_vi", rrow.get("department", "?")
-                        )  # THÊM CỘT
                     else:
                         name = "?"
-                        dept = "?"
 
                     label = (
                         "❌ **Substitute**"
@@ -404,7 +379,6 @@ def main():
                         {
                             "ID": cid,
                             "Tên sản phẩm": name,
-                            "Ngành hàng": dept,  # THÊM CỘT
                             "CB Similarity": f"{sim:.4f}",
                             "Kết luận": label,
                         }
