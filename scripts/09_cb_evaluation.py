@@ -1,7 +1,7 @@
 """
-Bước 9: CB Evaluation — Khảo sát và đánh giá Content-Based Diversity Filter.
-Chạy riêng: python scripts/09_cb_evaluation.py
-Yêu cầu: scripts 01-02 đã chạy (cần product_vectors)
+Buoc 9: CB Evaluation - Khao sat va danh gia Content-Based Diversity Filter.
+Chay rieng: python scripts/09_cb_evaluation.py
+Yeu cau: scripts 01-02 da chay (can product_vectors)
 
 Output: results/cb_evaluation/
   - similarity_distribution.png
@@ -30,23 +30,23 @@ from src.evaluation.cb_evaluator import (
 )
 
 # ============================================================
-# CẤU HÌNH
+# CAU HINH
 # ============================================================
-N_PER_BIN = 10                   # số mẫu mỗi bin cho manual inspection
-N_LLM_SAMPLES = 200              # số mẫu cho LLM survey
+N_PER_BIN = 10                   # so mau moi bin cho manual inspection
+N_LLM_SAMPLES = 200              # so mau cho LLM survey
 
 SAVE_DIR = os.path.join(RESULT_DIR, "cb_evaluation")
 os.makedirs(SAVE_DIR, exist_ok=True)
 
 
 # ============================================================
-# LOAD DỮ LIỆU & MODELS
+# LOAD DU LIEU & MODELS
 # ============================================================
 print("="*60)
-print("  BƯỚC 9: CB EVALUATION")
+print("  BUOC 9: CB EVALUATION")
 print("="*60)
 
-# Kiểm tra files cần thiết
+# Kiem tra files can thiet
 checks = [
     ("CB Filter", os.path.join(MODEL_DIR, "cb_filter", "product_vectors.npz")),
     ("CB Filter mapping", os.path.join(MODEL_DIR, "cb_filter", "product_id_to_idx.json")),
@@ -54,7 +54,7 @@ checks = [
 ]
 for name, path in checks:
     if not os.path.exists(path):
-        print(f"ERROR: Thiếu {name}! Chạy scripts 01-02 trước.")
+        print(f"ERROR: Thieu {name}! Chay scripts 01-02 truoc.")
         print(f"  Path: {path}")
         sys.exit(1)
 
@@ -74,147 +74,207 @@ print(f"   -> {n_prod} products")
 
 
 # ============================================================
-# KHẢO SÁT 1: FULL SIMILARITY MATRIX — TOÀN BỘ CẶP SẢN PHẨM
+# KHAO SAT 1: FULL SIMILARITY MATRIX - TOAN BO CAP SAN PHAM
 # ============================================================
 print(f"\n{'='*60}")
-print(f"  KHẢO SÁT 1: FULL SIMILARITY MATRIX (tất cả cặp sản phẩm)")
-print(f"  Số sản phẩm: {n_prod}")
+print(f"  KHAO SAT 1: FULL SIMILARITY MATRIX (tat ca cap san pham)")
+print(f"  So san pham: {n_prod}")
 print(f"{'='*60}")
 t0 = time.time()
 
-# Tính full similarity matrix = product_vectors @ product_vectors.T
-# product_vectors: CSR (n_prod, 15K) sparse
-# Kết quả: CSR (n_prod, n_prod) — similarity giữa mọi cặp
-print("\n  Tính full similarity matrix...")
-sim_matrix = cb.product_vectors @ cb.product_vectors.T
-print(f"  Sim matrix shape: {sim_matrix.shape}")
-print(f"  Sim matrix non-zero: {sim_matrix.nnz}")
+# Tinh full similarity matrix = product_vectors @ product_vectors.T
+# Dung batch processing + online statistics de tranh OOM
+# (1.2 ty cap = 9GB neu luu toan bo)
+print("\n  Tinh full similarity matrix (online stats)...")
 
-# Lấy upper triangle (k=1) để tránh duplicate + diagonal
-# tril k=-1 lấy lower triangle không gồm diagonal
-lower = scipy.sparse.tril(sim_matrix, k=-1, format='csr')
-all_values = lower.data
-print(f"  Upper triangle (unique pairs): {len(all_values):,}")
+n_prod = cb.product_vectors.shape[0]
+batch_size = 500
+
+# Online statistics
+cnt = 0
+total = 0.0
+total_sq = 0.0
+min_val = 1.0
+max_val = 0.0
+
+# Threshold counters
+threshold_list = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99]
+above_count = {t: 0 for t in threshold_list}
+
+# Histogram bins: [0, 0.001), [0.001, 0.002), ..., [0.999, 1.0]
+N_BINS = 1000
+hist_counts = np.zeros(N_BINS, dtype=np.int64)
+
+for start in range(0, n_prod, batch_size):
+    end = min(start + batch_size, n_prod)
+    batch_vecs = cb.product_vectors[start:end]               # (bs, D) sparse
+
+    # similarity cua batch voi toan bo product: (bs, N) sparse
+    block = batch_vecs @ cb.product_vectors.T
+
+    for i in range(end - start):
+        row_idx = start + i
+        # Upper triangle: chi lay cot > row_idx
+        vals = block[i, row_idx + 1:].toarray().flatten()
+        if len(vals) == 0:
+            continue
+
+        # Clip ve [0, 1]
+        np.clip(vals, 0, 1, out=vals)
+
+        # Update online stats
+        n = len(vals)
+        cnt += n
+        total += float(vals.sum())
+        total_sq += float((vals * vals).sum())
+        min_val = min(min_val, float(vals.min()))
+        max_val = max(max_val, float(vals.max()))
+
+        # Threshold counters
+        for t in threshold_list:
+            above_count[t] += int((vals >= t).sum())
+
+        # Histogram bins (integer bin index = int(val * N_BINS))
+        bin_idxs = (vals * N_BINS).astype(np.int64)
+        # Clip edge case vals == 1.0 -> bin N_BINS-1
+        bin_idxs = np.clip(bin_idxs, 0, N_BINS - 1)
+        np.add.at(hist_counts, bin_idxs, 1)
+
+    if (start // batch_size + 1) % 10 == 0:
+        print(f"    Batch {start//batch_size + 1}/{n_prod//batch_size + 1}..."
+              f" ({start}/{n_prod})")
 
 t1 = time.time()
-print(f"   ⏱ Thời gian tính: {t1 - t0:.1f}s")
+print(f"   Thoi gian tinh: {t1 - t0:.1f}s")
+print(f"  Tong so cap (upper triangle): {cnt:,}")
 
-# Thống kê
+# Thong ke
 stats = {}
-if len(all_values) > 0:
-    stats['n_pairs'] = int(len(all_values))
-    stats['mean'] = float(np.mean(all_values))
-    stats['median'] = float(np.median(all_values))
-    stats['std'] = float(np.std(all_values))
-    stats['min'] = float(np.min(all_values))
-    stats['max'] = float(np.max(all_values))
-    stats['percentiles'] = {
-        'p1': float(np.percentile(all_values, 1)),
-        'p5': float(np.percentile(all_values, 5)),
-        'p10': float(np.percentile(all_values, 10)),
-        'p25': float(np.percentile(all_values, 25)),
-        'p50': float(np.percentile(all_values, 50)),
-        'p75': float(np.percentile(all_values, 75)),
-        'p90': float(np.percentile(all_values, 90)),
-        'p95': float(np.percentile(all_values, 95)),
-        'p99': float(np.percentile(all_values, 99)),
-    }
-    stats['frac_above_threshold'] = {}
-    for t in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99]:
-        frac = float(np.mean(all_values >= t))
-        stats['frac_above_threshold'][f'≥{t}'] = frac
+if cnt > 0:
+    stats['n_pairs'] = cnt
+    mean = total / cnt
+    # std = sqrt(E[X^2] - E[X]^2)
+    var = total_sq / cnt - mean * mean
+    std = np.sqrt(max(var, 0))
 
-    # In thống kê
-    print(f"\n  Thống kê similarity (trên toàn bộ {len(all_values):,} cặp):")
-    print(f"    Mean   = {stats['mean']:.4f}")
-    print(f"    Median = {stats['median']:.4f}")
-    print(f"    Std    = {stats['std']:.4f}")
+    stats['mean'] = float(mean)
+    stats['median'] = float(np.median(np.repeat(np.linspace(0, 1, N_BINS, endpoint=False)[:N_BINS], hist_counts)))
+    stats['std'] = float(std)
+    stats['min'] = float(min_val)
+    stats['max'] = float(max_val)
+
+    # Percentiles tu cumulative histogram
+    cum_counts = np.cumsum(hist_counts)
+    total_cnt = cum_counts[-1]
+    percentiles = {}
+    for p in [1, 5, 10, 25, 50, 75, 90, 95, 99]:
+        target = p / 100.0 * total_cnt
+        idx = int(np.searchsorted(cum_counts, target))
+        # Ensure idx is within bounds
+        idx = min(idx, N_BINS - 1)
+        val = (idx + 0.5) / N_BINS  # midpoint of bin
+        percentiles[f'p{p}'] = float(val)
+    stats['percentiles'] = percentiles
+
+    stats['frac_above_threshold'] = {}
+    for t in threshold_list:
+        frac = above_count[t] / cnt
+        stats['frac_above_threshold'][f'\u2265{t}'] = float(frac)
+
+    # In thong ke
+    print(f"\n  Thong ke similarity (tren toan bo {cnt:,} cap):")
+    print(f"    Mean   = {stats['mean']:.6f}")
+    print(f"    Median = {stats['median']:.6f}")
+    print(f"    Std    = {stats['std']:.6f}")
     print(f"    Min    = {stats['min']:.6f}")
     print(f"    Max    = {stats['max']:.6f}")
     print(f"  Percentiles:")
     for k, v in stats['percentiles'].items():
         print(f"    {k:>4s} = {v:.6f}")
-    print(f"  Tỷ lệ >= threshold:")
+    print(f"  Ty le >= threshold:")
     for k, v in stats['frac_above_threshold'].items():
-        print(f"    {k:>6s} = {v*100:.4f}%")
+        print(f"    {k:>6s} = {v*100:.6f}%")
 
-    # Histogram — log scale vì đa số similarity rất thấp
+    # Ve histogram tu bin edges
+    bin_edges = np.linspace(0, 1, N_BINS + 1)
+
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
     # Histogram linear (full range)
-    axes[0].hist(all_values, bins=100, color='steelblue', edgecolor='white', alpha=0.8)
+    axes[0].bar(bin_edges[:-1], hist_counts, width=1/N_BINS, color='steelblue', alpha=0.8)
     axes[0].axvline(CB_THRESHOLD, color='red', linestyle='--', linewidth=2,
                     label=f"THRESHOLD={CB_THRESHOLD}")
     axes[0].set_xlabel("Cosine Similarity", fontsize=12)
-    axes[0].set_ylabel("Số lượng cặp", fontsize=12)
-    axes[0].set_title(f"Phân bố Cosine Similarity (full matrix)\n{len(all_values):,} pairs", fontsize=13)
+    axes[0].set_ylabel("So luong cap", fontsize=12)
+    axes[0].set_title(f"Phan bo Cosine Similarity (full matrix)\n{cnt:,} pairs", fontsize=13)
     axes[0].legend(fontsize=11)
     axes[0].grid(axis='y', alpha=0.3)
     textstr = (
         f"Mean={stats['mean']:.4f}  Median={stats['median']:.4f}\n"
-        f"≥0.3={stats['frac_above_threshold']['≥0.3']*100:.2f}%  "
-        f"≥0.5={stats['frac_above_threshold']['≥0.5']*100:.2f}%  "
-        f"≥0.8={stats['frac_above_threshold']['≥0.8']*100:.2f}%"
+        f" >=0.3={stats['frac_above_threshold']['\u22650.3']*100:.2f}%  "
+        f" >=0.5={stats['frac_above_threshold']['\u22650.5']*100:.2f}%  "
+        f" >=0.8={stats['frac_above_threshold']['\u22650.8']*100:.2f}%"
     )
     axes[0].text(0.95, 0.95, textstr, transform=axes[0].transAxes, fontsize=10,
                  verticalalignment='top', horizontalalignment='right',
                  bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
-    # Zoom vào vùng similarity thấp (0-0.1) để thấy rõ phân bố
-    zoom_mask = all_values < 0.1
-    if zoom_mask.sum() > 0:
-        zoom_vals = all_values[zoom_mask]
-        axes[1].hist(zoom_vals, bins=80, color='coral', edgecolor='white', alpha=0.8)
+    # Zoom: similarity < 0.1
+    zoom_bins = int(0.1 * N_BINS)  # so bins tu 0 den 0.1
+    if zoom_bins > 0:
+        zoom_counts = hist_counts[:zoom_bins]
+        zoom_edges = bin_edges[:zoom_bins + 1]
+        axes[1].bar(zoom_edges[:-1], zoom_counts, width=1/N_BINS, color='coral', alpha=0.8)
         axes[1].axvline(CB_THRESHOLD, color='red', linestyle='--', linewidth=2)
         axes[1].set_xlabel("Cosine Similarity", fontsize=12)
-        axes[1].set_ylabel("Số lượng cặp", fontsize=12)
-        axes[1].set_title(f"Zoom: similarity < 0.1 ({len(zoom_vals):,} pairs)", fontsize=13)
+        axes[1].set_ylabel("So luong cap", fontsize=12)
+        axes[1].set_title(f"Zoom: similarity < 0.1 ({zoom_counts.sum():,} pairs)", fontsize=13)
         axes[1].grid(axis='y', alpha=0.3)
 
     plt.tight_layout()
     path = os.path.join(SAVE_DIR, "similarity_distribution.png")
     fig.savefig(path, dpi=150)
     plt.close(fig)
-    print(f"\n  Đã lưu: {path}")
+    print(f"\n  Da luu: {path}")
 
-    # Histogram của phân bố trên thang log
+    # Histogram log scale
     fig2, ax2 = plt.subplots(figsize=(10, 6))
     logbins = np.logspace(np.log10(max(stats['min'], 1e-10)), np.log10(stats['max']), 80)
-    ax2.hist(all_values, bins=logbins, color='steelblue', edgecolor='white', alpha=0.8)
+    ax2.hist(np.repeat(bin_edges[:-1], hist_counts), bins=logbins, color='steelblue', edgecolor='white', alpha=0.8)
     ax2.axvline(CB_THRESHOLD, color='red', linestyle='--', linewidth=2,
                 label=f"THRESHOLD={CB_THRESHOLD}")
     ax2.set_xscale('log')
     ax2.set_xlabel("Cosine Similarity (log scale)", fontsize=12)
-    ax2.set_ylabel("Số lượng cặp", fontsize=12)
-    ax2.set_title(f"Phân bố Cosine Similarity — log scale\n{len(all_values):,} pairs", fontsize=13)
+    ax2.set_ylabel("So luong cap", fontsize=12)
+    ax2.set_title(f"Phan bo Cosine Similarity - log scale\n{cnt:,} pairs", fontsize=13)
     ax2.legend(fontsize=11)
     ax2.grid(axis='y', alpha=0.3)
     plt.tight_layout()
     path2 = os.path.join(SAVE_DIR, "similarity_distribution_log.png")
     fig2.savefig(path2, dpi=150)
     plt.close(fig2)
-    print(f"  Đã lưu: {path2}")
+    print(f"  Da luu: {path2}")
 else:
-    print("  WARNING: Không có non-zero similarity nào!")
+    print("  WARNING: Khong co cap similarity nao!")
 
 
 # ============================================================
-# KHẢO SÁT 2: MANUAL INSPECTION
+# KHAO SAT 2: MANUAL INSPECTION
 # ============================================================
 t0 = time.time()
 df_manual = manual_inspection_samples(
     cbfilter=cb,
     products_df=products,
     n_per_bin=N_PER_BIN,
-    seed=123,          # seed khác với survey để đa dạng mẫu
+    seed=123,          # seed khac voi survey de da dang mau
     save_dir=SAVE_DIR,
 )
 t1 = time.time()
-print(f"   ⏱ Thời gian: {t1 - t0:.1f}s")
+print(f"   Thoi gian: {t1 - t0:.1f}s")
 
 
 # ============================================================
-# KHẢO SÁT 3: LLM SURVEY SAMPLES
+# KHAO SAT 3: LLM SURVEY SAMPLES
 # ============================================================
 t0 = time.time()
 df_llm = export_llm_survey(
@@ -227,14 +287,14 @@ df_llm = export_llm_survey(
     save_dir=SAVE_DIR,
 )
 t1 = time.time()
-print(f"   ⏱ Thời gian: {t1 - t0:.1f}s")
+print(f"   Thoi gian: {t1 - t0:.1f}s")
 
 
 # ============================================================
-# TỔNG HỢP BÁO CÁO
+# TONG HOP BAO CAO
 # ============================================================
 print(f"\n{'='*60}")
-print(f"  TỔNG HỢP BÁO CÁO")
+print(f"  TONG HOP BAO CAO")
 print(f"{'='*60}")
 
 report = {
@@ -247,19 +307,19 @@ report = {
     'similarity_distribution': stats,
 }
 
-# Lưu report
+# Luu report
 report_path = os.path.join(SAVE_DIR, "report.json")
 with open(report_path, 'w', encoding='utf-8') as f:
     json.dump(report, f, indent=2, ensure_ascii=False)
-print(f"\n  Đã lưu report: {report_path}")
+print(f"\n  Da luu report: {report_path}")
 
-print(f"\n  Tất cả output được lưu trong: {SAVE_DIR}")
-print(f"  Các file:")
+print(f"\n  Tat ca output duoc luu trong: {SAVE_DIR}")
+print(f"  Cac file:")
 for f in sorted(os.listdir(SAVE_DIR)):
     fpath = os.path.join(SAVE_DIR, f)
     size = os.path.getsize(fpath)
     print(f"    - {f} ({size/1024:.1f} KB)")
 
 print(f"\n{'='*60}")
-print(f"  HOÀN THÀNH CB EVALUATION!")
+print(f"  HOAN THANH CB EVALUATION!")
 print(f"{'='*60}")
