@@ -13,7 +13,7 @@ from scipy import sparse
 from src.config import (
     CB_N_GRAM_RANGE, CB_MAX_FEATURES,
     CB_COUNT_N_GRAM_RANGE, CB_COUNT_MAX_FEATURES,
-    CB_ALPHA,
+    CB_ALPHA, CB_METRIC,
 )
 from src.features.vectorizer import (
     build_product_vectors, build_count_vectors,
@@ -32,7 +32,7 @@ class CBFilter:
 
     def __init__(self, ngram_range=None, max_features: int = None,
                  count_ngram_range=None, count_max_features: int = None,
-                 alpha: float = None):
+                 alpha: float = None, metric: str = None):
         """
         Args:
             ngram_range: tuple (min_n, max_n) cho TF-IDF (default: CB_N_GRAM_RANGE)
@@ -43,6 +43,8 @@ class CBFilter:
                                 (default: CB_COUNT_MAX_FEATURES)
             alpha: float, trọng số Count Vectorizer (TF-IDF weight = 1-alpha)
                    (default: CB_ALPHA)
+            metric: str, 'jaccard' hoặc 'cosine' cho nhánh Count
+                    (default: 'jaccard')
         """
         self.ngram_range = ngram_range if ngram_range is not None else CB_N_GRAM_RANGE
         self.max_features = max_features if max_features is not None else CB_MAX_FEATURES
@@ -51,6 +53,7 @@ class CBFilter:
         self.count_max_features = (count_max_features if count_max_features is not None
                                    else CB_COUNT_MAX_FEATURES)
         self.alpha = alpha if alpha is not None else CB_ALPHA
+        self.metric = metric if metric is not None else CB_METRIC
 
         self.product_vectors_tfidf = None   # sparse.csr_matrix (n_products, D_tfidf)
         self.product_vectors_count = None   # sparse.csr_matrix (n_products, D_count)
@@ -152,7 +155,7 @@ class CBFilter:
         # Tính ensemble similarity on-demand
         similarities = cb_ensemble_similarity(
             self.product_vectors_tfidf, self.product_vectors_count,
-            idx_a, valid_indices, alpha=self.alpha,
+            idx_a, valid_indices, alpha=self.alpha, metric=self.metric,
         )
 
         # Loại bỏ:
@@ -231,7 +234,7 @@ class CBFilter:
         # Tính ensemble similarity
         similarities = cb_ensemble_similarity(
             self.product_vectors_tfidf, self.product_vectors_count,
-            idx_a, valid_indices, alpha=self.alpha,
+            idx_a, valid_indices, alpha=self.alpha, metric=self.metric,
         )
 
         # Chỉ giữ lại: 0 < similarity < threshold

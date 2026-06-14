@@ -11,9 +11,9 @@ from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.preprocessing import normalize
 
 from src.config import (
-    CB_N_GRAM_RANGE, CB_MAX_FEATURES, CB_ANALYZER,
-    CB_COUNT_N_GRAM_RANGE, CB_COUNT_MAX_FEATURES, CB_COUNT_ANALYZER,
-    CB_ALPHA, PROJECT_ROOT
+    CB_N_GRAM_RANGE, CB_MAX_FEATURES,
+    CB_COUNT_N_GRAM_RANGE, CB_COUNT_MAX_FEATURES,
+    CB_ALPHA, CB_METRIC, PROJECT_ROOT
 )
 
 # Pattern gom Nhóm đơn vị đo lường, khối lượng, dung tích và kích cỡ
@@ -78,7 +78,7 @@ def _clean_text_preprocessor(text):
     return text
 
 
-def build_product_vectors(text_data, ngram_range=CB_N_GRAM_RANGE, max_features=CB_MAX_FEATURES, analyzer=CB_ANALYZER):
+def build_product_vectors(text_data, ngram_range=CB_N_GRAM_RANGE, max_features=CB_MAX_FEATURES, analyzer='word'):
     """
     Xây dựng ma trận TF-IDF từ danh sách tên sản phẩm.
     """
@@ -115,7 +115,7 @@ def cb_similarity(product_vectors, product_a_idx, candidate_indices):
 
 def build_count_vectors(text_data, ngram_range=CB_COUNT_N_GRAM_RANGE,
                         max_features=CB_COUNT_MAX_FEATURES,
-                        analyzer=CB_COUNT_ANALYZER):
+                        analyzer='word'):
     """
     Xây dựng ma trận Count Vectorizer (L2-normalized) từ danh sách tên sản phẩm.
     Chuẩn hóa L2 để cosine similarity có ý nghĩa khi dùng raw count.
@@ -132,38 +132,71 @@ def build_count_vectors(text_data, ngram_range=CB_COUNT_N_GRAM_RANGE,
     )
 
     count_matrix = count_vec.fit_transform(text_data)
-    # Chuẩn hóa L2 để cosine similarity hoạt động đúng
-    count_matrix_norm = normalize(count_matrix, norm='l2', axis=1)
-    print(f"    CountVectorizer matrix shape: {count_matrix_norm.shape}")
+    # KHÔNG normalize — giữ raw count để Jaccard hoạt động đúng
+    # Cosine similarity sẽ normalize on-the-fly trong cb_ensemble_similarity
+    print(f"    CountVectorizer matrix shape: {count_matrix.shape}")
 
-    return count_matrix_norm, count_vec
+    return count_matrix, count_vec
 
 
 def cb_ensemble_similarity(product_vectors_tfidf, product_vectors_count,
-                           product_a_idx, candidate_indices, alpha=CB_ALPHA):
+                           product_a_idx, candidate_indices, alpha=CB_ALPHA,
+                           metric=CB_METRIC):
     """
-    Tính ensemble similarity = alpha * sim(Count) + (1-alpha) * sim(TF-IDF).
+    Tính ensemble similarity kết hợp Count (Jaccard/Cosine) + TF-IDF (Cosine).
 
     Args:
         product_vectors_tfidf: sparse CSR matrix từ TF-IDF
-        product_vectors_count: sparse CSR matrix (L2-normalized) từ Count Vectorizer
+        product_vectors_count: sparse CSR matrix từ Count Vectorizer (raw count, chưa norm)
         product_a_idx: int, index của product đầu vào
         candidate_indices: list[int], indices của các candidate
         alpha: float, trọng số Count Vectorizer (0 = chỉ TF-IDF, 1 = chỉ Count)
+        metric: str, 'jaccard' hoặc 'cosine' cho nhánh Count
 
     Returns:
         np.ndarray: mảng similarity scores cho từng candidate
     """
-    # Cosine similarity trên TF-IDF
+    # 1. Cosine similarity trên TF-IDF (luôn giữ)
     vec_a_tfidf = product_vectors_tfidf[product_a_idx]
     vecs_b_tfidf = product_vectors_tfidf[candidate_indices]
     sim_tfidf = vecs_b_tfidf.dot(vec_a_tfidf.T).toarray().ravel()
 
-    # Cosine similarity trên Count (đã L2-normalized nên dot = cosine)
+    # 2. Nhánh Count Vectorizer
     vec_a_cnt = product_vectors_count[product_a_idx]
     vecs_b_cnt = product_vectors_count[candidate_indices]
-    sim_count = vecs_b_cnt.dot(vec_a_cnt.T).toarray().ravel()
 
-    # Kết hợp
+    if metric == 'jaccard':
+        # Nhị phân hóa: chỉ cần biết từ có xuất hiện hay không
+        bin_a = vec_a_cnt.astype(bool).astype(np.float64)
+        bin_b = vecs_b_cnt.astype(bool).astype(np.float64)
+
+        # Giao = số từ trùng
+        intersection = bin_b.dot(bin_a.T).toarray().ravel()
+
+        # Số từ mỗi bên
+        sum_a = bin_a.sum()
+        sum_b = np.array(bin_b.sum(axis=1)).ravel()
+
+        # Hợp = |A| + |B| - |A∩B|
+        union = sum_a + sum_b - intersection
+
+        # Jaccard = Intersection / Union (tránh chia 0)
+        sim_count = np.divide(intersection, union,
+                              out=np.zeros_like(intersection, dtype=float),
+                              where=union != 0)
+    else:
+        # Chuẩn hóa L2 trực tiếp on-the-fly cho kịch bản test Cosine
+        norm_a = np.sqrt(vec_a_cnt.multiply(vec_a_cnt).sum())
+        norm_b = np.sqrt(np.array(vecs_b_cnt.multiply(vecs_b_cnt).sum(axis=1)).ravel())
+
+        dot_product = vecs_b_cnt.dot(vec_a_cnt.T).toarray().ravel()
+        denominator = norm_a * norm_b
+
+        # Tránh lỗi chia cho 0 nếu gặp chuỗi rỗng
+        sim_count = np.divide(dot_product, denominator,
+                              out=np.zeros_like(dot_product, dtype=float),
+                              where=denominator != 0)
+
+    # 3. Kết hợp Ensemble
     final_sim = alpha * sim_count + (1.0 - alpha) * sim_tfidf
     return final_sim
