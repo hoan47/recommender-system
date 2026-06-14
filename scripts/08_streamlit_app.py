@@ -143,7 +143,7 @@ def get_cb_detail(product_id, candidates, models):
 
     similarities = cb_ensemble_similarity(
         cb.product_vectors_tfidf, cb.product_vectors_count,
-        idx_a, valid_indices, alpha=cb.alpha, metric=cb.metric,
+        idx_a, valid_indices, alpha=cb.alpha,
     )
     return list(zip(valid_candidates, similarities))
 

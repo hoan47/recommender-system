@@ -154,7 +154,7 @@ class CBFilter:
         # Tính ensemble similarity on-demand
         similarities = cb_ensemble_similarity(
             self.product_vectors_tfidf, self.product_vectors_count,
-            idx_a, valid_indices, alpha=self.alpha, metric=self.metric,
+            idx_a, valid_indices, alpha=self.alpha,
         )
 
         # Loại bỏ:
@@ -233,7 +233,7 @@ class CBFilter:
         # Tính ensemble similarity
         similarities = cb_ensemble_similarity(
             self.product_vectors_tfidf, self.product_vectors_count,
-            idx_a, valid_indices, alpha=self.alpha, metric=self.metric,
+            idx_a, valid_indices, alpha=self.alpha,
         )
 
         # Chỉ giữ lại: 0 < similarity < threshold
