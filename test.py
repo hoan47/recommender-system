@@ -1,80 +1,66 @@
-import json
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
+import os
+import re
+from collections import Counter
+import pandas as pd
 
-# 1. Đường dẫn tới các file của bạn
-PATH_JSON = r"C:\Users\b2h16\OneDrive\Máy tính\recommender-system\models\cb_filter\product_id_to_idx.json"
-PATH_NPZ = r"C:\Users\b2h16\OneDrive\Máy tính\recommender-system\models\cb_filter\product_vectors.npz"
+# Đường dẫn file của bạn
+file_path = r"C:\Users\b2h16\OneDrive\Máy tính\recommender-system\data\processed\products_vi.csv"
 
-def load_data():
-    print("🔄 Đang tải dữ liệu...")
-    # Load file mapping ID -> Index
-    with open(PATH_JSON, 'json', encoding='utf-8') as f:
-        product_id_to_idx = json.load(f)
-    
-    # Đảo ngược mapping để từ Index tìm lại được ID sản phẩm
-    idx_to_product_id = {int(v): k for k, v in product_id_to_idx.items()}
-    
-    # Load ma trận vector sản phẩm (giả sử key trong npz là 'vectors' hoặc 'arr_0')
-    npz_file = np.load(PATH_NPZ)
-    # Lấy key đầu tiên nếu không biết chính xác tên key lưu trữ
-    key = npz_file.files[0]
-    product_vectors = npz_file[key]
-    
-    # Nếu là ma trận thưa từ scipy được lưu dạng npz, cần convert sang dense/csr nếu cần
-    # Thường nếu dùng np.savez thì nó là numpy array thông thường
-    if hasattr(product_vectors, "toarray"):
-        product_vectors = product_vectors.toarray()
-        
-    print(f"✅ Tải thành công! Số lượng sản phẩm: {len(product_id_to_idx)}")
-    print(f"📐 Kích thước ma trận vector: {product_vectors.shape}")
-    return product_id_to_idx, idx_to_product_id, product_vectors
+try:
+    print("=== ĐANG QUÉT TỰ ĐỘNG: PHÁT HIỆN TẤT CẢ CÁC CỤM CHỨA SỐ ===")
+    df = pd.read_csv(file_path)
+    products = df["product_name_vi"].dropna().astype(str).tolist()
+    print(f"Tổng số dòng quét qua: {len(products):,}\n")
 
-def recommend_sanity_check(target_product_id, idx_to_product_id, product_id_to_idx, product_vectors, top_k=5):
-    if target_product_id not in product_id_to_idx:
-        print(f"❌ Không tìm thấy Product ID: {target_product_id} trong từ điển.")
-        return
-    
-    # Lấy index và vector của sản phẩm mục tiêu
-    target_idx = product_id_to_idx[target_product_id]
-    target_vector = product_vectors[target_idx].reshape(1, -1)
-    
-    # Tính toán Cosine Similarity giữa sản phẩm này với TOÀN BỘ sản phẩm khác
-    # Kết quả trả về một mảng chứa điểm số tương đồng
-    similarity_scores = cosine_similarity(target_vector, product_vectors).flatten()
-    
-    # Sắp xếp lấy index của các sản phẩm có điểm cao nhất (giảm dần)
-    # Loại bỏ chính nó (sản phẩm mục tiêu luôn có similarity = 1.0 với chính nó)
-    related_indices = np.argsort(similarity_scores)[::-1]
-    related_indices = [idx for idx in related_indices if idx != target_idx][:top_k]
-    
-    print("\n" + "="*50)
-    print(f"🎯 Sản phẩm gốc (Target): ID {target_product_id} (Index: {target_idx})")
-    print("="*50)
-    print(f"🤖 Top {top_k} sản phẩm tương đồng nhất được gợi ý:")
-    
-    for i, idx in enumerate(related_indices, 1):
-        p_id = idx_to_product_id[idx]
-        score = similarity_scores[idx]
-        print(f"{i}. Product ID: {p_id} | Điểm Cosine: {score:.4f}")
-    print("="*50)
+    discovered_patterns = []
+    examples = {}
 
-if __name__ == "__main__":
-    try:
-        product_id_to_idx, idx_to_product_id, product_vectors = load_data()
+    # 1. Regex tìm "Số đứng trước" (Bao gồm cả số thập phân, phần trăm, kí tự đặc biệt liền sau)
+    # Ví dụ: 500ml, 5 lit, 7 Inch, 2%, 1.5L
+    pattern_num_first = r"\b\d+(?:[\.,]\d+)?\s*[%a-zA-Zàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễđìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹ]+\b"
+
+    # 2. Regex tìm "Số đứng sau" (Chữ/Kí tự đặc biệt đứng trước, số đứng sau)
+    # Ví dụ: - 4 CT, pack 6, vỉ 4, x12, no.1
+    pattern_num_last = r"\b[a-zA-Zàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễđìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹ-]+\s*\d+\b"
+
+    for p in products:
+        # Tìm tất cả các cụm khớp theo 2 quy luật
+        matches_first = re.findall(pattern_num_first, p, flags=re.IGNORECASE)
+        matches_last = re.findall(pattern_num_last, p, flags=re.IGNORECASE)
         
-        # Lấy thử một ID sản phẩm bất kỳ từ dữ liệu để test
-        sample_product_id = list(product_id_to_idx.keys())[0] 
+        total_matches = matches_first + matches_last
         
-        # Chạy thử nghiệm gợi ý
-        recommend_sanity_check(
-            target_product_id=sample_product_id, 
-            idx_to_product_id=idx_to_product_id, 
-            product_id_to_idx=product_id_to_idx, 
-            product_vectors=product_vectors, 
-            top_k=5
-        )
-        
-    except Exception as e:
-        print(f"❌ Có lỗi xảy ra: {e}")
-        print("💡 Gợi ý: Hãy kiểm tra lại định dạng lưu trữ bên trong file .npz xem key chính xác là gì.")
+        for m in total_matches:
+            m_clean = m.strip()
+            # Loại bỏ các số thuần túy (nếu có lọt vào)
+            if not m_clean.isdigit():
+                # Chuẩn hóa khoảng trắng để gom nhóm chính xác hơn
+                m_norm = re.sub(r'\s+', ' ', m_clean).lower()
+                discovered_patterns.append(m_norm)
+                if m_norm not in examples:
+                    examples[m_norm] = p
+
+    # Thống kê tần suất
+    pattern_counts = Counter(discovered_patterns)
+
+    print("--- TOP 50 CỤM CHỨA SỐ TỰ ĐỘNG PHÁT HIỆN ĐƯỢC ---")
+    print("Dưới đây là danh sách các hạt sạn (dung tích, quy cách) cần dọn dẹp:")
+    print("-" * 80)
+    
+    for pattern, count in pattern_counts.most_common(50):
+        print(f" ❌ Cụm tìm thấy: '{pattern}' | Xuất hiện: {count:,} lần")
+        print(f"    Ví dụ gốc    : '{examples[pattern]}'\n")
+
+    # Xuất file báo cáo chi tiết để bạn kiểm tra toàn bộ
+    df_report = pd.DataFrame(pattern_counts.most_common(), columns=["Cum_Chua_So", "So_Lan_Xuat_Hien"])
+    df_report["Vi_Du_Thuc_Te"] = df_report["Cum_Chua_So"].map(examples)
+    
+    output_name = "ket_qua_quet_so.csv"
+    df_report.to_csv(output_name, index=False, encoding="utf-8-sig")
+    
+    print("-" * 80)
+    print(f"Đã lưu toàn bộ danh sách quét được vào file: {os.path.abspath(output_name)}")
+    print("Bạn chạy đoạn này rồi thảy kết quả hiển thị lên đây nhé, mình sẽ viết hàm RegEx xóa sạch tụi nó một lần luôn!")
+
+except Exception as e:
+    print(f"Gặp lỗi khi quét dữ liệu: {e}")
