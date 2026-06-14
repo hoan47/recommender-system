@@ -158,10 +158,9 @@ class CBFilter:
         )
 
         # Loại bỏ:
-        # - similarity == 0 → hoàn toàn khác nhau, không có thông tin → bỏ
         # - similarity >= threshold → substitute → bỏ
-        # Chỉ giữ: 0 < similarity < threshold
-        mask = (similarities > 0) & (similarities < threshold)
+        # Giữ: similarity < threshold (gồm cả similarity == 0 → complementary mạnh nhất)
+        mask = similarities < threshold
 
         if is_tuple_list:
             # Tra cứu similarity nhanh bằng dict, giữ nguyên thứ tự
@@ -174,9 +173,9 @@ class CBFilter:
                     result.append((cid, score))      # cold-start: giữ lại
                 else:
                     sim = sim_map.get(cid, 0)
-                    if sim > 0 and sim < threshold:
+                    if sim < threshold:
                         result.append((cid, score))  # complementary: giữ lại
-                # else: substitute (sim >= threshold) hoặc sim == 0 → bỏ
+                # else: substitute (sim >= threshold) → bỏ
             return result
         else:
             # Trả về list product_id
@@ -236,8 +235,8 @@ class CBFilter:
             idx_a, valid_indices, alpha=self.alpha,
         )
 
-        # Chỉ giữ lại: 0 < similarity < threshold
-        mask = (np.array(similarities) > 0) & (np.array(similarities) < threshold)
+        # Chỉ giữ lại: similarity < threshold (gồm cả similarity == 0)
+        mask = np.array(similarities) < threshold
         filtered_df = valid_df[mask].copy()
 
         # Thêm lại cold-start candidates
