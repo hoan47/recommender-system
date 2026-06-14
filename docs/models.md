@@ -149,12 +149,13 @@ def cb_similarity(product_a_id, candidate_ids):
     return cosine_similarity(vec_a, vecs_b)  # chỉ len(candidates) phép tính
 ```
 
-**Bước 2 — Lọc substitute**
+**Bước 2 — Lọc substitute (khi dùng hybrid ensemble)**
 
-Khi model co-occurrence gợi ý sản phẩm B cho sản phẩm đầu vào A:
+CB tự nó không biết ngưỡng — đây là việc của ensemble:
 - Tính `CB_similarity(A, B)` = cosine similarity của vector mô tả
-- Nếu `similarity ≥ threshold` (ví dụ 0.8) → B là substitute → **loại bỏ**
-- Nếu `similarity < threshold` → B là complementary → **giữ lại**
+- Nếu `similarity = 0` → hoàn toàn khác nhau, không có thông tin → **loại bỏ**
+- Nếu `0 < similarity < threshold` → B là complementary → **giữ lại**
+- Nếu `similarity ≥ threshold` → B là substitute → **loại bỏ**
 
 **Ví dụ thực tế**:
 
@@ -164,6 +165,7 @@ Khi model co-occurrence gợi ý sản phẩm B cho sản phẩm đầu vào A:
 | Budweiser + Doritos | 0.12 (khác aisle, tên khác xa) | ✅ Giữ (complementary) |
 | Whole Milk + 2% Milk | 0.88 (cùng aisle dairy) | ❌ Loại (substitute) |
 | Whole Milk + Cereal | 0.09 (khác department) | ✅ Giữ (complementary) |
+| Beer + Carrot | 0.00 (hoàn toàn khác) | ❌ Loại (không thông tin) |
 
 ---
 
@@ -173,14 +175,10 @@ Khi model co-occurrence gợi ý sản phẩm B cho sản phẩm đầu vào A:
 - **Cold-start & Long-tail**: Sản phẩm mới/ít giao dịch vẫn được lọc đúng nhờ thông tin mô tả
 
 #### Nhược điểm
-- Threshold cần được chỉnh tay (có thể dùng heuristic hoặc tune dựa trên survey chính)
 - Chỉ dựa trên thông tin mô tả, không capture hành vi mua hàng thực tế
+- Similarity = 0 (tên hoàn toàn khác) không có thông tin → phải loại bỏ thủ công
 
-> **Lưu ý quan trọng về đánh giá**: CB **không có tập khảo sát (survey) riêng**. 
-> - CB là deterministic algorithm, không phải model học cần tuning phức tạp
-> - Chỉ có 1 hyperparameter duy nhất là **threshold** → có thể tune heuristic hoặc dùng luôn survey chính để chọn threshold tối ưu
-> - Tác động của CB được đánh giá **gián tiếp** qua việc so sánh `Ensemble` vs `Ensemble + CB Filter` trên cùng một bộ survey (Mục 5)
-> - Việc tạo survey riêng cho substitute detection là không cần thiết vì chi phí lớn nhưng lợi ích thu được (tối ưu 1 threshold) không xứng đáng
+> **Lưu ý về threshold**: CB **không có threshold riêng**. Ngưỡng lọc substitute là tham số của **ensemble** (hybrid), đặt tại `ENS_CB_THRESHOLD` trong config. Tác động của CB được đánh giá gián tiếp qua so sánh `Ensemble` vs `Ensemble + CB Filter`.
 
 ---
 

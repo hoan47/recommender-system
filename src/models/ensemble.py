@@ -7,7 +7,7 @@ import pandas as pd
 
 from src.config import (
     ENS_ALPHA, ENS_BETA, ENS_GAMMA,
-    ENS_TOP_K, ENS_FINAL_K
+    ENS_TOP_K, ENS_FINAL_K, ENS_CB_THRESHOLD
 )
 from src.models.cb_filter import CBFilter
 
@@ -170,7 +170,9 @@ class EnsembleModel:
         
         # --- Bước 5: CB Filter (optional) ---
         if use_cb_filter and self.cb_filter is not None:
-            candidates_sorted = self.cb_filter.filter(product_id, candidates_sorted)
+            candidates_sorted = self.cb_filter.filter(
+                product_id, candidates_sorted, threshold=ENS_CB_THRESHOLD
+            )
         
         # --- Bước 6: Lấy final_k ---
         result = candidates_sorted[:self.final_k]

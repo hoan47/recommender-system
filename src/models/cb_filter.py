@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 from scipy import sparse
 
-from src.config import CB_THRESHOLD, CB_N_GRAM_RANGE, CB_MAX_FEATURES
+from src.config import CB_N_GRAM_RANGE, CB_MAX_FEATURES
 from src.features.vectorizer import build_product_vectors, cb_similarity
 
 
@@ -19,14 +19,12 @@ class CBFilter:
     không pre-compute full matrix 49K x 49K.
     """
     
-    def __init__(self, threshold: float = None, ngram_range=None, max_features: int = None):
+    def __init__(self, ngram_range=None, max_features: int = None):
         """
         Args:
-            threshold: cosine similarity >= threshold → substitute → loại bỏ (default: CB_THRESHOLD)
             ngram_range: tuple (min_n, max_n) cho TF-IDF (default: CB_N_GRAM_RANGE)
             max_features: int, max features cho TF-IDF (default: CB_MAX_FEATURES)
         """
-        self.threshold = threshold if threshold is not None else CB_THRESHOLD
         self.ngram_range = ngram_range if ngram_range is not None else CB_N_GRAM_RANGE
         self.max_features = max_features if max_features is not None else CB_MAX_FEATURES
         self.product_vectors = None  # sparse.csr_matrix (n_products, D)
@@ -57,7 +55,7 @@ class CBFilter:
         
         print(f"CBFilter: Đã vector hóa {len(self.product_id_to_idx)} sản phẩm.")
     
-    def filter(self, product_a_id: int, candidates):
+    def filter(self, product_a_id: int, candidates, threshold: float):
         """
         Lọc substitute khỏi danh sách candidate — giữ lại complementary.
 
@@ -65,6 +63,8 @@ class CBFilter:
             product_a_id: product_id đầu vào
             candidates: list (product_id, score) đã sort giảm dần theo score,
                        hoặc list product_id đơn thuần
+            threshold: cosine similarity >= threshold → substitute → loại bỏ.
+                       Chỉ dùng khi hybrid ensemble, CB tự nó không biết ngưỡng.
 
         Returns:
             list (product_id, score) đã loại bỏ substitute,
@@ -98,8 +98,11 @@ class CBFilter:
         # Tính similarity on-demand
         similarities = cb_similarity(self.product_vectors, idx_a, valid_indices)
         
-        # Loại bỏ substitute (similarity >= threshold)
-        mask = similarities < self.threshold
+        # Loại bỏ:
+        # - similarity == 0 → hoàn toàn khác nhau, không có thông tin → bỏ
+        # - similarity >= threshold → substitute → bỏ
+        # Chỉ giữ: 0 < similarity < threshold
+        mask = (similarities > 0) & (similarities < threshold)
         
         if is_tuple_list:
             # Tra cứu similarity nhanh bằng dict, giữ nguyên thứ tự
@@ -110,9 +113,11 @@ class CBFilter:
             for cid, score in candidates:
                 if cid not in valid_set:
                     result.append((cid, score))      # cold-start: giữ lại
-                elif sim_map.get(cid, 0) < self.threshold:
-                    result.append((cid, score))      # complementary: giữ lại
-                # else: substitute (similarity >= threshold) → bỏ
+                else:
+                    sim = sim_map.get(cid, 0)
+                    if sim > 0 and sim < threshold:
+                        result.append((cid, score))  # complementary: giữ lại
+                # else: substitute (sim >= threshold) hoặc sim == 0 → bỏ
             return result
         else:
             # Trả về list product_id
@@ -135,13 +140,14 @@ class CBFilter:
                     ordered_result.append(cid)
             return ordered_result
     
-    def filter_df(self, product_a_id: int, candidate_df, score_col: str = "score"):
+    def filter_df(self, product_a_id: int, candidate_df, threshold: float, score_col: str = "score"):
         """
         Version trả về DataFrame thay vì list — lọc substitute.
 
         Args:
             product_a_id: product_id đầu vào
             candidate_df: DataFrame [product_id, score, ...]
+            threshold: cosine similarity >= threshold → substitute → loại bỏ
             score_col: tên cột chứa score
 
         Returns:
@@ -167,8 +173,8 @@ class CBFilter:
         # Tính similarity
         similarities = cb_similarity(self.product_vectors, idx_a, valid_indices)
         
-        # Giữ lại complementary (similarity < threshold)
-        mask = np.array(similarities) < self.threshold
+        # Chỉ giữ lại: 0 < similarity < threshold
+        mask = (np.array(similarities) > 0) & (np.array(similarities) < threshold)
         filtered_df = valid_df[mask].copy()
         
         # Thêm lại cold-start candidates

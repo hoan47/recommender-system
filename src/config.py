@@ -23,9 +23,8 @@ AISLES_FILE = os.path.join(PROJECT_ROOT, "data/aisles.csv")
 DEPARTMENTS_FILE = os.path.join(PROJECT_ROOT, "data/departments.csv")
 
 # ============================================================
-# Hyperparameters — CB Filter
+# Hyperparameters — CB (Content-Based Vectorizer)
 # ============================================================
-CB_THRESHOLD = 0.3          # cosine similarity >= threshold → substitute → loại
 CB_N_GRAM_RANGE = (2, 4)    # TF-IDF: character 2-gram đến 4-gram
 CB_ANALYZER = 'char'        # 'char' cho character n-gram, 'word' cho word n-gram
 CB_MAX_FEATURES = 15000      # TF-IDF: max số features từ tên sản phẩm
@@ -76,6 +75,7 @@ ENS_BETA = 0.25                 # trọng số Item2Vec
 ENS_GAMMA = 0.25                # trọng số DeepWalk (graph embedding)
 ENS_TOP_K = 100                 # top-K sau ensemble (trước CB filter)
 ENS_FINAL_K = 10                # top-K cuối cùng output
+ENS_CB_THRESHOLD = 0.25          # ngưỡng CB filter khi dùng hybrid ensemble
 
 # ============================================================
 # IO
