@@ -25,7 +25,7 @@ print("="*60)
 
 # Kiem tra cac model da train chua
 checks = [
-    ("CB Filter", os.path.join(MODEL_DIR, "cb_filter", "product_vectors.npz")),
+    ("CB Filter", os.path.join(MODEL_DIR, "cb_filter", "tfidf_vectors.npz")),
     ("Ochiai",    os.path.join(MODEL_DIR, "ochiai", "cooc_matrix.npz")),
     ("Item2Vec",  os.path.join(MODEL_DIR, "item2vec", "word2vec.model")),
     ("DeepWalk",  os.path.join(MODEL_DIR, "deepwalk", "embeddings.npy")),
@@ -40,13 +40,18 @@ products = pd.read_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
 
 print("\n2. Loading models...")
 
-print("   CB Filter...")
+print("   CB Filter (ensemble Count + TF-IDF)...")
 cb = CBFilter()
-# Load product vectors tu file
-product_vectors = scipy.sparse.load_npz(
-    os.path.join(MODEL_DIR, "cb_filter", "product_vectors.npz")
+# Load TF-IDF vectors
+product_vectors_tfidf = scipy.sparse.load_npz(
+    os.path.join(MODEL_DIR, "cb_filter", "tfidf_vectors.npz")
 )
-cb.product_vectors = product_vectors
+cb.product_vectors = product_vectors_tfidf  # setter gán vào product_vectors_tfidf
+# Load Count vectors (L2-normalized)
+count_path = os.path.join(MODEL_DIR, "cb_filter", "count_vectors.npz")
+if os.path.exists(count_path):
+    cb.product_vectors_count = scipy.sparse.load_npz(count_path)
+    print(f"   -> Loaded Count vectors: {cb.product_vectors_count.shape}")
 # Load product_id_to_idx đúng mapping từ file (tránh lệch index so với lúc fit)
 with open(os.path.join(MODEL_DIR, "cb_filter", "product_id_to_idx.json")) as f:
     cb.product_id_to_idx = {int(k): v for k, v in json.load(f).items()}

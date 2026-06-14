@@ -1,5 +1,6 @@
 """
 09 — Đánh giá CB similarity theo số từ trùng nhau.
+So sánh 3 loại similarity: TF-IDF, Count Vectorizer (L2-norm), Ensemble (alpha * Count + (1-alpha) * TF-IDF).
 Với mỗi overlap = 1..10, tìm 5 cặp ngẫu nhiên có đúng N từ chung, tính similarity.
 
 Không vẽ biểu đồ, không phân tích bucket.
@@ -14,21 +15,30 @@ import numpy as np
 import pandas as pd
 import scipy.sparse
 
-from src.config import MODEL_DIR, PROCESSED_DIR, RESULT_DIR
+from src.config import MODEL_DIR, PROCESSED_DIR, RESULT_DIR, CB_ALPHA
 from src.features.vectorizer import cb_similarity
 
 N_EXAMPLES = 20         # cặp cho mỗi overlap
 MAX_OVERLAP = 10       # từ 1 đến 10 từ trùng
 MAX_TRIES = 5_000_000  # giới hạn lần thử tránh treo
 
+
 def load_data():
     products = pd.read_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
-    product_vectors = scipy.sparse.load_npz(
-        os.path.join(MODEL_DIR, "cb_filter", "product_vectors.npz")
+
+    # TF-IDF vectors
+    tfidf_vectors = scipy.sparse.load_npz(
+        os.path.join(MODEL_DIR, "cb_filter", "tfidf_vectors.npz")
     )
+    # Count vectors (L2-normalized)
+    count_vectors = scipy.sparse.load_npz(
+        os.path.join(MODEL_DIR, "cb_filter", "count_vectors.npz")
+    )
+
     with open(os.path.join(MODEL_DIR, "cb_filter", "product_id_to_idx.json")) as f:
         product_id_to_idx = {int(k): v for k, v in json.load(f).items()}
-    return products, product_vectors, product_id_to_idx
+
+    return products, tfidf_vectors, count_vectors, product_id_to_idx
 
 
 def tokenize(name):
@@ -37,11 +47,12 @@ def tokenize(name):
     return set(name.lower().split())
 
 
-def find_pairs_by_overlap(products, product_vectors, product_id_to_idx):
+def find_pairs_by_overlap(products, tfidf_vectors, count_vectors, product_id_to_idx):
     """
     Duyệt random pairs, nhóm theo số từ trùng.
-    Trả về dict: overlap -> list of (sim, name_a, name_b, common_tokens)
+    Trả về dict: overlap -> list of (sim_tfidf, sim_count, sim_ensemble, name_a, name_b, common_tokens)
     """
+    alpha = CB_ALPHA
     pid_to_name = dict(zip(products['product_id'], products['product_name']))
     all_ids = list(product_id_to_idx.keys())
 
@@ -74,13 +85,16 @@ def find_pairs_by_overlap(products, product_vectors, product_id_to_idx):
                 needed.discard(overlap)
             continue
 
-        # Tính similarity
+        # Tính similarity trên cả 2 vectorizers
         idx_a = product_id_to_idx[a]
         idx_b = product_id_to_idx[b]
-        sim = cb_similarity(product_vectors, idx_a, [idx_b])[0]
+
+        sim_tfidf = cb_similarity(tfidf_vectors, idx_a, [idx_b])[0]
+        sim_count = cb_similarity(count_vectors, idx_a, [idx_b])[0]
+        sim_ensemble = alpha * sim_count + (1.0 - alpha) * sim_tfidf
 
         common = tokens_a & tokens_b
-        result[overlap].append((sim, name_a, name_b, sorted(common)))
+        result[overlap].append((sim_tfidf, sim_count, sim_ensemble, name_a, name_b, sorted(common)))
 
         if len(result[overlap]) >= N_EXAMPLES:
             needed.discard(overlap)
@@ -90,41 +104,48 @@ def find_pairs_by_overlap(products, product_vectors, product_id_to_idx):
 
 def print_results(data):
     print()
-    print("=" * 120)
-    print("  CB SIMILARITY THEO SỐ TỪ TRÙNG")
-    print("=" * 120)
+    print("=" * 140)
+    print("  CB SIMILARITY THEO SỐ TỪ TRÙNG (TF-IDF | Count | Ensemble)")
+    print("=" * 140)
 
     for overlap in range(1, MAX_OVERLAP + 1):
         pairs = data.get(overlap, [])
         print(f"\n--- overlap = {overlap} ({len(pairs)} cặp) ---")
-        for sim, name_a, name_b, common in pairs:
+        print(f"  {'TF-IDF':>8} | {'Count':>8} | {'Ensemble':>8} | Sản phẩm A ~ Sản phẩm B | Từ trùng")
+        print(f"  {'-'*8}-+-{'-'*8}-+-{'-'*8}-+{'-'*45}+-{'-'*30}")
+        for sim_t, sim_c, sim_e, name_a, name_b, common in pairs:
             common_str = ", ".join(common) if common else "(không có)"
-            print(f"  sim={sim:.4f} | \"{name_a}\" ~ \"{name_b}\" | trùng: {common_str}")
+            print(f"  {sim_t:>8.4f} | {sim_c:>8.4f} | {sim_e:>8.4f} | \"{name_a}\" ~ \"{name_b}\" | {common_str}")
 
-    print("\n" + "=" * 120)
+    print("\n" + "=" * 140)
 
 
 def main():
     print("=" * 60)
     print("  ĐÁNH GIÁ CB SIMILARITY THEO WORD OVERLAP")
+    print(f"  Ensemble: alpha(Count)={CB_ALPHA}")
     print("=" * 60)
 
     print("\n1. Loading data...")
-    products, product_vectors, product_id_to_idx = load_data()
-    print(f"   products={len(products)}, vectors={product_vectors.shape}")
+    products, tfidf_vectors, count_vectors, product_id_to_idx = load_data()
+    print(f"   products={len(products)}")
+    print(f"   TF-IDF vectors={tfidf_vectors.shape}")
+    print(f"   Count vectors={count_vectors.shape}")
 
     print(f"\n2. Tìm cặp cho overlap 1->{MAX_OVERLAP}, mỗi cái {N_EXAMPLES} cặp...")
-    data = find_pairs_by_overlap(products, product_vectors, product_id_to_idx)
+    data = find_pairs_by_overlap(products, tfidf_vectors, count_vectors, product_id_to_idx)
 
     print_results(data)
 
     # Lưu CSV
     rows = []
     for overlap in range(1, MAX_OVERLAP + 1):
-        for sim, name_a, name_b, common in data.get(overlap, []):
+        for sim_t, sim_c, sim_e, name_a, name_b, common in data.get(overlap, []):
             rows.append({
                 'overlap': overlap,
-                'similarity': sim,
+                'sim_tfidf': sim_t,
+                'sim_count': sim_c,
+                'sim_ensemble': sim_e,
                 'product_a': name_a,
                 'product_b': name_b,
                 'common_tokens': ", ".join(common),

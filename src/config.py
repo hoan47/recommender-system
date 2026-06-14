@@ -30,9 +30,15 @@ CHUNKSIZE = 500000  # số records mỗi chunk khi đọc file prior 32.4M recor
 # ============================================================
 # Hyperparameters — CB (Content-Based Vectorizer)
 # ============================================================
-CB_N_GRAM_RANGE = (1, 2)    # TF-IDF: character 2-gram đến 4-gram
+CB_N_GRAM_RANGE = (1, 2)    # TF-IDF: word 1-gram đến 2-gram
 CB_ANALYZER = 'word'        # 'char' cho character n-gram, 'word' cho word n-gram
 CB_MAX_FEATURES = 15000      # TF-IDF: max số features từ tên sản phẩm
+
+# Ensemble Count + TF-IDF
+CB_ALPHA = 1               # trọng số Count Vectorizer (TF-IDF weight = 1 - alpha)
+CB_COUNT_N_GRAM_RANGE = (1, 2)  # Count Vectorizer: word n-gram range
+CB_COUNT_ANALYZER = 'word'      # Count Vectorizer: analyzer
+CB_COUNT_MAX_FEATURES = 15000   # Count Vectorizer: max features
 
 # ============================================================
 # Hyperparameters — Ochiai

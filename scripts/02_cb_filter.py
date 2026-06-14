@@ -38,7 +38,17 @@ cb.fit(products)
 # Save
 save_path = os.path.join(MODEL_DIR, "cb_filter")
 os.makedirs(save_path, exist_ok=True)
-scipy.sparse.save_npz(os.path.join(save_path, "product_vectors.npz"), cb.product_vectors)
+
+# Lưu TF-IDF vectors
+scipy.sparse.save_npz(
+    os.path.join(save_path, "tfidf_vectors.npz"),
+    cb.product_vectors_tfidf,
+)
+# Lưu Count vectors (L2-normalized)
+scipy.sparse.save_npz(
+    os.path.join(save_path, "count_vectors.npz"),
+    cb.product_vectors_count,
+)
 
 # Lưu product_id_to_idx để 07_ensemble.py load đúng mapping
 with open(os.path.join(save_path, "product_id_to_idx.json"), 'w') as f:
@@ -46,5 +56,7 @@ with open(os.path.join(save_path, "product_id_to_idx.json"), 'w') as f:
 
 print(f"\n   -> Saved to {save_path}")
 print(f"   -> {len(cb.product_id_to_idx)} products vectorized")
-print(f"   -> Vector shape: {cb.product_vectors.shape}")
+print(f"   -> TF-IDF shape: {cb.product_vectors_tfidf.shape}")
+print(f"   -> Count shape:  {cb.product_vectors_count.shape}")
+print(f"   -> Alpha (Count) = {cb.alpha:.2f}")
 print("\n Done!")

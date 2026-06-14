@@ -7,9 +7,14 @@ import os
 import re
 import numpy as np
 from scipy import sparse
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from sklearn.preprocessing import normalize
 
-from src.config import CB_N_GRAM_RANGE, CB_MAX_FEATURES, CB_ANALYZER, PROJECT_ROOT
+from src.config import (
+    CB_N_GRAM_RANGE, CB_MAX_FEATURES, CB_ANALYZER,
+    CB_COUNT_N_GRAM_RANGE, CB_COUNT_MAX_FEATURES, CB_COUNT_ANALYZER,
+    CB_ALPHA, PROJECT_ROOT
+)
 
 # Pattern gom Nhóm đơn vị đo lường, khối lượng, dung tích và kích cỡ
 _PATTERN_CLEAN = re.compile(
@@ -106,3 +111,59 @@ def cb_similarity(product_vectors, product_a_idx, candidate_indices):
     # Tính toán trực tiếp trên Ma trận thưa (Sparse Matrix) để tối ưu tốc độ
     dot_ab = vecs_b.dot(vec_a.T).toarray().ravel()
     return dot_ab
+
+
+def build_count_vectors(text_data, ngram_range=CB_COUNT_N_GRAM_RANGE,
+                        max_features=CB_COUNT_MAX_FEATURES,
+                        analyzer=CB_COUNT_ANALYZER):
+    """
+    Xây dựng ma trận Count Vectorizer (L2-normalized) từ danh sách tên sản phẩm.
+    Chuẩn hóa L2 để cosine similarity có ý nghĩa khi dùng raw count.
+    """
+    print(f"  CountVectorizer ({analyzer}, ngram_range={ngram_range}, "
+          f"max_features={max_features})...")
+
+    count_vec = CountVectorizer(
+        ngram_range=ngram_range,
+        max_features=max_features,
+        analyzer=analyzer,
+        preprocessor=_clean_text_preprocessor,
+        stop_words=None,
+    )
+
+    count_matrix = count_vec.fit_transform(text_data)
+    # Chuẩn hóa L2 để cosine similarity hoạt động đúng
+    count_matrix_norm = normalize(count_matrix, norm='l2', axis=1)
+    print(f"    CountVectorizer matrix shape: {count_matrix_norm.shape}")
+
+    return count_matrix_norm, count_vec
+
+
+def cb_ensemble_similarity(product_vectors_tfidf, product_vectors_count,
+                           product_a_idx, candidate_indices, alpha=CB_ALPHA):
+    """
+    Tính ensemble similarity = alpha * sim(Count) + (1-alpha) * sim(TF-IDF).
+
+    Args:
+        product_vectors_tfidf: sparse CSR matrix từ TF-IDF
+        product_vectors_count: sparse CSR matrix (L2-normalized) từ Count Vectorizer
+        product_a_idx: int, index của product đầu vào
+        candidate_indices: list[int], indices của các candidate
+        alpha: float, trọng số Count Vectorizer (0 = chỉ TF-IDF, 1 = chỉ Count)
+
+    Returns:
+        np.ndarray: mảng similarity scores cho từng candidate
+    """
+    # Cosine similarity trên TF-IDF
+    vec_a_tfidf = product_vectors_tfidf[product_a_idx]
+    vecs_b_tfidf = product_vectors_tfidf[candidate_indices]
+    sim_tfidf = vecs_b_tfidf.dot(vec_a_tfidf.T).toarray().ravel()
+
+    # Cosine similarity trên Count (đã L2-normalized nên dot = cosine)
+    vec_a_cnt = product_vectors_count[product_a_idx]
+    vecs_b_cnt = product_vectors_count[candidate_indices]
+    sim_count = vecs_b_cnt.dot(vec_a_cnt.T).toarray().ravel()
+
+    # Kết hợp
+    final_sim = alpha * sim_count + (1.0 - alpha) * sim_tfidf
+    return final_sim

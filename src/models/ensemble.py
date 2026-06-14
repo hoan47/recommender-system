@@ -240,11 +240,16 @@ class EnsembleModel:
             json.dump(config, f, indent=2)
         
         # Lưu CB Filter vectors (nếu có) — để load sau không cần đọc từ cb_filter/
-        if self.cb_filter is not None and self.cb_filter.product_vectors is not None:
-            sp_path = os.path.join(path, 'cb_product_vectors.npz')
-            # Không lưu lại nếu file đã tồn tại và giống nhau (tiết kiệm IO)
-            scipy.sparse.save_npz(sp_path, self.cb_filter.product_vectors)
-            
+        if self.cb_filter is not None and self.cb_filter.product_vectors_tfidf is not None:
+            # TF-IDF vectors
+            sp_path = os.path.join(path, 'cb_tfidf_vectors.npz')
+            scipy.sparse.save_npz(sp_path, self.cb_filter.product_vectors_tfidf)
+
+            # Count vectors (L2-normalized)
+            cnt_path = os.path.join(path, 'cb_count_vectors.npz')
+            if self.cb_filter.product_vectors_count is not None:
+                scipy.sparse.save_npz(cnt_path, self.cb_filter.product_vectors_count)
+
             idx_path = os.path.join(path, 'product_id_to_idx.json')
             with open(idx_path, 'w') as f:
                 json.dump(
@@ -283,13 +288,17 @@ class EnsembleModel:
         
         # Load CB Filter
         cb = CBFilter()
-        sp_path = os.path.join(path, 'cb_product_vectors.npz')
-        if os.path.exists(sp_path):
-            cb.product_vectors = scipy.sparse.load_npz(sp_path)
+        tfidf_path = os.path.join(path, 'cb_tfidf_vectors.npz')
+        if os.path.exists(tfidf_path):
+            cb.product_vectors = scipy.sparse.load_npz(tfidf_path)
+            # Load Count vectors nếu có
+            cnt_path = os.path.join(path, 'cb_count_vectors.npz')
+            if os.path.exists(cnt_path):
+                cb.product_vectors_count = scipy.sparse.load_npz(cnt_path)
             idx_path = os.path.join(path, 'product_id_to_idx.json')
             with open(idx_path) as f:
                 cb.product_id_to_idx = {int(k): v for k, v in json.load(f).items()}
-            print(f"  CB Filter: {len(cb.product_id_to_idx)} products")
+            print(f"  CB Filter: {len(cb.product_id_to_idx)} products (TF-IDF + Count)")
         
         ensemble.cb_filter = cb
         
