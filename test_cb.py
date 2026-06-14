@@ -6,7 +6,7 @@ Phân tích:
 1. Thống kê mô tả similarity
 2. Tỉ lệ cặp có similarity > 0
 3. Phân tích word_overlap
-4. Tương quan similarity vs jaccard
+4. Tương quan similarity vs overlap
 5. Top 10 cặp tương đồng nhất
 6. Phân tích similarity theo số từ
 7. Nhận xét tổng quan
@@ -121,23 +121,23 @@ def analyze_word_overlap(df: pd.DataFrame) -> dict:
     print(f"  Std similarity      : {result['std_similarity_when_overlap']:.6f}")
     return result
 
-# ─── 4. Tương quan similarity vs jaccard ──────────────────
-def correlation_sim_jaccard(df: pd.DataFrame) -> dict:
+# ─── 4. Tương quan similarity vs overlap ──────────────────
+def correlation_sim_overlap(df: pd.DataFrame) -> dict:
     print("\n" + "=" * 55)
-    print("4. TƯƠNG QUAN similarity vs jaccard")
+    print("4. TƯƠNG QUAN similarity vs overlap")
     print("=" * 55)
 
     # Lọc các cặp có ít nhất một giá trị dương để tránh bias từ zero
-    mask = (df['similarity'] > 0) | (df['jaccard'] > 0)
+    mask = (df['similarity'] > 0) | (df['overlap'] > 0)
     sub = df[mask]
-    print(f"  Số cặp có similarity>0 hoặc jaccard>0: {len(sub):,} / {len(df):,}")
+    print(f"  Số cặp có similarity>0 hoặc overlap>0: {len(sub):,} / {len(df):,}")
 
     if len(sub) < 2:
         print("  → Không đủ dữ liệu để tính tương quan.")
         return {"pearson_r": 0, "pearson_p": 0, "spearman_r": 0, "spearman_p": 0, "n_used": len(sub)}
 
-    corr_pearson, p_pearson = pearsonr(sub['similarity'], sub['jaccard'])
-    corr_spearman, p_spearman = spearmanr(sub['similarity'], sub['jaccard'])
+    corr_pearson, p_pearson = pearsonr(sub['similarity'], sub['overlap'])
+    corr_spearman, p_spearman = spearmanr(sub['similarity'], sub['overlap'])
 
     result = {
         "pearson_r": round(corr_pearson, 6),
@@ -149,7 +149,7 @@ def correlation_sim_jaccard(df: pd.DataFrame) -> dict:
     print(f"  Pearson r  = {result['pearson_r']:.6f}  (p = {result['pearson_p']:.6e})")
     print(f"  Spearman ρ = {result['spearman_r']:.6f}  (p = {result['spearman_p']:.6e})")
     if abs(result['pearson_r']) > 0.7:
-        print("  → Tương quan tuyến tính mạnh giữa similarity TF-IDF và jaccard.")
+        print("  → Tương quan tuyến tính mạnh giữa similarity TF-IDF và overlap.")
     elif abs(result['pearson_r']) > 0.4:
         print("  → Tương quan trung bình.")
     else:
@@ -170,8 +170,8 @@ def top_n_similar(df: pd.DataFrame, n: int = 10) -> list:
 
     top = df.nlargest(n, 'similarity')
     records = []
-    print(f"  {'#':>3}  {'prod_a':>7}  {'prod_b':>7}  {'similarity':>12}  {'overlap':>7}  {'jaccard':>8}")
-    print(f"  {'---':>3}  {'-------':>7}  {'-------':>7}  {'-----------':>12}  {'-------':>7}  {'--------':>8}")
+    print(f"  {'#':>3}  {'prod_a':>7}  {'prod_b':>7}  {'similarity':>12}  {'word_overlap':>7}  {'overlap':>8}")
+    print(f"  {'---':>3}  {'-------':>7}  {'-------':>7}  {'-----------':>12}  {'----------':>7}  {'-------':>8}")
     for i, (_, row) in enumerate(top.iterrows(), 1):
         rec = {
             "rank": i,
@@ -179,10 +179,10 @@ def top_n_similar(df: pd.DataFrame, n: int = 10) -> list:
             "product_b": int(row['product_b_id']),
             "similarity": round(row['similarity'], 6),
             "word_overlap": int(row['word_overlap']),
-            "jaccard": round(row['jaccard'], 6)
+            "overlap": round(row['overlap'], 6)
         }
         records.append(rec)
-        print(f"  {i:>3}  {rec['product_a']:>7}  {rec['product_b']:>7}  {rec['similarity']:>12.6f}  {rec['word_overlap']:>7}  {rec['jaccard']:>8.6f}")
+        print(f"  {i:>3}  {rec['product_a']:>7}  {rec['product_b']:>7}  {rec['similarity']:>12.6f}  {rec['word_overlap']:>7}  {rec['overlap']:>8.6f}")
     return records
 
 # ─── 6. Phân tích similarity theo số từ ────────────────────
@@ -250,8 +250,8 @@ def summarize(stat_sim: dict, ratio: dict, overlap: dict, corr: dict) -> str:
 
     # Tương quan
     if corr['n_used'] >= 2:
-        lines.append(f"- Tương quan Pearson(sim, jaccard): r = {corr['pearson_r']:.4f}")
-        lines.append(f"- Tương quan Spearman(sim, jaccard): ρ = {corr['spearman_r']:.4f}")
+        lines.append(f"- Tương quan Pearson(sim, overlap): r = {corr['pearson_r']:.4f}")
+        lines.append(f"- Tương quan Spearman(sim, overlap): ρ = {corr['spearman_r']:.4f}")
 
     # Kết luận
     lines.append("")
@@ -297,7 +297,7 @@ def main():
     overlap = analyze_word_overlap(df)
 
     # 4
-    corr = correlation_sim_jaccard(df)
+    corr = correlation_sim_overlap(df)
 
     # 5
     top10 = top_n_similar(df, n=10)
@@ -314,7 +314,7 @@ def main():
         "thong_ke_similarity": stat_sim,
         "ti_le_similarity_gt_0": ratio,
         "phan_tich_word_overlap": overlap,
-        "tuong_quan_sim_jaccard": corr,
+        "tuong_quan_sim_overlap": corr,
         "top_10_cap_tuong_dong": top10,
         "phan_tich_theo_so_tu": wc_analysis,
         "nhan_xet": summary

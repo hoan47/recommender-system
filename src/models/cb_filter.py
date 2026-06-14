@@ -40,11 +40,11 @@ class CBFilter:
             count_ngram_range: tuple (min_n, max_n) cho Count Vectorizer
                                (default: CB_COUNT_N_GRAM_RANGE)
             count_max_features: int, max features cho Count Vectorizer
-                                (default: CB_COUNT_MAX_FEATURES)
+                               (default: CB_COUNT_MAX_FEATURES)
             alpha: float, trọng số Count Vectorizer (TF-IDF weight = 1-alpha)
                    (default: CB_ALPHA)
-            metric: str, 'jaccard' hoặc 'cosine' cho nhánh Count
-                    (default: 'jaccard')
+            metric: str, 'overlap' cho nhánh Count (Overlap Score)
+                    (default: CB_METRIC)
         """
         self.ngram_range = ngram_range if ngram_range is not None else CB_N_GRAM_RANGE
         self.max_features = max_features if max_features is not None else CB_MAX_FEATURES

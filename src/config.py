@@ -35,7 +35,7 @@ CB_MAX_FEATURES = 15000      # TF-IDF: max số features từ tên sản phẩm
 
 # Ensemble Count + TF-IDF
 CB_ALPHA = 1               # trọng số Count Vectorizer (TF-IDF weight = 1 - alpha)
-CB_METRIC = 'cosine'      # 'jaccard' hoặc 'cosine' cho nhánh Count
+CB_METRIC = 'overlap'     # 'overlap' cho nhánh Count (Overlap Score)
 CB_COUNT_N_GRAM_RANGE = (1, 1)  # Count Vectorizer: word unigram (đếm từ đơn)
 CB_COUNT_MAX_FEATURES = 15000   # Count Vectorizer: max features
 

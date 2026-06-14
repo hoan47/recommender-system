@@ -47,8 +47,8 @@ def tokenize(name):
     return set(name.lower().split())
 
 
-def _jaccard_similarity(count_vectors, idx_a, idx_b_list):
-    """Tính Jaccard similarity giữa product_a (idx_a) và từng candidate trong idx_b_list."""
+def _overlap_similarity(count_vectors, idx_a, idx_b_list):
+    """Tính Overlap Score giữa product_a (idx_a) và từng candidate trong idx_b_list."""
     vec_a = count_vectors[idx_a]
     vecs_b = count_vectors[idx_b_list]
 
@@ -59,11 +59,11 @@ def _jaccard_similarity(count_vectors, idx_a, idx_b_list):
     intersection = bin_b.dot(bin_a.T).toarray().ravel()
     sum_a = bin_a.sum()
     sum_b = np.array(bin_b.sum(axis=1)).ravel()
-    union = sum_a + sum_b - intersection
+    denom = np.minimum(sum_a, sum_b)
 
-    return np.divide(intersection, union,
+    return np.divide(intersection, denom,
                      out=np.zeros_like(intersection, dtype=float),
-                     where=union != 0)
+                     where=denom != 0)
 
 
 def find_pairs_by_overlap(products, tfidf_vectors, count_vectors, product_id_to_idx):
@@ -72,7 +72,7 @@ def find_pairs_by_overlap(products, tfidf_vectors, count_vectors, product_id_to_
     Trả về dict: overlap -> list of (sim_tfidf, sim_count, sim_ensemble, name_a, name_b, common_tokens)
     """
     alpha = CB_ALPHA
-    metric = 'jaccard'
+    metric = 'overlap'
     pid_to_name = dict(zip(products['product_id'], products['product_name']))
     all_ids = list(product_id_to_idx.keys())
 
@@ -110,8 +110,8 @@ def find_pairs_by_overlap(products, tfidf_vectors, count_vectors, product_id_to_
         idx_b = product_id_to_idx[b]
 
         sim_tfidf = cb_similarity(tfidf_vectors, idx_a, [idx_b])[0]
-        if metric == 'jaccard':
-            sim_count = _jaccard_similarity(count_vectors, idx_a, [idx_b])[0]
+        if metric == 'overlap':
+            sim_count = _overlap_similarity(count_vectors, idx_a, [idx_b])[0]
         else:
             sim_count = cb_similarity(count_vectors, idx_a, [idx_b])[0]
         sim_ensemble = alpha * sim_count + (1.0 - alpha) * sim_tfidf
