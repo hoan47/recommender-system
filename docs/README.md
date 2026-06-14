@@ -33,7 +33,8 @@ recommender-system/
 │   ├── 05_deepwalk.py       # Train DeepWalk
 │   ├── 06_assoc_rules.py    # Train Association Rules
 │   ├── 07_ensemble.py       # Ensemble + test
-│   └── 08_streamlit_app.py  # Streamlit Dashboard UI
+│   ├── 08_streamlit_app.py  # Streamlit Dashboard UI
+│   └── 09_cb_evaluation.py  # (đã xóa — không còn sử dụng)
 ├── src/                     # Source code
 │   ├── config.py            # Cấu hình tập trung
 │   ├── evaluation/          # (dự trữ cho đánh giá sau)
