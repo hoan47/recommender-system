@@ -338,7 +338,6 @@ def main():
                         {
                             "ID": cid,
                             "Tên sản phẩm": name,
-                            "Tên gốc": rrow["product_name"],
                             "CB Similarity": f"{sim:.4f}",
                             "Kết luận": label,
                         }

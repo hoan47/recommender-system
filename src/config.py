@@ -84,8 +84,8 @@ ENS_BETA = 0.25                 # trọng số Item2Vec
 ENS_GAMMA = 0.25                # trọng số DeepWalk (graph embedding)
 ENS_TOP_K = 100                 # top-K sau ensemble (trước CB filter)
 ENS_FINAL_K = 10                # top-K cuối cùng output
-ENS_CB_THRESHOLD = 0.25          # ngưỡng CB filter khi dùng hybrid ensemble
-CB_THRESHOLD = 0.25              # ngưỡng CB similarity để phân loại Substitute (>=) vs Complementary
+ENS_CB_THRESHOLD = 0.1          # ngưỡng CB filter khi dùng hybrid ensemble
+CB_THRESHOLD = 0.1              # ngưỡng CB similarity để phân loại Substitute (>=) vs Complementary
 
 # ============================================================
 # Product Filter Strategy
