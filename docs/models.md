@@ -135,7 +135,7 @@ final_similarity = alpha × Overlap(Count) + (1 - alpha) × Cosine(TF-IDF)
 |---|---|
 | **Count Vectorizer** (raw count → Overlap) | Đếm từ đơn tuyệt đối: càng trùng nhiều từ → điểm càng tiến sát 1.0. Bất chấp độ dài câu hay trật tự từ |
 | **TF-IDF** (Cosine) | Phân hóa thông minh: từ khóa chính (Cá hồi, Bắp bò) ↑, từ phụ (gói, hộp) ↓ |
-| **Overlap metric** (`CB_METRIC = 'overlap'`) | `|A ∩ B| / min(|A|, |B|)` trên nhị phân hóa — chỉ quan tâm tỷ lệ từ trùng so với bên ít từ hơn |
+| **Overlap metric** (Overlap Score) | `|A ∩ B| / min(|A|, |B|)` trên nhị phân hóa — chỉ quan tâm tỷ lệ từ trùng so với bên ít từ hơn |
 | **Alpha** (`CB_ALPHA = 1.0`) | Hoàn toàn dùng Overlap Count; có thể giảm để pha TF-IDF |
 
 Cả 2 ma trận đều là sparse CSR, lưu riêng thành 2 file:

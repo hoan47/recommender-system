@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 import scipy.sparse
 
-from src.config import MODEL_DIR, PROCESSED_DIR, RESULT_DIR, CB_ALPHA, CB_METRIC
+from src.config import MODEL_DIR, PROCESSED_DIR, RESULT_DIR, CB_ALPHA
 from src.features.vectorizer import cb_similarity
 
 N_EXAMPLES = 20         # cặp cho mỗi overlap

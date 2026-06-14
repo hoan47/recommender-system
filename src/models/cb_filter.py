@@ -13,7 +13,7 @@ from scipy import sparse
 from src.config import (
     CB_N_GRAM_RANGE, CB_MAX_FEATURES,
     CB_COUNT_N_GRAM_RANGE, CB_COUNT_MAX_FEATURES,
-    CB_ALPHA, CB_METRIC,
+    CB_ALPHA,
 )
 from src.features.vectorizer import (
     build_product_vectors, build_count_vectors,
@@ -32,7 +32,7 @@ class CBFilter:
 
     def __init__(self, ngram_range=None, max_features: int = None,
                  count_ngram_range=None, count_max_features: int = None,
-                 alpha: float = None, metric: str = None):
+                 alpha: float = None, metric: str = 'overlap'):
         """
         Args:
             ngram_range: tuple (min_n, max_n) cho TF-IDF (default: CB_N_GRAM_RANGE)
@@ -44,7 +44,6 @@ class CBFilter:
             alpha: float, trọng số Count Vectorizer (TF-IDF weight = 1-alpha)
                    (default: CB_ALPHA)
             metric: str, 'overlap' cho nhánh Count (Overlap Score)
-                    (default: CB_METRIC)
         """
         self.ngram_range = ngram_range if ngram_range is not None else CB_N_GRAM_RANGE
         self.max_features = max_features if max_features is not None else CB_MAX_FEATURES
@@ -53,7 +52,7 @@ class CBFilter:
         self.count_max_features = (count_max_features if count_max_features is not None
                                    else CB_COUNT_MAX_FEATURES)
         self.alpha = alpha if alpha is not None else CB_ALPHA
-        self.metric = metric if metric is not None else CB_METRIC
+        self.metric = metric if metric is not None else 'overlap'
 
         self.product_vectors_tfidf = None   # sparse.csr_matrix (n_products, D_tfidf)
         self.product_vectors_count = None   # sparse.csr_matrix (n_products, D_count)

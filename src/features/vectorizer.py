@@ -13,7 +13,7 @@ from sklearn.preprocessing import normalize
 from src.config import (
     CB_N_GRAM_RANGE, CB_MAX_FEATURES,
     CB_COUNT_N_GRAM_RANGE, CB_COUNT_MAX_FEATURES,
-    CB_ALPHA, CB_METRIC, PROJECT_ROOT
+    CB_ALPHA, PROJECT_ROOT
 )
 
 # Pattern gom Nhóm đơn vị đo lường, khối lượng, dung tích và kích cỡ
@@ -141,7 +141,7 @@ def build_count_vectors(text_data, ngram_range=CB_COUNT_N_GRAM_RANGE,
 
 def cb_ensemble_similarity(product_vectors_tfidf, product_vectors_count,
                            product_a_idx, candidate_indices, alpha=CB_ALPHA,
-                           metric=CB_METRIC):
+                           metric='overlap'):
     """
     Tính ensemble similarity kết hợp Count (Overlap Score) + TF-IDF (Cosine).
 
