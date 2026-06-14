@@ -7,6 +7,7 @@ Các chức năng:
 3. threshold_sweep(): Khảo sát ảnh hưởng của threshold lên % candidate bị loại
 4. manual_inspection_samples(): Lấy mẫu theo bins để kiểm tra thủ công
 5. export_llm_survey(): Export mẫu cho LLM đánh giá (vùng biên threshold)
+6. survey_cb_decisions(): Lấy mẫu thực tế dựa trên quyết định giữ/lọc của CB Filter
 """
 import json
 import os
@@ -644,4 +645,183 @@ def export_llm_survey(
         df.to_csv(path, index=False)
         print(f"\n  Đã lưu: {path}")
 
+    return df
+
+
+# ============================================================
+# 6. KHẢO SÁT QUYẾT ĐỊNH CB FILTER TRÊN DỮ LIỆU THỰC TẾ
+# ============================================================
+
+def survey_cb_decisions(
+    cbfilter,
+    ensemble_model,
+    ochiai_model,
+    products_df: pd.DataFrame,
+    n_products: int = 30,
+    top_k: int = 50,
+    n_samples_kept: int = 20,
+    n_samples_filtered: int = 20,
+    seed: int = 42,
+    save_dir: str = None
+) -> pd.DataFrame:
+    """
+    Khảo sát quyết định của CB Filter trên candidate thực tế từ ensemble.
+    Lấy mẫu từ cả 2 nhóm:
+      - kept: candidate được giữ lại (similarity < threshold)
+      - filtered: candidate bị loại (similarity >= threshold)
+
+    Output CSV có thêm cột:
+      - cb_decision: "kept" hoặc "filtered"
+      - cooc_count: số lần A và B xuất hiện cùng nhau (từ Ochiai)
+
+    Args:
+        cbfilter: CBFilter instance
+        ensemble_model: EnsembleModel instance
+        ochiai_model: OchiaiModel instance (để lấy cooc_count)
+        products_df: DataFrame [product_id, product_name, aisle_id, department_id, ...]
+        n_products: số product A mẫu để khảo sát
+        top_k: số candidate lấy từ ensemble (trước CB filter)
+        n_samples_kept: số mẫu kept muốn lấy
+        n_samples_filtered: số mẫu filtered muốn lấy
+        seed: random seed
+        save_dir: đường dẫn lưu file CSV
+
+    Returns:
+        DataFrame các mẫu kept + filtered
+    """
+    rng = random.Random(seed)
+    threshold = cbfilter.threshold
+
+    # Map product_id → name, aisle, department
+    pid2name = dict(zip(products_df['product_id'], products_df['product_name']))
+    pid2aisle = dict(zip(products_df['product_id'], products_df['aisle_id']))
+    pid2dept = dict(zip(products_df['product_id'], products_df['department_id']))
+
+    aisle_names = {}
+    if 'aisle' in products_df.columns:
+        aisle_names = dict(zip(products_df['aisle_id'], products_df['aisle']))
+    dept_names = {}
+    if 'department' in products_df.columns:
+        dept_names = dict(zip(products_df['department_id'], products_df['department']))
+
+    # Chọn product A mẫu
+    valid_products = list(cbfilter.product_id_to_idx.keys())
+    sample_products = rng.sample(valid_products, min(n_products, len(valid_products)))
+
+    kept_samples = []
+    filtered_samples = []
+
+    print(f"\n{'='*60}")
+    print(f"  KHẢO SÁT 6: CB DECISIONS TRÊN CANDIDATE THỰC TẾ")
+    print(f"  Số product A: {len(sample_products)}, top_k={top_k}")
+    print(f"  Threshold = {threshold}")
+    print(f"  Mục tiêu: kept={n_samples_kept}, filtered={n_samples_filtered}")
+    print(f"{'='*60}")
+
+    for pid in sample_products:
+        if pid not in cbfilter.product_id_to_idx:
+            continue
+
+        idx_a = cbfilter.product_id_to_idx[pid]
+
+        # Lấy raw candidates từ ensemble (union 3 model, không CB filter)
+        raw_candidates = ensemble_model.get_raw_candidates(pid, top_k=top_k)
+        if not raw_candidates:
+            continue
+
+        # Lọc candidate có trong CB filter
+        valid_candidates = []
+        for cid, escore in raw_candidates:
+            if cid != pid and cid in cbfilter.product_id_to_idx:
+                valid_candidates.append((cid, escore))
+        
+        if not valid_candidates:
+            continue
+        
+        # Tính CB similarity
+        valid_ids = [c[0] for c in valid_candidates]
+        valid_indices = [cbfilter.product_id_to_idx[cid] for cid in valid_ids]
+        sims = cb_similarity(cbfilter.product_vectors, idx_a, valid_indices)
+        
+        # Lấy cooc_count từ ochiai
+        cooc_row = None
+        if hasattr(ochiai_model, 'cooc_matrix') and ochiai_model.cooc_matrix is not None:
+            if pid in ochiai_model.product_id_to_idx:
+                oidx = ochiai_model.product_id_to_idx[pid]
+                cooc_row = ochiai_model.cooc_matrix[oidx].toarray().flatten()
+        
+        for i, (cid, escore) in enumerate(valid_candidates):
+            sim = float(sims[i])
+            decision = "kept" if sim < threshold else "filtered"
+            
+            # Co-occurrence count
+            cooc_count = 0
+            if cooc_row is not None and cid in ochiai_model.product_id_to_idx:
+                c_oidx = ochiai_model.product_id_to_idx[cid]
+                cooc_count = int(cooc_row[c_oidx])
+            
+            sample = {
+                'product_A_id': pid,
+                'product_B_id': cid,
+                'cosine_similarity': sim,
+                'product_A_name': pid2name.get(pid, '?'),
+                'product_B_name': pid2name.get(cid, '?'),
+                'aisle_A': aisle_names.get(pid2aisle.get(pid, -1), '?'),
+                'aisle_B': aisle_names.get(pid2aisle.get(cid, -1), '?'),
+                'dept_A': dept_names.get(pid2dept.get(pid, -1), '?'),
+                'dept_B': dept_names.get(pid2dept.get(cid, -1), '?'),
+                'cooc_count': cooc_count,
+                'ensemble_score': float(escore),
+                'cb_decision': decision,
+            }
+            
+            if decision == "kept":
+                kept_samples.append(sample)
+            else:
+                filtered_samples.append(sample)
+    
+    # Trộn và lấy mẫu
+    rng.shuffle(kept_samples)
+    rng.shuffle(filtered_samples)
+    
+    kept_final = kept_samples[:n_samples_kept]
+    filtered_final = filtered_samples[:n_samples_filtered]
+    
+    print(f"\n  Kết quả:")
+    print(f"    Kept: {len(kept_final)} mẫu (từ {len(kept_samples)} tổng)")
+    print(f"    Filtered: {len(filtered_final)} mẫu (từ {len(filtered_samples)} tổng)")
+    
+    # Gộp lại
+    all_final = kept_final + filtered_final
+    rng.shuffle(all_final)
+    df = pd.DataFrame(all_final)
+    
+    # Thống kê nhanh
+    if not df.empty:
+        print(f"\n  Thống kê theo decision:")
+        for decision in ["kept", "filtered"]:
+            subset = df[df['cb_decision'] == decision]
+            if not subset.empty:
+                avg_sim = subset['cosine_similarity'].mean()
+                avg_cooc = subset['cooc_count'].mean()
+                print(f"    {decision}: {len(subset)} mẫu, "
+                      f"avg_sim={avg_sim:.4f}, avg_cooc={avg_cooc:.1f}")
+    
+    # In mẫu
+    print(f"\n  Mẫu (tất cả):")
+    print(f"  {'A_ID':>6s} | {'B_ID':>6s} | {'Sim':>5s} | {'Cooc':>5s} | {'Decision':<10s} | {'A_Name':<30s} | {'B_Name':<30s}")
+    print(f"  {'-'*6}-+-{'-'*6}-+-{'-'*5}-+-{'-'*5}-+-{'-'*10}-+-{'-'*30}-+-{'-'*30}")
+    for _, row in df.iterrows():
+        a_name = str(row['product_A_name'])[:29]
+        b_name = str(row['product_B_name'])[:29]
+        print(f"  {int(row['product_A_id']):>6d} | {int(row['product_B_id']):>6d} | "
+              f"{row['cosine_similarity']:.3f} | {int(row['cooc_count']):>5d} | "
+              f"{row['cb_decision']:<10s} | {a_name:<30s} | {b_name:<30s}")
+    
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+        path = os.path.join(save_dir, "cb_decision_samples.csv")
+        df.to_csv(path, index=False)
+        print(f"\n  Đã lưu: {path}")
+    
     return df

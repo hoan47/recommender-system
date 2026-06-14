@@ -33,6 +33,7 @@ from src.evaluation.cb_evaluator import (
     threshold_sweep,
     manual_inspection_samples,
     export_llm_survey,
+    survey_cb_decisions,
 )
 
 # ============================================================
@@ -193,6 +194,26 @@ df_llm = export_llm_survey(
     n_samples=N_LLM_SAMPLES,
     sim_min=0.2,
     sim_max=0.5,
+    seed=42,
+    save_dir=SAVE_DIR,
+)
+t1 = time.time()
+print(f"   ⏱ Thời gian: {t1 - t0:.1f}s")
+
+
+# ============================================================
+# KHẢO SÁT 6: CB DECISIONS TRÊN DỮ LIỆU THỰC TẾ
+# ============================================================
+t0 = time.time()
+df_cb_decisions = survey_cb_decisions(
+    cbfilter=cb,
+    ensemble_model=ensemble,
+    ochiai_model=ochiai,
+    products_df=products,
+    n_products=30,
+    top_k=50,
+    n_samples_kept=15,
+    n_samples_filtered=15,
     seed=42,
     save_dir=SAVE_DIR,
 )

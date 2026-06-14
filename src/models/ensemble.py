@@ -82,6 +82,68 @@ class EnsembleModel:
         """
         return {pid: score for pid, score in recommendations}
     
+    def get_raw_candidates(self, product_id: int, top_k: int = None):
+        """
+        Lấy raw candidates từ union của 3 model (không CB filter, không giới hạn final_k).
+        Useful cho evaluation/survey.
+
+        Args:
+            product_id: int
+            top_k: số candidate lấy từ mỗi model (default: self.top_k)
+
+        Returns:
+            list (product_id, ensemble_score) — sorted descending, không giới hạn số lượng
+        """
+        if top_k is None:
+            top_k = self.top_k
+
+        # Lấy recommendations từ từng model
+        ochiai_recs = self.ochiai.recommend(product_id, top_k=top_k) if self.ochiai else []
+        i2v_recs = self.item2vec.recommend(product_id, top_k=top_k) if self.item2vec else []
+        dw_recs = self.deepwalk.recommend(product_id, top_k=top_k) if self.deepwalk else []
+
+        # Union candidates
+        candidate_ids = set()
+        for pid, _ in ochiai_recs:
+            candidate_ids.add(pid)
+        for pid, _ in i2v_recs:
+            candidate_ids.add(pid)
+        for pid, _ in dw_recs:
+            candidate_ids.add(pid)
+
+        if not candidate_ids:
+            return []
+
+        # Score dicts
+        ochiai_dict = self._build_score_dict(ochiai_recs)
+        i2v_dict = self._build_score_dict(i2v_recs)
+        dw_dict = self._build_score_dict(dw_recs)
+
+        # Tính weighted score
+        candidate_list = list(candidate_ids)
+        ochiai_scores = [ochiai_dict.get(pid, 0) for pid in candidate_list]
+        i2v_scores = [i2v_dict.get(pid, 0) for pid in candidate_list]
+        dw_scores = [dw_dict.get(pid, 0) for pid in candidate_list]
+
+        ochiai_norm = self._normalize(ochiai_scores)
+        i2v_norm = self._normalize(i2v_scores)
+        dw_norm = self._normalize(dw_scores)
+
+        final_scores = [
+            self.alpha * o + self.beta * i + self.gamma * d
+            for o, i, d in zip(ochiai_norm, i2v_norm, dw_norm)
+        ]
+
+        # Sort descending
+        sorted_indices = np.argsort(final_scores)[::-1]
+        result = [
+            (candidate_list[i], final_scores[i])
+            for i in sorted_indices
+            if final_scores[i] > 0
+        ]
+
+        return result
+
     def recommend(self, product_id: int, use_cb_filter: bool = True):
         """
         Ensemble recommendation.
@@ -100,54 +162,11 @@ class EnsembleModel:
         Returns:
             list (product_id, final_score)
         """
-        # --- Bước 1: Lấy recommendations từ từng model ---
-        ochiai_recs = self.ochiai.recommend(product_id, top_k=self.top_k) if self.ochiai else []
-        i2v_recs = self.item2vec.recommend(product_id, top_k=self.top_k) if self.item2vec else []
-        dw_recs = self.deepwalk.recommend(product_id, top_k=self.top_k) if self.deepwalk else []
+        # Lấy raw candidates
+        candidates_sorted = self.get_raw_candidates(product_id, top_k=self.top_k)
         
-        # --- Bước 2: Union candidates ---
-        candidate_ids = set()
-        for pid, _ in ochiai_recs:
-            candidate_ids.add(pid)
-        for pid, _ in i2v_recs:
-            candidate_ids.add(pid)
-        for pid, _ in dw_recs:
-            candidate_ids.add(pid)
-        
-        if not candidate_ids:
+        if not candidates_sorted:
             return []
-        
-        # --- Bước 3: Score dicts ---
-        ochiai_dict = self._build_score_dict(ochiai_recs)
-        i2v_dict = self._build_score_dict(i2v_recs)
-        dw_dict = self._build_score_dict(dw_recs)
-        
-        # --- Bước 4: Tính weighted score ---
-        candidate_list = list(candidate_ids)
-        
-        # Lấy scores từ từng model (0 nếu không có)
-        ochiai_scores = [ochiai_dict.get(pid, 0) for pid in candidate_list]
-        i2v_scores = [i2v_dict.get(pid, 0) for pid in candidate_list]
-        dw_scores = [dw_dict.get(pid, 0) for pid in candidate_list]
-        
-        # Normalize từng model
-        ochiai_norm = self._normalize(ochiai_scores)
-        i2v_norm = self._normalize(i2v_scores)
-        dw_norm = self._normalize(dw_scores)
-        
-        # Weighted sum
-        final_scores = [
-            self.alpha * o + self.beta * i + self.gamma * d
-            for o, i, d in zip(ochiai_norm, i2v_norm, dw_norm)
-        ]
-        
-        # Sort descending
-        sorted_indices = np.argsort(final_scores)[::-1]
-        candidates_sorted = [
-            (candidate_list[i], final_scores[i])
-            for i in sorted_indices
-            if final_scores[i] > 0
-        ]
         
         # --- Bước 5: CB Filter (optional) ---
         if use_cb_filter and self.cb_filter is not None:
