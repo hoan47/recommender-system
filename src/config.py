@@ -78,7 +78,13 @@ ENS_FINAL_K = 10                # top-K cuối cùng output
 ENS_CB_THRESHOLD = 0.25          # ngưỡng CB filter khi dùng hybrid ensemble
 
 # ============================================================
-# IO
+# Product Filter Strategy
+# Lọc non-food products khỏi train data để model chỉ học
+# các pattern mua kèm thực phẩm (grocery).
 # ============================================================
-CHUNKSIZE = 500000              # chunksize cho đọc CSV lớn
-RANDOM_SEED = 42                # seed cho reproducibility
+EXCLUDED_DEPARTMENTS = [8, 11, 17, 2, 21]
+# pets (8), personal care (11), household (17), other (2), missing (21)
+
+EXCLUDED_AISLES = [82, 102]
+# baby accessories (82), baby bath body care (102)
+# Giữ aisle 92 (baby food formula) — thực phẩm cho trẻ

@@ -38,6 +38,9 @@ recommender-system/
 │   ├── config.py            # Cấu hình tập trung
 │   ├── evaluation/          # (dự trữ cho đánh giá sau)
 │   ├── features/            # Xử lý dữ liệu & vector hóa
+│   │   ├── loader.py
+│   │   ├── product_filter.py   # Bộ lọc non-food departments/aisles
+│   │   └── vectorizer.py
 │   ├── utils/               # Hàm tiện ích dùng chung
 │   │   ├── __init__.py
 │   │   └── _numba_ops.py    # Numba-accelerated operations (co-occurrence counting, adjacency CSR)

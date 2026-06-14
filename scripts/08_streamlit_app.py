@@ -17,13 +17,9 @@ import streamlit as st
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.config import MODEL_DIR, PROCESSED_DIR
+from src.config import MODEL_DIR, PROCESSED_DIR, CB_THRESHOLD
 from src.models.assoc_rules import AssocRulesModel
-from src.models.cb_filter import CBFilter
-from src.models.deepwalk import DeepWalkModel
 from src.models.ensemble import EnsembleModel
-from src.models.item2vec import Item2VecModel
-from src.models.ochiai import OchiaiModel
 
 # ============================================================
 # CẤU HÌNH TRANG
@@ -73,41 +69,20 @@ def load_models():
     """Load tất cả models đã train (chạy 1 lần, cache)."""
     models = {}
 
-    with st.spinner("Đang load CB Filter..."):
-        cb = CBFilter()
-        cb.product_vectors = scipy.sparse.load_npz(
-            os.path.join(MODEL_DIR, "cb_filter", "product_vectors.npz")
-        )
-        with open(
-            os.path.join(MODEL_DIR, "cb_filter", "product_id_to_idx.json")
-        ) as f:
-            cb.product_id_to_idx = {int(k): v for k, v in json.load(f).items()}
-    models["cb"] = cb
-
-    with st.spinner("Đang load Ochiai..."):
-        ochiai = OchiaiModel()
-        ochiai.load(os.path.join(MODEL_DIR, "ochiai"))
-    models["ochiai"] = ochiai
-
-    with st.spinner("Đang load Item2Vec..."):
-        i2v = Item2VecModel()
-        i2v.load(os.path.join(MODEL_DIR, "item2vec"))
-    models["i2v"] = i2v
-
-    with st.spinner("Đang load DeepWalk..."):
-        dw = DeepWalkModel()
-        dw.load(os.path.join(MODEL_DIR, "deepwalk"))
-    models["dw"] = dw
-
     with st.spinner("Đang load Association Rules..."):
         arm = AssocRulesModel()
         arm.load(os.path.join(MODEL_DIR, "assoc_rules"))
     models["arm"] = arm
 
-    with st.spinner("Đang khởi tạo Ensemble..."):
-        ensemble = EnsembleModel()
-        ensemble.fit(ochiai, i2v, dw, cb)
+    with st.spinner("Đang load Ensemble (Ochiai + Item2Vec + DeepWalk + CB Filter)..."):
+        ensemble = EnsembleModel.load()
     models["ensemble"] = ensemble
+
+    # Sub-models được truy xuất qua ensemble để lấy recommendations riêng
+    models["ochiai"] = ensemble.ochiai
+    models["i2v"] = ensemble.item2vec
+    models["dw"] = ensemble.deepwalk
+    models["cb"] = ensemble.cb_filter
 
     return models
 
@@ -374,7 +349,7 @@ def main():
 
                     label = (
                         "❌ **Substitute**"
-                        if sim >= 0.8
+                        if sim >= CB_THRESHOLD
                         else "✅ Complementary"
                     )
                     rows.append(

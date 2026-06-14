@@ -68,6 +68,10 @@ print("\n3. Initializing Ensemble...")
 ensemble = EnsembleModel()
 ensemble.fit(ochiai, i2v, deepwalk, cb)
 
+# Save ensemble model de 08_streamlit_app.py load 1 lan
+print("\n   Saving Ensemble model...")
+ensemble.save()
+
 print("\n4. Testing recommendations cho 4 san pham mau:")
 test_products = [1, 250, 5000, 25000]
 
