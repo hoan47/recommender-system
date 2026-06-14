@@ -1,195 +1,331 @@
-# survey_cb.py
 """
-Khảo sát CB similarity distribution - chạy trực tiếp bằng python survey_cb.py
+test_cb.py — Script đánh giá kết quả Content-Based Similarity
+File tạm, không cập nhật docs
+
+Phân tích:
+1. Thống kê mô tả similarity
+2. Tỉ lệ cặp có similarity > 0
+3. Phân tích word_overlap
+4. Tương quan similarity vs jaccard
+5. Top 10 cặp tương đồng nhất
+6. Phân tích similarity theo số từ
+7. Nhận xét tổng quan
 """
 
-import sys
-import json
-import numpy as np
 import pandas as pd
-import random
-from scipy import sparse
-from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+import json
+import os
+from scipy.stats import pearsonr, spearmanr
 
+# ─── Cấu hình ─────────────────────────────────────────────
+FILE_PATH = "results/cb_similarity_distribution/cb_similarity_samples.csv"
+OUTPUT_JSON = "results/cb_similarity_distribution/eval_summary.json"
+os.makedirs(os.path.dirname(OUTPUT_JSON), exist_ok=True)
+
+# ─── Đọc dữ liệu ──────────────────────────────────────────
+def load_data(path: str) -> pd.DataFrame:
+    print(f"[+] Đọc file: {path}")
+    df = pd.read_csv(path, encoding='utf-8')
+    print(f"    → Số dòng: {len(df):,}")
+    print(f"    → Các cột: {list(df.columns)}")
+    return df
+
+# ─── 1. Thống kê mô tả similarity ─────────────────────────
+def stat_similarity(df: pd.DataFrame) -> dict:
+    print("\n" + "=" * 55)
+    print("1. THỐNG KÊ MÔ TẢ similarity")
+    print("=" * 55)
+
+    s = df['similarity']
+    desc = s.describe(percentiles=[0.25, 0.5, 0.75])
+    result = {
+        "count": int(desc['count']),
+        "mean": round(desc['mean'], 6),
+        "std": round(desc['std'], 6),
+        "min": round(desc['min'], 6),
+        "25%": round(desc['25%'], 6),
+        "50%": round(desc['50%'], 6),
+        "75%": round(desc['75%'], 6),
+        "max": round(desc['max'], 6)
+    }
+    print(f"  Count     : {result['count']:>10,}")
+    print(f"  Mean      : {result['mean']:>10.6f}")
+    print(f"  Std       : {result['std']:>10.6f}")
+    print(f"  Min       : {result['min']:>10.6f}")
+    print(f"  25%       : {result['25%']:>10.6f}")
+    print(f"  50%       : {result['50%']:>10.6f}")
+    print(f"  75%       : {result['75%']:>10.6f}")
+    print(f"  Max       : {result['max']:>10.6f}")
+    return result
+
+# ─── 2. Tỉ lệ similarity > 0 ──────────────────────────────
+def ratio_nonzero(df: pd.DataFrame) -> dict:
+    print("\n" + "=" * 55)
+    print("2. TỈ LỆ CẶP similarity > 0")
+    print("=" * 55)
+
+    total = len(df)
+    pos = (df['similarity'] > 0).sum()
+    zero = total - pos
+    result = {
+        "total": total,
+        "similarity_gt_0": int(pos),
+        "similarity_eq_0": int(zero),
+        "ratio_gt_0": round(pos / total * 100, 4),
+        "ratio_eq_0": round(zero / total * 100, 4)
+    }
+    print(f"  Tổng số cặp          : {result['total']:>10,}")
+    print(f"  similarity > 0        : {result['similarity_gt_0']:>10,}  ({result['ratio_gt_0']:.2f}%)")
+    print(f"  similarity = 0        : {result['similarity_eq_0']:>10,}  ({result['ratio_eq_0']:.2f}%)")
+    print(f"\n  → Nhận xét: {result['ratio_gt_0']:.2f}% cặp có similarity dương.")
+    if result['ratio_gt_0'] < 5:
+        print("  → Rất thưa (sparse), đa số cặp sản phẩm không có từ chung.")
+    elif result['ratio_gt_0'] < 20:
+        print("  → Tỉ lệ thấp, nhiều cặp không có từ chung.")
+    else:
+        print("  → Tỉ lệ khá, nhiều cặp có điểm tương đồng.")
+    return result
+
+# ─── 3. Phân tích word_overlap ─────────────────────────────
+def analyze_word_overlap(df: pd.DataFrame) -> dict:
+    print("\n" + "=" * 55)
+    print("3. PHÂN TÍCH word_overlap")
+    print("=" * 55)
+
+    has_overlap = df[df['word_overlap'] > 0]
+    no_overlap = df[df['word_overlap'] == 0]
+
+    result = {
+        "has_overlap_count": len(has_overlap),
+        "has_overlap_ratio": round(len(has_overlap) / len(df) * 100, 4),
+        "no_overlap_count": len(no_overlap),
+        "no_overlap_ratio": round(len(no_overlap) / len(df) * 100, 4),
+        "mean_similarity_when_overlap": round(has_overlap['similarity'].mean(), 6) if len(has_overlap) > 0 else 0
+    }
+    if len(has_overlap) > 0:
+        result["max_similarity_when_overlap"] = round(has_overlap['similarity'].max(), 6)
+        result["min_similarity_when_overlap"] = round(has_overlap['similarity'].min(), 6)
+        result["std_similarity_when_overlap"] = round(has_overlap['similarity'].std(), 6)
+    else:
+        result["max_similarity_when_overlap"] = 0
+        result["min_similarity_when_overlap"] = 0
+        result["std_similarity_when_overlap"] = 0
+
+    print(f"  Có word_overlap > 0 : {result['has_overlap_count']:>10,}  ({result['has_overlap_ratio']:.2f}%)")
+    print(f"  Word_overlap = 0    : {result['no_overlap_count']:>10,}  ({result['no_overlap_ratio']:.2f}%)")
+    print(f"\n  -- Với các cặp có word_overlap > 0 --")
+    print(f"  Mean similarity     : {result['mean_similarity_when_overlap']:.6f}")
+    print(f"  Min similarity      : {result['min_similarity_when_overlap']:.6f}")
+    print(f"  Max similarity      : {result['max_similarity_when_overlap']:.6f}")
+    print(f"  Std similarity      : {result['std_similarity_when_overlap']:.6f}")
+    return result
+
+# ─── 4. Tương quan similarity vs jaccard ──────────────────
+def correlation_sim_jaccard(df: pd.DataFrame) -> dict:
+    print("\n" + "=" * 55)
+    print("4. TƯƠNG QUAN similarity vs jaccard")
+    print("=" * 55)
+
+    # Lọc các cặp có ít nhất một giá trị dương để tránh bias từ zero
+    mask = (df['similarity'] > 0) | (df['jaccard'] > 0)
+    sub = df[mask]
+    print(f"  Số cặp có similarity>0 hoặc jaccard>0: {len(sub):,} / {len(df):,}")
+
+    if len(sub) < 2:
+        print("  → Không đủ dữ liệu để tính tương quan.")
+        return {"pearson_r": 0, "pearson_p": 0, "spearman_r": 0, "spearman_p": 0, "n_used": len(sub)}
+
+    corr_pearson, p_pearson = pearsonr(sub['similarity'], sub['jaccard'])
+    corr_spearman, p_spearman = spearmanr(sub['similarity'], sub['jaccard'])
+
+    result = {
+        "pearson_r": round(corr_pearson, 6),
+        "pearson_p": round(p_pearson, 6),
+        "spearman_r": round(corr_spearman, 6),
+        "spearman_p": round(p_spearman, 6),
+        "n_used": len(sub)
+    }
+    print(f"  Pearson r  = {result['pearson_r']:.6f}  (p = {result['pearson_p']:.6e})")
+    print(f"  Spearman ρ = {result['spearman_r']:.6f}  (p = {result['spearman_p']:.6e})")
+    if abs(result['pearson_r']) > 0.7:
+        print("  → Tương quan tuyến tính mạnh giữa similarity TF-IDF và jaccard.")
+    elif abs(result['pearson_r']) > 0.4:
+        print("  → Tương quan trung bình.")
+    else:
+        print("  → Tương quan yếu, hai metric đo lường khác nhau.")
+    if abs(result['spearman_r']) > 0.7:
+        print("  → Tương quan rank mạnh.")
+    elif abs(result['spearman_r']) > 0.4:
+        print("  → Tương quan rank trung bình.")
+    else:
+        print("  → Tương quan rank yếu.")
+    return result
+
+# ─── 5. Top 10 cặp tương đồng nhất ────────────────────────
+def top_n_similar(df: pd.DataFrame, n: int = 10) -> list:
+    print(f"\n" + "=" * 55)
+    print(f"5. TOP {n} CẶP CÓ similarity CAO NHẤT")
+    print("=" * 55)
+
+    top = df.nlargest(n, 'similarity')
+    records = []
+    print(f"  {'#':>3}  {'prod_a':>7}  {'prod_b':>7}  {'similarity':>12}  {'overlap':>7}  {'jaccard':>8}")
+    print(f"  {'---':>3}  {'-------':>7}  {'-------':>7}  {'-----------':>12}  {'-------':>7}  {'--------':>8}")
+    for i, (_, row) in enumerate(top.iterrows(), 1):
+        rec = {
+            "rank": i,
+            "product_a": int(row['product_a_id']),
+            "product_b": int(row['product_b_id']),
+            "similarity": round(row['similarity'], 6),
+            "word_overlap": int(row['word_overlap']),
+            "jaccard": round(row['jaccard'], 6)
+        }
+        records.append(rec)
+        print(f"  {i:>3}  {rec['product_a']:>7}  {rec['product_b']:>7}  {rec['similarity']:>12.6f}  {rec['word_overlap']:>7}  {rec['jaccard']:>8.6f}")
+    return records
+
+# ─── 6. Phân tích similarity theo số từ ────────────────────
+def analyze_by_word_count(df: pd.DataFrame) -> dict:
+    print("\n" + "=" * 55)
+    print("6. PHÂN TÍCH similarity THEO SỐ LƯỢNG TỪ")
+    print("=" * 55)
+
+    # Lấy số từ trung bình của mỗi cặp
+    df['avg_word_count'] = (df['word_count_a'] + df['word_count_b']) / 2.0
+
+    # Chia nhóm
+    bins = [0, 2, 4, 6, 8, 10, 20, 50, 100]
+    labels = ['1-2', '3-4', '5-6', '7-8', '9-10', '11-20', '21-50', '51+']
+    df['word_bin'] = pd.cut(df['avg_word_count'], bins=bins, labels=labels, right=True)
+
+    grouped = df.groupby('word_bin', observed=True)['similarity'].agg(['count', 'mean', 'std', 'min', 'max'])
+    print(f"  {'Nhóm từ':>8}  {'Số cặp':>8}  {'Mean':>10}  {'Std':>10}  {'Min':>10}  {'Max':>10}")
+    print(f"  {'--------':>8}  {'------':>8}  {'------':>10}  {'-----':>10}  {'-----':>10}  {'-----':>10}")
+    result = {}
+    for label, row in grouped.iterrows():
+        result[str(label)] = {
+            "count": int(row['count']),
+            "mean_similarity": round(row['mean'], 6),
+            "std_similarity": round(row['std'], 6),
+            "min_similarity": round(row['min'], 6),
+            "max_similarity": round(row['max'], 6)
+        }
+        print(f"  {label:>8}  {int(row['count']):>8,}  {row['mean']:>10.6f}  {row['std']:>10.6f}  {row['min']:>10.6f}  {row['max']:>10.6f}")
+
+    # Xu hướng
+    means = grouped['mean'].dropna()
+    if len(means) > 1:
+        trend = "giảm" if means.iloc[0] > means.iloc[-1] else "tăng"
+        print(f"\n  → Xu hướng: similarity có xu hướng {trend} khi số từ tăng.")
+    else:
+        print("\n  → Không đủ nhóm để nhận xét xu hướng.")
+    return result
+
+# ─── 7. Nhận xét tổng quan ────────────────────────────────
+def summarize(stat_sim: dict, ratio: dict, overlap: dict, corr: dict) -> str:
+    print("\n" + "=" * 55)
+    print("7. NHẬN XÉT TỔNG QUAN")
+    print("=" * 55)
+
+    lines = []
+    lines.append(f"- Tổng số cặp sản phẩm: {stat_sim['count']:,}")
+    lines.append(f"- Similarity trung bình: {stat_sim['mean']:.6f} (rất thấp, do đa số = 0)")
+    lines.append(f"- Tỉ lệ cặp có similarity > 0: {ratio['ratio_gt_0']:.2f}% ({ratio['similarity_gt_0']:,} cặp)")
+
+    # Đánh giá mức độ thưa
+    if ratio['ratio_gt_0'] < 5:
+        lines.append("- Mức độ thưa: RẤT CAO — ma trận similarity gần như sparse (>95% bằng 0).")
+    elif ratio['ratio_gt_0'] < 15:
+        lines.append("- Mức độ thưa: CAO.")
+    elif ratio['ratio_gt_0'] < 30:
+        lines.append("- Mức độ thưa: TRUNG BÌNH.")
+    else:
+        lines.append("- Mức độ thưa: THẤP — nhiều cặp có điểm tương đồng.")
+
+    # Word overlap
+    lines.append(f"- Tỉ lệ cặp có từ chung (word_overlap > 0): {overlap['has_overlap_ratio']:.2f}%")
+    if overlap['has_overlap_count'] > 0:
+        lines.append(f"- Trung bình similarity khi có từ chung: {overlap['mean_similarity_when_overlap']:.6f}")
+
+    # Tương quan
+    if corr['n_used'] >= 2:
+        lines.append(f"- Tương quan Pearson(sim, jaccard): r = {corr['pearson_r']:.4f}")
+        lines.append(f"- Tương quan Spearman(sim, jaccard): ρ = {corr['spearman_r']:.4f}")
+
+    # Kết luận
+    lines.append("")
+    lines.append("=== KẾT LUẬN ===")
+    if ratio['ratio_gt_0'] < 5:
+        lines.append("CB similarity hiện tại rất thưa. Cần kiểm tra:")
+        lines.append("  1. Dữ liệu mô tả sản phẩm: có quá ngắn / thiếu đặc trưng?")
+        lines.append("  2. Vectorizer: có dùng đúng TF-IDF với unigram/bigram?")
+        lines.append("  3. Stopwords: có filter quá nhiều từ?")
+        lines.append("  4. Có cần mở rộng đặc trưng (category, brand...)?")
+
+        # Gợi ý cải thiện
+        lines.append("")
+        lines.append("Gợi ý cải thiện:")
+        lines.append("  - Kiểm tra product_filter.py có đang filter đúng không")
+        lines.append("  - Thử dùng CountVectorizer thay vì TfidfVectorizer")
+        lines.append("  - Bổ sung thêm cột đặc trưng: department, aisle, brand")
+    elif ratio['ratio_gt_0'] < 15:
+        lines.append("CB similarity tương đối thưa. Có thể cải thiện bằng cách bổ sung đặc trưng.")
+    else:
+        lines.append("CB similarity hoạt động tương đối tốt.")
+
+    report = "\n".join(lines)
+    print(report)
+    return report
+
+# ─── Main ──────────────────────────────────────────────────
 def main():
-    print("="*60)
-    print("CB SIMILARITY SURVEY TOOL")
-    print("="*60)
-    
-    # Load model
-    print("\nLoading CB model...")
-    product_vectors = sparse.load_npz('models/cb_filter/product_vectors.npz')
-    with open('models/cb_filter/product_id_to_idx.json', 'r') as f:
-        product_id_to_idx = json.load(f)
-    
-    product_ids = list(product_id_to_idx.keys())
-    products_df = pd.read_csv('data/products.csv')
-    
-    print(f"  Products loaded: {len(product_ids)}")
-    print(f"  Vector shape: {product_vectors.shape}")
-    
-    # Define similarity function
-    def cb_similarity(vectors, idx_a, idxs_b):
-        vec_a = vectors[idx_a]
-        vecs_b = vectors[idxs_b]
-        return cosine_similarity(vec_a.reshape(1, -1), vecs_b).flatten()
-    
-    # Sample random pairs
-    print("\nSampling 5000 random pairs...")
-    random.seed(42)
-    sims = []
-    
-    for _ in range(5000):
-        a = random.choice(product_ids)
-        b = random.choice(product_ids)
-        if a == b:
-            continue
-        idx_a = product_id_to_idx[a]
-        idx_b = product_id_to_idx[b]
-        sim = cb_similarity(product_vectors, idx_a, [idx_b])[0]
-        sims.append(sim)
-    
-    sims = np.array(sims)
-    
-    # Statistics
-    print("\n" + "="*60)
-    print("SIMILARITY DISTRIBUTION STATISTICS")
-    print("="*60)
-    print(f"Number of pairs sampled: {len(sims)}")
-    print(f"Mean:     {sims.mean():.6f}")
-    print(f"Std:      {sims.std():.6f}")
-    print(f"Min:      {sims.min():.6f}")
-    print(f"25th:     {np.percentile(sims, 25):.6f}")
-    print(f"50th:     {np.percentile(sims, 50):.6f}")
-    print(f"75th:     {np.percentile(sims, 75):.6f}")
-    print(f"90th:     {np.percentile(sims, 90):.6f}")
-    print(f"95th:     {np.percentile(sims, 95):.6f}")
-    print(f"99th:     {np.percentile(sims, 99):.6f}")
-    print(f"Max:      {sims.max():.6f}")
-    
-    # Threshold analysis - từ 0 đến 0.95, bước 0.05
-    print("\n" + "="*60)
-    print("THRESHOLD ANALYSIS (percentage of pairs filtered)")
-    print("="*60)
-    print(f"{'Threshold':<12} {'% Filtered (≥ threshold)':<25} {'% Kept (< threshold)':<22} {'Interpretation'}")
-    print("-"*80)
-    
-    thresholds = [0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 
-                  0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
-    
-    for th in thresholds:
-        pct_filtered = (sims >= th).mean() * 100
-        pct_kept = 100 - pct_filtered
-        
-        if th == 0:
-            interp = "Keep everything"
-        elif th >= 0.9:
-            interp = "Very strict - only exact duplicates"
-        elif th >= 0.8:
-            interp = "Strict - good for substitute detection"
-        elif th >= 0.7:
-            interp = "Moderate"
-        elif th >= 0.5:
-            interp = "Loose"
-        else:
-            interp = "Very loose - keeps most"
-        
-        print(f"{th:<12} {pct_filtered:<25.2f}% {pct_kept:<22.2f}% {interp}")
-    
-    # Histogram-like distribution (bins)
-    print("\n" + "="*60)
-    print("SIMILARITY DISTRIBUTION (binned)")
-    print("="*60)
-    
-    bins = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95, 1.0]
-    for i in range(len(bins)-1):
-        low = bins[i]
-        high = bins[i+1]
-        count = np.sum((sims >= low) & (sims < high))
-        pct = count / len(sims) * 100
-        bar = "█" * int(pct / 2)
-        print(f"{low:.2f} - {high:.2f}: {pct:5.2f}% {bar}")
-    
-    # Top similar pairs
-    print("\n" + "="*60)
-    print("TOP 20 MOST SIMILAR PAIRS (potential substitutes)")
-    print("="*60)
-    
-    # Collect top similar pairs
-    pairs = []
-    for _ in range(2000):
-        a = random.choice(product_ids)
-        b = random.choice(product_ids)
-        if a == b:
-            continue
-        sim = cb_similarity(product_vectors, product_id_to_idx[a], [product_id_to_idx[b]])[0]
-        pairs.append((a, b, sim))
-    
-    top_pairs = sorted(pairs, key=lambda x: x[2], reverse=True)[:20]
-    name_dict = dict(zip(products_df['product_id'], products_df['product_name']))
-    
-    print(f"{'Rank':<5} {'ID_A':<8} {'ID_B':<8} {'Similarity':<12} {'Product A':<35} {'Product B'}")
-    print("-"*90)
-    for rank, (a, b, s) in enumerate(top_pairs, 1):
-        name_a = name_dict.get(a, 'Unknown')[:32]
-        name_b = name_dict.get(b, 'Unknown')[:32]
-        print(f"{rank:<5} {a:<8} {b:<8} {s:<12.4f} {name_a:<35} {name_b}")
-    
-    # Analyze specific product if requested
-    print("\n" + "="*60)
-    print("ANALYZE A SPECIFIC PRODUCT")
-    print("="*60)
-    print("Enter a product_id to see its most similar products (or press Enter to skip)")
-    
-    try:
-        pid_input = input("Product ID: ").strip()
-        if pid_input:
-            pid = int(pid_input)
-            if pid in product_id_to_idx:
-                idx_a = product_id_to_idx[pid]
-                name_a = name_dict.get(pid, 'Unknown')
-                print(f"\nProduct: {pid} - {name_a}")
-                
-                # Get all other products
-                other_ids = [p for p in product_ids if p != pid]
-                other_idxs = [product_id_to_idx[p] for p in other_ids]
-                sims_pid = cb_similarity(product_vectors, idx_a, other_idxs)
-                
-                # Top 20 most similar
-                top_indices = np.argsort(sims_pid)[::-1][:20]
-                
-                print(f"\nTOP 20 MOST SIMILAR TO {pid}:")
-                print(f"{'Rank':<5} {'ID':<8} {'Similarity':<12} {'Product Name'}")
-                print("-"*70)
-                for rank, idx in enumerate(top_indices, 1):
-                    pid_other = other_ids[idx]
-                    sim_val = sims_pid[idx]
-                    name_other = name_dict.get(pid_other, 'Unknown')[:45]
-                    print(f"{rank:<5} {pid_other:<8} {sim_val:<12.4f} {name_other}")
-                
-                # Count by threshold
-                print(f"\nTHRESHOLD COUNTS for product {pid}:")
-                for th in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]:
-                    count = np.sum(sims_pid >= th)
-                    print(f"  ≥ {th}: {count:5d} products ({count/len(sims_pid)*100:5.2f}%)")
-            else:
-                print(f"Product {pid} not found in CB model")
-    except (ValueError, KeyboardInterrupt):
-        pass
-    
-    print("\n" + "="*60)
-    print("SURVEY COMPLETE")
-    print("="*60)
-    
-    # Recommendation
-    print("\nRECOMMENDED THRESHOLD:")
-    print(f"  - 99th percentile of random pairs: {np.percentile(sims, 99):.4f}")
-    print(f"  - 95th percentile of random pairs: {np.percentile(sims, 95):.4f}")
-    print(f"  - 90th percentile of random pairs: {np.percentile(sims, 90):.4f}")
-    print("\n  Suggestion: Use threshold = 0.8 or 0.85")
-    print(f"    - 0.8: Filters {(sims >= 0.8).mean() * 100:.2f}% of random pairs")
-    print(f"    - 0.85: Filters {(sims >= 0.85).mean() * 100:.2f}% of random pairs")
-    print(f"    - 0.9: Filters {(sims >= 0.9).mean() * 100:.2f}% of random pairs")
+    print("=" * 55)
+    print("  ĐÁNH GIÁ Content-Based Similarity")
+    print("  File: cb_similarity_samples.csv")
+    print("=" * 55)
+
+    df = load_data(FILE_PATH)
+
+    # 1
+    stat_sim = stat_similarity(df)
+
+    # 2
+    ratio = ratio_nonzero(df)
+
+    # 3
+    overlap = analyze_word_overlap(df)
+
+    # 4
+    corr = correlation_sim_jaccard(df)
+
+    # 5
+    top10 = top_n_similar(df, n=10)
+
+    # 6
+    wc_analysis = analyze_by_word_count(df)
+
+    # 7
+    summary = summarize(stat_sim, ratio, overlap, corr)
+
+    # ─── Ghi JSON ──────────────────────────────────────
+    output = {
+        "file": FILE_PATH,
+        "thong_ke_similarity": stat_sim,
+        "ti_le_similarity_gt_0": ratio,
+        "phan_tich_word_overlap": overlap,
+        "tuong_quan_sim_jaccard": corr,
+        "top_10_cap_tuong_dong": top10,
+        "phan_tich_theo_so_tu": wc_analysis,
+        "nhan_xet": summary
+    }
+    with open(OUTPUT_JSON, 'w', encoding='utf-8') as f:
+        json.dump(output, f, ensure_ascii=False, indent=2)
+    print(f"\n[+] Đã lưu báo cáo JSON: {OUTPUT_JSON}")
+
+    print("\n" + "=" * 55)
+    print("  HOÀN TẤT ĐÁNH GIÁ")
+    print("=" * 55)
 
 if __name__ == "__main__":
     main()

@@ -27,13 +27,13 @@ def _clean_text_preprocessor(text):
     # 1. Xóa sạch dung tích, kích thước dựa trên Regex đã chốt
     text = _PATTERN_CLEAN.sub("", text)
 
-    # 2. Dọn dẹp hậu quả (dấu gạch ngang mồ côi, khoảng trắng kép)
+    # 2. Dọn dẹp hậu quả (dấu gạch ngang mồ côi, khoảng trắng kép, ký tự kích thước rác)
     text = re.sub(r'\s*-\s*$', '', text)          # Cuối câu
     text = re.sub(r'\s*-\s*(?=\s)', ' ', text)    # Giữa câu
-    text = re.sub(r'\(\s*\)', '', text)            # Ngoặc rỗng
-    text = re.sub(r'\s+', ' ', text).strip()      # Gom khoảng trắng
+    text = re.sub(r'\([\s*xX/,\.-]*\)', '', text)  # Dọn sạch dấu ngoặc chứa ký tự nhân/chia mồ côi
+    text = re.sub(r'\s+', ' ', text).strip()      # Gom khoảng trắng thừa
 
-    # 3. Đưa về lowercase đồng bộ cho mô hình TF-IDF dễ tính toán (Khuyên dùng)
+    # 3. Đưa về lowercase đồng bộ cho mô hình TF-IDF dễ tính toán
     return text.lower()
 
 
@@ -87,6 +87,6 @@ def cb_similarity(product_vectors, product_a_idx, candidate_indices):
     vec_a = product_vectors[product_a_idx]
     vecs_b = product_vectors[candidate_indices]
 
-    # Tính tích vô hướng giữa vector A và ma trận các vector B
+    # Cosine similarity thủ công cho sparse matrix
     dot_ab = vecs_b.dot(vec_a.T).toarray().ravel()
     return dot_ab

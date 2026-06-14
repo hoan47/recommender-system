@@ -88,3 +88,5 @@ EXCLUDED_DEPARTMENTS = [8, 11, 17, 2, 21]
 EXCLUDED_AISLES = [82, 102]
 # baby accessories (82), baby bath body care (102)
 # Giữ aisle 92 (baby food formula) — thực phẩm cho trẻ
+
+RANDOM_SEED = 42
