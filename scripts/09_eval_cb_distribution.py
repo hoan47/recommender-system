@@ -18,6 +18,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import numpy as np
 import pandas as pd
 import scipy.sparse
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 from src.config import MODEL_DIR, PROCESSED_DIR, RESULT_DIR
 from src.features.vectorizer import cb_similarity
@@ -96,6 +99,20 @@ def compute_similarities_and_overlaps(product_vectors, product_id_to_idx, pairs,
         'name_a': names_a,
         'name_b': names_b,
     }
+
+
+def plot_histogram(similarities, save_path):
+    """Vẽ 1 histogram đơn giản: y=số cặp, x=cosine similarity (0-1)."""
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.hist(similarities, bins=40, range=(0, 1), color='steelblue', edgecolor='white', alpha=0.85)
+    ax.set_xlabel('Cosine Similarity')
+    ax.set_ylabel('Số cặp')
+    ax.set_title(f'Phân bố CB Similarity (n={len(similarities):,})')
+    ax.set_xlim(0, 1)
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"  Histogram saved: {save_path}")
 
 
 def print_bucket_table(data):
@@ -196,6 +213,11 @@ def main():
     print(f"   Computed: {len(data['similarity'])} pairs")
 
     print_bucket_table(data)
+
+    save_dir = os.path.join(RESULT_DIR, "cb_similarity_distribution")
+    os.makedirs(save_dir, exist_ok=True)
+    plot_histogram(data['similarity'], os.path.join(save_dir, "histogram.png"))
+
     save_raw_data(data)
 
     print("\n  HOÀN TẤT!")
