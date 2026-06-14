@@ -25,8 +25,8 @@ DEPARTMENTS_FILE = os.path.join(PROJECT_ROOT, "data/departments.csv")
 # ============================================================
 # Hyperparameters — CB (Content-Based Vectorizer)
 # ============================================================
-CB_N_GRAM_RANGE = (2, 4)    # TF-IDF: character 2-gram đến 4-gram
-CB_ANALYZER = 'char'        # 'char' cho character n-gram, 'word' cho word n-gram
+CB_N_GRAM_RANGE = (1, 2)    # TF-IDF: character 2-gram đến 4-gram
+CB_ANALYZER = 'word'        # 'char' cho character n-gram, 'word' cho word n-gram
 CB_MAX_FEATURES = 15000      # TF-IDF: max số features từ tên sản phẩm
 
 # ============================================================
