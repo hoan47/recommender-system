@@ -1,7 +1,7 @@
 """
 Streamlit App — Bundle Recommendation System (Instacart).
 Hiển thị gợi ý mua kèm từ các model: Ochiai, Item2Vec, DeepWalk, Ensemble + CB Filter.
-Dữ liệu tiếng Việt từ data/processed/*_vi.csv
+Dữ liệu tiếng Việt từ products.parquet (product_name đã là tiếng Việt sau 01_load_data.py)
 
 Chạy: streamlit run scripts/08_streamlit_app.py
 """
@@ -37,30 +37,11 @@ st.set_page_config(
 
 
 @st.cache_data
-def _read_csv_vi(filename):
-    """Đọc CSV tiếng Việt dùng pandas (xử lý BOM, dấu phẩy trong tên, Unicode encoding)."""
-    return pd.read_csv(filename, encoding="utf-8-sig")
-
-
-@st.cache_data
 def load_products_vi():
-    """Load dữ liệu sản phẩm tiếng Việt + merge với products.parquet."""
+    """Load sản phẩm từ products.parquet — product_name đã là tiếng Việt."""
     products = pd.read_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
-
-    products_vi = _read_csv_vi(os.path.join(PROCESSED_DIR, "products_vi.csv"))
-
-    # Ép kiểu product_id cho đồng bộ trước merge
-    products["product_id"] = products["product_id"].astype(int)
-    products_vi["product_id"] = products_vi["product_id"].astype(int)
-
-    # Merge tên tiếng Việt
-    products = products.merge(products_vi, on="product_id", how="left")
-
-    # Dùng tên tiếng Việt, fallback về tiếng Anh nếu chưa có bản dịch
-    products["display_name"] = products["product_name_vi"].fillna(
-        products["product_name"]
-    )
-
+    # product_name đã là tiếng Việt sau load_products(use_vietnamese=True)
+    products["display_name"] = products["product_name"]
     return products
 
 
@@ -260,8 +241,7 @@ def main():
                     color: var(--text-color);">
             <h3 style="margin:0; color: #4CAF50;">📦 SẢN PHẨM MỤC TIÊU</h3>
             <p style="margin:5px 0;"><b>ID:</b> {product_id}</p>
-            <p style="margin:5px 0;"><b>Tên (VI):</b> {product_row['display_name']}</p>
-            <p style="margin:5px 0;"><b>Tên (EN):</b> {product_row['product_name']}</p>
+            <p style="margin:5px 0;"><b>Tên:</b> {product_row['display_name']}</p>
         </div>
         """,
             unsafe_allow_html=True,

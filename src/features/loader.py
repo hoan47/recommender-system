@@ -11,9 +11,31 @@ from src.config import (
 )
 
 
-def load_products() -> pd.DataFrame:
+def _load_products_vi() -> pd.DataFrame:
+    """
+    Đọc file products_vi.csv (bản dịch tiếng Việt).
+    
+    Returns:
+        DataFrame columns: [product_id, product_name_vi]
+    """
+    import os
+    from src.config import PROCESSED_DIR
+    vi_path = os.path.join(PROCESSED_DIR, "products_vi.csv")
+    if os.path.exists(vi_path):
+        return pd.read_csv(vi_path)
+    print("[WARN] Không tìm thấy products_vi.csv, bỏ qua bản dịch tiếng Việt.")
+    return None
+
+
+def load_products(use_vietnamese: bool = True) -> pd.DataFrame:
     """
     Đọc products.csv, merge với aisles.csv và departments.csv.
+    
+    Nếu use_vietnamese=True và có file products_vi.csv, cột product_name
+    sẽ được ghi đè bằng product_name_vi (tiếng Việt).
+
+    Args:
+        use_vietnamese: có ghi đè tên sản phẩm bằng tiếng Việt không
 
     Returns:
         DataFrame columns: [product_id, product_name, aisle_id,
@@ -25,6 +47,17 @@ def load_products() -> pd.DataFrame:
     
     products = products.merge(aisles, on='aisle_id', how='left')
     products = products.merge(departments, on='department_id', how='left')
+    
+    # Ghi đè product_name bằng tiếng Việt nếu có
+    if use_vietnamese:
+        products_vi = _load_products_vi()
+        if products_vi is not None:
+            # Merge để lấy product_name_vi
+            products = products.merge(products_vi, on='product_id', how='left')
+            # Ghi đè: nếu có bản dịch thì dùng, không thì giữ tên gốc
+            products['product_name'] = products['product_name_vi'].fillna(products['product_name'])
+            # Drop cột product_name_vi để giữ schema cũ
+            products = products.drop(columns=['product_name_vi'])
     
     return products
 

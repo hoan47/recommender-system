@@ -35,7 +35,8 @@ class CBFilter:
         Pre-compute product vectors 1 lần — vector hóa sản phẩm.
 
         Args:
-            products_df: DataFrame [product_id, product_name_vi, ...]
+            products_df: DataFrame [product_id, product_name, aisle_id, ...]
+            (product_name đã là tiếng Việt sau load_products)
             ngram_range: tuple (min_n, max_n) cho TF-IDF (default: self.ngram_range)
             max_features: int, max features cho TF-IDF (default: self.max_features)
         """
@@ -45,8 +46,8 @@ class CBFilter:
             max_features = self.max_features
         
         print("CBFilter: Đang vector hóa sản phẩm (tiếng Việt)...")
-        # Lấy text_data từ cột product_name_vi
-        text_data = products_df['product_name_vi'].fillna('').tolist()
+        # Lấy text_data từ cột product_name (đã là tiếng Việt sau load_products)
+        text_data = products_df['product_name'].fillna('').tolist()
         self.product_vectors, _ = build_product_vectors(
             text_data, ngram_range=ngram_range, max_features=max_features
         )
