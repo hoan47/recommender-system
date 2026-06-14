@@ -34,6 +34,7 @@ recommender-system/
 │   ├── 06_assoc_rules.py    # Train Association Rules
 │   ├── 07_ensemble.py       # Ensemble + test
 │   ├── 08_streamlit_app.py  # Streamlit Dashboard UI
+│   ├── 09_eval_cb_distribution.py  # Đánh giá phân bố CB similarity → chọn ENS_CB_THRESHOLD
 ├── src/                     # Source code
 │   ├── config.py            # Cấu hình tập trung
 │   ├── evaluation/          # (dự trữ cho đánh giá sau)
@@ -111,6 +112,9 @@ python scripts/07_ensemble.py
 
 # Bước 8: Streamlit Dashboard
 streamlit run scripts/08_streamlit_app.py
+
+# Bước 9: Đánh giá phân bố CB similarity (chọn ENS_CB_THRESHOLD)
+python scripts/09_eval_cb_distribution.py
 ```
 
 ## Lưu Ý

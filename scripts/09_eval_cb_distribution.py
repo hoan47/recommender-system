@@ -1,12 +1,18 @@
 """
-Đánh giá phân bố cosine similarity của CB (Content-Based).
+09 — Đánh giá phân bố cosine similarity của CB (Content-Based).
 Giúp chọn ENS_CB_THRESHOLD phù hợp dựa trên dữ liệu thực tế.
 
-Chạy:
-    python scripts/eval_cb_distribution.py
+Yêu cầu đã chạy:
+    1. scripts/01_load_data.py    → tạo data/processed/products_vi.csv
+    2. scripts/02_cb_filter.py    → tạo models/cb_filter/product_vectors.npz + product_id_to_idx.json
 
-Yêu cầu: scripts/01_load_data.py và scripts/02_cb_filter.py đã chạy
-(có products.parquet + product_vectors.npz)
+⚠️ LƯU Ý QUAN TRỌNG (dễ nhầm):
+    - CB vectors được TF-IDF train trên tên sản phẩm TIẾNG VIỆT (product_name_vi)
+    - File này load products_vi.csv (tiếng Việt) để word overlap analysis match với CB vectors
+    - KHÔNG dùng products.parquet (tiếng Anh) ở đây — sẽ dẫn đến sai lệch word overlap & similarity
+    - products.parquet (49,689 records, English) dùng cho collaborative models (Ochiai, Item2Vec, DeepWalk...)
+    - products_vi.csv (49,688 records, Vietnamese) dùng cho CB Filter + CB evaluation
+
 Output: results/cb_similarity_distribution/ (ảnh + CSV thống kê)
 """
 import json
@@ -37,8 +43,14 @@ TOP_K_SHOW = 20
 
 
 def load_data():
-    """Load products + product vectors."""
-    products = pd.read_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
+    """
+    Load products (tiếng Việt) + product vectors (trained trên tiếng Việt).
+
+    Dùng products_vi.csv thay vì products.parquet vì CB vectors được train
+    trên product_name_vi (xem 02_cb_filter.py). Word overlap cũng tính trên
+    tiếng Việt để phân tích match với cosine similarity.
+    """
+    products = pd.read_csv(os.path.join(PROCESSED_DIR, "products_vi.csv"))
     
     product_vectors = scipy.sparse.load_npz(
         os.path.join(MODEL_DIR, "cb_filter", "product_vectors.npz")
@@ -47,7 +59,7 @@ def load_data():
     with open(os.path.join(MODEL_DIR, "cb_filter", "product_id_to_idx.json")) as f:
         product_id_to_idx = {int(k): v for k, v in json.load(f).items()}
     
-    print(f"Products: {len(products)}")
+    print(f"Products (Vietnamese): {len(products)}")
     print(f"Vectors: {product_vectors.shape}")
     print(f"Mapping: {len(product_id_to_idx)} products")
     
@@ -62,7 +74,7 @@ def tokenize(name):
 
 
 def compute_word_overlap(name_a, name_b):
-    """Tính word overlap giữa 2 tên sản phẩm."""
+    """Tính word overlap giữa 2 tên sản phẩm (tiếng Việt)."""
     tokens_a = tokenize(name_a)
     tokens_b = tokenize(name_b)
     
@@ -100,7 +112,8 @@ def compute_similarities(product_vectors, product_id_to_idx, pairs, products):
     word_counts_b = []
     jaccards = []
     
-    pid_to_name = dict(zip(products['product_id'], products['product_name']))
+    # Dùng product_name_vi (tiếng Việt) để match với TF-IDF vectors
+    pid_to_name = dict(zip(products['product_id'], products['product_name_vi']))
     
     n_total = len(pairs)
     for i, (a, b) in enumerate(pairs):
@@ -117,7 +130,7 @@ def compute_similarities(product_vectors, product_id_to_idx, pairs, products):
         similarities.append(sim)
         valid_pairs.append((a, b))
         
-        # Word overlap
+        # Word overlap trên tên tiếng Việt
         name_a = pid_to_name.get(a, '')
         name_b = pid_to_name.get(b, '')
         overlap, na, nb, jac = compute_word_overlap(name_a, name_b)
@@ -214,7 +227,7 @@ def print_examples_by_threshold_bucket(similarities, pairs, word_overlaps, jacca
     if buckets is None:
         buckets = [(0.85, 1.01), (0.75, 0.85), (0.65, 0.75), (0.5, 0.65), (0.3, 0.5), (0.0, 0.3)]
     
-    pid_to_name = dict(zip(products['product_id'], products['product_name']))
+    pid_to_name = dict(zip(products['product_id'], products['product_name_vi']))
     n_show = 5
     
     print("\n" + "=" * 100)
@@ -261,7 +274,7 @@ def print_examples_by_threshold_bucket(similarities, pairs, word_overlaps, jacca
 
 def print_examples(similarities, pairs, products, n=TOP_K_SHOW):
     """In ví dụ các cặp giống nhất."""
-    pid_to_name = dict(zip(products['product_id'], products['product_name']))
+    pid_to_name = dict(zip(products['product_id'], products['product_name_vi']))
     
     # Top-N giống nhất → substitute rõ ràng
     top_indices = np.argsort(similarities)[::-1][:n]

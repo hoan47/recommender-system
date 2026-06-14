@@ -197,6 +197,11 @@ Dữ liệu được cấu trúc theo **đơn hàng (order)**, mỗi đơn hàng
 ✅ **Thông tin phong phú:** Bao gồm thời gian, thứ tự, và tần suất mua lại  
 
 ### 5.2 Hạn chế
+> ⚠️ **Lưu ý về 2 nguồn dữ liệu sản phẩm (dễ nhầm):**
+> - `products.parquet` (English, 49,689 records) — tạo từ `01_load_data.py`, dùng cho **collaborative models** (Ochiai, Item2Vec, DeepWalk, Association Rules)
+> - `products_vi.csv` (Vietnamese, 49,688 records) — dùng cho **CB Filter** (`02_cb_filter.py`) vì TF-IDF trained trên `product_name_vi`
+> - Khi làm evaluation liên quan đến CB (ví dụ `09_eval_cb_distribution.py`): **PHẢI dùng `products_vi.csv`**, không dùng `products.parquet` — nếu không word overlap & similarity sẽ sai lệch do khác ngôn ngữ
+
 ⚠️ **Không có thông tin giá:** Không thể tính toán ngân sách hoặc giá trị đơn hàng  
 ⚠️ **Không có demographics:** Không biết tuổi, giới tính, vị trí của người dùng  
 ⚠️ **Dữ liệu test không phù hợp:** `eval_set=test` là dữ liệu tuần tự không phải mua kèm thực tế  
