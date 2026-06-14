@@ -1,7 +1,7 @@
 """
 TF-IDF cho CB Diversity Filter.
 Vector hóa sản phẩm dựa trên product_name_vi dùng word n-gram TF-IDF.
-Giữ nguyên dấu tiếng Việt, không lowercase.
+Giữ nguyên dấu tiếng Việt, không lowercase bừa bãi trước khi clean.
 """
 import os
 import re
@@ -19,6 +19,24 @@ _PATTERN_CLEAN = re.compile(
 )
 
 
+def _clean_text_preprocessor(text):
+    """Hàm tiền xử lý chuỗi: xóa sạch dung tích/quy cách rác trước khi đưa vào TF-IDF."""
+    if not isinstance(text, str):
+        return ""
+
+    # 1. Xóa sạch dung tích, kích thước dựa trên Regex đã chốt
+    text = _PATTERN_CLEAN.sub("", text)
+
+    # 2. Dọn dẹp hậu quả (dấu gạch ngang mồ côi, khoảng trắng kép)
+    text = re.sub(r'\s*-\s*$', '', text)          # Cuối câu
+    text = re.sub(r'\s*-\s*(?=\s)', ' ', text)    # Giữa câu
+    text = re.sub(r'\(\s*\)', '', text)            # Ngoặc rỗng
+    text = re.sub(r'\s+', ' ', text).strip()      # Gom khoảng trắng
+
+    # 3. Đưa về lowercase đồng bộ cho mô hình TF-IDF dễ tính toán (Khuyên dùng)
+    return text.lower()
+
+
 def _load_vietnamese_stopwords():
     """Load stop words tiếng Việt từ file vietnamese_stopwords.txt."""
     path = os.path.join(PROJECT_ROOT, "vietnamese_stopwords.txt")
@@ -26,77 +44,37 @@ def _load_vietnamese_stopwords():
         print(f"[WARN] Không tìm thấy {path}, bỏ qua stop words.")
         return []
     with open(path, "r", encoding="utf-8") as f:
-        words = [line.strip() for line in f if line.strip()]
-    print(f"  Đã load {len(words)} stop words tiếng Việt từ {path}")
-    return words
+        # Đưa stop words về chữ thường để khớp với văn bản sau khi preprocessor hạ case
+        return [line.strip().lower() for line in f if line.strip()]
 
 
-def _clean_product_name_vi(text: str) -> str:
+def build_product_vectors(text_data, ngram_range=CB_N_GRAM_RANGE, max_features=CB_MAX_FEATURES, analyzer=CB_ANALYZER):
     """
-    Làm sạch tên sản phẩm tiếng Việt:
-      - Giữ nguyên dấu tiếng Việt, không lowercase
-      - Xóa các cụm dung tích, quy cách (số + đơn vị, size/cỡ + số)
-      - Dọn dẹp ký tự thừa phát sinh sau khi xóa
+    Xây dựng ma trận TF-IDF từ danh sách tên sản phẩm.
     """
-    if not isinstance(text, str):
-        return ''
-
-    # 1. Xóa sạch các cụm dung tích, quy cách bằng Regex
-    text = _PATTERN_CLEAN.sub('', text)
-
-    # 2. Dọn dẹp các ký tự thừa phát sinh sau khi xóa số
-    text = re.sub(r'\s*-\s*$', '', text)          # Xóa dấu gạch ngang ở cuối câu
-    text = re.sub(r'\s*-\s*(?=\s)', ' ', text)    # Xóa dấu gạch ngang bị cô lập giữa câu
-    text = re.sub(r'\(\s*\)', '', text)            # Xóa dấu ngoặc đơn rỗng dạng ()
-    text = re.sub(r'\s+', ' ', text).strip()      # Gom khoảng trắng thừa thành khoảng trắng đơn
-
-    return text
-
-
-def build_product_vectors(products_df, ngram_range=None, max_features=None, analyzer=None):
-    """
-    Vector hóa sản phẩm (word n-gram TF-IDF trên product_name_vi).
-
-    Args:
-        products_df: DataFrame [product_id, product_name_vi, ...]
-        ngram_range: tuple (min_n, max_n) cho TF-IDF
-        max_features: int, max features cho TF-IDF
-        analyzer: 'char' hoặc 'word'
-
-    Returns:
-        product_vectors: sparse.csr_matrix shape (n_products, D)
-        vectorizer: TfidfVectorizer đã fit
-    """
-    if ngram_range is None:
-        ngram_range = CB_N_GRAM_RANGE
-    if max_features is None:
-        max_features = CB_MAX_FEATURES
-    if analyzer is None:
-        analyzer = CB_ANALYZER
-
-    n_products = len(products_df)
-    print(f"Đang vector hóa {n_products} sản phẩm (tiếng Việt)...")
-
-    # Làm sạch tên sản phẩm tiếng Việt — giữ nguyên dấu, không lowercase
-    text_data = products_df['product_name_vi'].fillna('').apply(_clean_product_name_vi)
-
-    # Load stop words tiếng Việt (nếu có)
     stop_words = _load_vietnamese_stopwords()
 
-    # TF-IDF với word n-gram
+    # Nếu analyzer là dựa trên ký tự (char/char_wb), không áp dụng stop_words dạng từ đơn để tránh lỗi Sklearn
+    if analyzer in ['char', 'char_wb']:
+        actual_stop_words = None
+        print(f"[INFO] Analyzer là '{analyzer}', tự động bỏ qua list stop_words dạng từ.")
+    else:
+        actual_stop_words = stop_words if stop_words else None
+
     print(f"  TF-IDF ({analyzer}, ngram_range={ngram_range}, max_features={max_features})...")
+
     tfidf = TfidfVectorizer(
         ngram_range=ngram_range,
         max_features=max_features,
         analyzer=analyzer,
-        stop_words=stop_words if stop_words else None,
+        preprocessor=_clean_text_preprocessor,  # ĐÃ KÍCH HOẠT: Gọi hàm xóa rác ở đây
+        stop_words=actual_stop_words,
     )
+
     tfidf_matrix = tfidf.fit_transform(text_data)
     print(f"    TF-IDF matrix shape: {tfidf_matrix.shape}")
 
     product_vectors = tfidf_matrix
-
-    # Lưu vectorizer vào attribute để dùng sau (nếu cần)
     product_vectors._tfidf = tfidf
 
     return product_vectors, tfidf
@@ -105,25 +83,10 @@ def build_product_vectors(products_df, ngram_range=None, max_features=None, anal
 def cb_similarity(product_vectors, product_a_idx, candidate_indices):
     """
     Tính cosine similarity giữa product_a và từng candidate — on-demand.
-
-    Args:
-        product_vectors: sparse.csr_matrix (n_products, D)
-        product_a_idx: int — index của product A
-        candidate_indices: list[int] — indices của các candidate
-
-    Returns:
-        numpy array shape (len(candidate_indices),) — similarity scores [0,1]
     """
     vec_a = product_vectors[product_a_idx]
     vecs_b = product_vectors[candidate_indices]
 
-    # Cosine similarity thủ công cho sparse matrix
-    dot_ab = vecs_b.dot(vec_a.T).toarray().flatten()
-    norm_a = np.sqrt(vec_a.dot(vec_a.T).toarray()[0, 0])
-    norms_b = np.sqrt((vecs_b.multiply(vecs_b)).sum(axis=1)).A1
-
-    denom = norm_a * norms_b
-    denom[denom == 0] = 1e-9  # tránh chia 0
-
-    similarities = dot_ab / denom
-    return np.clip(similarities, 0, 1)
+    # Tính tích vô hướng giữa vector A và ma trận các vector B
+    dot_ab = vecs_b.dot(vec_a.T).toarray().ravel()
+    return dot_ab
