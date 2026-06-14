@@ -34,7 +34,7 @@ recommender-system/
 │   ├── 06_assoc_rules.py    # Train Association Rules
 │   ├── 07_ensemble.py       # Ensemble + test
 │   ├── 08_streamlit_app.py  # Streamlit Dashboard UI
-│   └── 09_cb_evaluation.py  # (đã xóa — không còn sử dụng)
+│   └── 09_eval_cb_similarity.py  # Phân tích phân bố cosine similarity CB Filter
 ├── src/                     # Source code
 │   ├── config.py            # Cấu hình tập trung
 │   ├── evaluation/          # (dự trữ cho đánh giá sau)
