@@ -23,6 +23,11 @@ AISLES_FILE = os.path.join(PROJECT_ROOT, "data/aisles.csv")
 DEPARTMENTS_FILE = os.path.join(PROJECT_ROOT, "data/departments.csv")
 
 # ============================================================
+# Xử lý dữ liệu (chunk-based)
+# ============================================================
+CHUNKSIZE = 500000  # số records mỗi chunk khi đọc file prior 32.4M records
+
+# ============================================================
 # Hyperparameters — CB (Content-Based Vectorizer)
 # ============================================================
 CB_N_GRAM_RANGE = (1, 2)    # TF-IDF: character 2-gram đến 4-gram
@@ -76,6 +81,7 @@ ENS_GAMMA = 0.25                # trọng số DeepWalk (graph embedding)
 ENS_TOP_K = 100                 # top-K sau ensemble (trước CB filter)
 ENS_FINAL_K = 10                # top-K cuối cùng output
 ENS_CB_THRESHOLD = 0.25          # ngưỡng CB filter khi dùng hybrid ensemble
+CB_THRESHOLD = 0.25              # ngưỡng CB similarity để phân loại Substitute (>=) vs Complementary
 
 # ============================================================
 # Product Filter Strategy
