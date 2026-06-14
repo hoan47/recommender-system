@@ -34,7 +34,7 @@ CB_N_GRAM_RANGE = (1, 2)    # TF-IDF: word 1-gram đến 2-gram
 CB_MAX_FEATURES = 15000      # TF-IDF: max số features từ tên sản phẩm
 
 # Ensemble Count + TF-IDF
-CB_ALPHA = 1               # trọng số Count Vectorizer (TF-IDF weight = 1 - alpha)
+CB_ALPHA = 0.8               # trọng số Count Vectorizer (TF-IDF weight = 1 - alpha)
 CB_COUNT_N_GRAM_RANGE = (1, 1)  # Count Vectorizer: word unigram (đếm từ đơn)
 CB_COUNT_MAX_FEATURES = 15000   # Count Vectorizer: max features
 

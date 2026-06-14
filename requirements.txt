@@ -24,3 +24,6 @@ numba>=0.56.0
 
 # Progress bars (cho chunk processing)
 tqdm>=4.62.0
+
+# Plotting (cho eval scripts)
+matplotlib>=3.5.0
