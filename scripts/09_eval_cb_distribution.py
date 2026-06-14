@@ -17,14 +17,9 @@ import scipy.sparse
 from src.config import MODEL_DIR, PROCESSED_DIR, RESULT_DIR
 from src.features.vectorizer import cb_similarity
 
-RANDOM_SEED = 42
-N_EXAMPLES = 10         # 5 cặp cho mỗi overlap
+N_EXAMPLES = 20         # cặp cho mỗi overlap
 MAX_OVERLAP = 10       # từ 1 đến 10 từ trùng
 MAX_TRIES = 5_000_000  # giới hạn lần thử tránh treo
-
-random.seed(RANDOM_SEED)
-np.random.seed(RANDOM_SEED)
-
 
 def load_data():
     products = pd.read_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
