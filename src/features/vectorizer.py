@@ -12,7 +12,6 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from src.config import CB_N_GRAM_RANGE, CB_MAX_FEATURES, CB_ANALYZER, PROJECT_ROOT
 
 # Pattern gom Nhóm đơn vị đo lường, khối lượng, dung tích và kích cỡ
-# Cải tiến: Thêm g, kg, gr, cm, mm và xử lý chặt chẽ hơn các ký tự dính liền
 _PATTERN_CLEAN = re.compile(
     r"\b\d+(?:[\.,]\d+)?\s*(?:ct|count|mg|mcg|oz|fl\s*oz|fl|gallon|inch|in|pack|pk|ml|liter|lit|lít|l|lb|lbs|iu|i\.u\.?|loads|watt|cups|cup|sticks|g|kg|gr|grs|cm|mm)\b"
     r"|\b(?:size|cỡ)\s*\d+\b",
@@ -37,7 +36,6 @@ def _load_vietnamese_stopwords():
 
     with open(path, "r", encoding="utf-8") as f:
         # Sắp xếp stop words theo chiều dài giảm dần để khi thay thế không bị đè
-        # (ví dụ: 'tự nhiên' trước 'tự', 'chính hãng' trước 'hãng')
         words = [line.strip().lower() for line in f if line.strip()]
         _VIETNAMESE_STOPWORDS = sorted(words, key=len, reverse=True)
     return _VIETNAMESE_STOPWORDS
@@ -54,15 +52,20 @@ def _clean_text_preprocessor(text):
     # 2. Xóa sạch dung tích, kích thước dựa trên Regex
     text = _PATTERN_CLEAN.sub("", text)
 
-    # 3. Loại bỏ các ký tự đặc biệt rác hay có trong tên sản phẩm (giữ lại dấu cách)
-    text = re.sub(r'[^\w\s]', ' ', text)
-
-    # 4. XỬ LÝ TRIỆT ĐỂ STOP WORDS (Bao gồm cả từ ghép như "chính hãng", "cao cấp")
+    # 3. ĐƯA XỬ LÝ STOP WORDS LÊN TRƯỚC PUNCTUATION
     #    Xóa cụm dài (2-3 từ) trước, từ ngắn sau — tránh mất context
+    #    Đặt trước punctuation để stop words đặc biệt (vd: &) không bị xóa nhầm
     stop_words = _load_vietnamese_stopwords()
     for word in stop_words:
-        # Sử dụng \b để chỉ xóa khi nó là một từ trọn vẹn, tránh xóa nhầm một phần của từ khác
-        text = re.sub(r'\b' + re.escape(word) + r'\b', '', text)
+        # Nếu stop word là ký tự chữ -> dùng \b để match từ trọn vẹn
+        # Nếu stop word là ký tự đặc biệt (vd: &) -> không dùng \b kẻo lỗi Regex
+        if re.match(r'^\w', word) and re.search(r'\w$', word):
+            text = re.sub(r'\b' + re.escape(word) + r'\b', '', text)
+        else:
+            text = re.sub(re.escape(word), '', text)
+
+    # 4. Loại bỏ các ký tự đặc biệt rác còn sót lại (giữ lại dấu cách)
+    text = re.sub(r'[^\w\s]', ' ', text)
 
     # 5. Dọn dẹp khoảng trắng thừa phát sinh sau khi xóa từ
     text = re.sub(r'\s+', ' ', text).strip()
@@ -76,8 +79,7 @@ def build_product_vectors(text_data, ngram_range=CB_N_GRAM_RANGE, max_features=C
     """
     print(f"  TF-IDF ({analyzer}, ngram_range={ngram_range}, max_features={max_features})...")
 
-    # Vì ta đã xử lý stop_words thủ công ở tầng `preprocessor` rất sạch sẽ,
-    # nên ta đặt stop_words của Sklearn là None để tránh xung đột hoặc lỗi cảnh báo.
+    # Đặt stop_words của Sklearn là None để tránh xung đột hoặc lỗi cảnh báo.
     tfidf = TfidfVectorizer(
         ngram_range=ngram_range,
         max_features=max_features,
