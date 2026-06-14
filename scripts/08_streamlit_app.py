@@ -336,6 +336,7 @@ def main():
                             "Xếp hạng": rank,
                             "ID": rid,
                             "Tên sản phẩm": rrow["display_name"],
+                            "P_name_en": rrow["product_name"],
                             "Điểm số": f"{score:.4f}",
                         }
                     )
@@ -379,6 +380,7 @@ def main():
                         {
                             "ID": cid,
                             "Tên sản phẩm": name,
+                            "P_name_en": rrow["product_name"],
                             "CB Similarity": f"{sim:.4f}",
                             "Kết luận": label,
                         }
@@ -415,7 +417,10 @@ def main():
                     name = (
                         rrow.iloc[0]["display_name"] if not rrow.empty else "?"
                     )
-                    st.write(f"- [{pid}] {name}")
+                    name_en = (
+                        rrow.iloc[0]["product_name"] if not rrow.empty else "?"
+                    )
+                    st.write(f"- [{pid}] {name} ({name_en})")
             else:
                 st.write("*(Không có)*")
 
@@ -427,7 +432,10 @@ def main():
                     name = (
                         rrow.iloc[0]["display_name"] if not rrow.empty else "?"
                     )
-                    st.write(f"- [{pid}] {name}")
+                    name_en = (
+                        rrow.iloc[0]["product_name"] if not rrow.empty else "?"
+                    )
+                    st.write(f"- [{pid}] {name} ({name_en})")
             else:
                 st.write("*(Không có)*")
 
