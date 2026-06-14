@@ -11,8 +11,7 @@
   - `[feat]` cho commit thêm tính năng mới
 
 ## 2. Đọc docs trước khi làm
-- Trước khi implement: đọc docs/data_evaluation.md, docs/models.md, docs/implementation_plan.md
-- Tuân theo thứ tự implement trong implementation_plan.md
+- Trước khi implement: đọc docs/data_evaluation.md, docs/models.md
 - KHÔNG implement theo thứ tự khác nếu chưa có lý do chính đáng
 
 ## 3. Kiểm tra dữ liệu
@@ -22,8 +21,8 @@
 - File prior 32.4M records → xử lý chunk-based
 
 ## 4. Cập nhật docs khi thay đổi cấu trúc
-- Khi thêm/xóa/di chuyển file hoặc thư mục: phải cập nhật `docs/README.md` (sơ đồ cấu trúc) và `docs/progress.md` (bảng hiện trạng file)
-- Nếu thay đổi ảnh hưởng đến data flow/kiến trúc: cập nhật `docs/models.md` và `docs/implementation_plan.md`
+- Khi thêm/xóa/di chuyển file hoặc thư mục: phải cập nhật `docs/README.md` (sơ đồ cấu trúc)
+- Nếu thay đổi ảnh hưởng đến data flow/kiến trúc: cập nhật `docs/models.md`
 
 ## 5. Hỏi user khi không chắc chắn
 - Khi không chắc chắn về điều gì → hỏi lại user trước khi làm
