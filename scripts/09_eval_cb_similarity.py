@@ -1,75 +1,91 @@
 """
-Bước 9: Phân tích phân bố cosine similarity CB Filter.
-Output: results/cb_similarity_stats.json, results/cb_similarity_distribution.png
+Bước 9: Phân tích phân bố cosine similarity CB Filter (full matrix, CPU).
+RAM chỉ lưu histogram 10 bins + ma trận sparse.
+Dùng sparse matrix multiplication → chỉ duyệt nonzero elements.
 """
-import json, os, sys, pandas as pd, numpy as np, scipy.sparse, matplotlib
+import json, os, sys
+import numpy as np
+from scipy import sparse
+import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.config import MODEL_DIR, RESULT_DIR, PROCESSED_DIR
-from src.features.vectorizer import cb_similarity
+from src.config import MODEL_DIR, RESULT_DIR, CB_THRESHOLD
 
 # === Load vectors ===
-v = scipy.sparse.load_npz(os.path.join(MODEL_DIR, "cb_filter", "product_vectors.npz"))
-with open(os.path.join(MODEL_DIR, "cb_filter", "product_id_to_idx.json")) as f:
-    pid_to_idx = json.load(f)
+print("Đang load product_vectors...")
+v = sparse.load_npz(os.path.join(MODEL_DIR, "cb_filter", "product_vectors.npz")).tocsr()
 n = v.shape[0]
+print(f"  shape: {v.shape}")
 
-# === Load products để có tên ===
-p = pd.read_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
-pid_to_name = dict(zip(p['product_id'], p['product_name']))
+# === Chuẩn hóa L2 từng hàng (unit norm) --> cosine = dot ===
+print("Đang chuẩn hóa L2...")
+norm = np.sqrt((v.multiply(v)).sum(axis=1)).A1
+norm[norm == 0] = 1e-9
+v = v.multiply(1.0 / norm[:, np.newaxis]).tocsr()
 
-# === Thống kê: 200K cặp ngẫu nhiên ===
-rng = np.random.default_rng(42)
-a = rng.integers(0, n, 200_000)
-b = rng.integers(0, n, 200_000)
-m = a == b
-while m.sum():
-    b[m] = rng.integers(0, n, m.sum())
-    m = a == b
-sim = np.array([cb_similarity(v, a[i], [b[i]])[0] for i in range(200_000)])
+# === Tính sparse similarity matrix (chỉ nonzero) ===
+print("Đang tính v @ v.T (sparse)...")
+sim = v.dot(v.T).tocoo()
+total_nz = len(sim.data)
+print(f"  nonzero elements: {total_nz:,}")
 
-stats = {"n_samples": 200_000, "min": float(sim.min()), "max": float(sim.max()),
-         "mean": float(sim.mean()), "median": float(np.median(sim)), "std": float(sim.std()),
-         "p25": float(np.percentile(sim, 25)), "p50": float(np.percentile(sim, 50)),
-         "p75": float(np.percentile(sim, 75)), "p90": float(np.percentile(sim, 90)),
-         "p95": float(np.percentile(sim, 95)), "p99": float(np.percentile(sim, 99))}
-for k, v in stats.items():
-    print(f"  {k:20s} = {v:.6f}" if k != "n_samples" else f"  {k:20s} = {v:,}")
+# === Duyệt nonzero, lấy upper triangle, đếm histogram ===
+bins = [round(i * 0.1, 1) for i in range(10)]
+counts = [0] * 10
+nz_upper = 0
 
-# === Đối chiếu thực tế ===
-def pair(ka, kb):
-    """Tìm product chứa keyword, tính similarity"""
-    try:
-        ia = int(p[p['product_name'].str.contains(ka, case=False)]['product_id'].iloc[0])
-        ib = int(p[p['product_name'].str.contains(kb, case=False)]['product_id'].iloc[0])
-        if ia == ib and len(p[p['product_name'].str.contains(kb, case=False)]) > 1:
-            ib = int(p[p['product_name'].str.contains(kb, case=False)]['product_id'].iloc[1])
-        s = cb_similarity(v, pid_to_idx[str(ia)], [pid_to_idx[str(ib)]])[0]
-        print(f"  {pid_to_name[ia]:<50s} | {pid_to_name[ib]:<50s} | {s:.4f}")
-    except: pass
+print("Đang duyệt upper triangle...")
+for i, j, val in zip(sim.row, sim.col, sim.data):
+    if j > i:  # upper triangle
+        val = float(np.clip(val, 0, 1))
+        bin_idx = min(int(val * 10), 9)
+        counts[bin_idx] += 1
+        nz_upper += 1
 
-print("\n--- SUBSTITUTE (cùng loại) ---")
-for kw in ['beer', 'milk', 'bread', 'cheese', 'chicken']:
-    pair(kw, kw)
-print("\n--- COMPLEMENTARY (mua kèm) ---")
-for ka, kb in [('beer','chip'), ('milk','cereal'), ('bread','peanut butter'), ('pasta','sauce'), ('coffee','cream')]:
-    pair(ka, kb)
-print("\n--- KHÔNG LIÊN QUAN ---")
-for ka, kb in [('beer','diaper'), ('milk','shampoo'), ('bread','soap'), ('chicken','toothpaste'), ('banana','tire')]:
-    pair(ka, kb)
+total_pairs = n * (n - 1) // 2
+print(f"  upper triangle pairs: {total_pairs:,}")
+print(f"  nonzero upper pairs:  {nz_upper:,}")
+print(f"  pairs bị bỏ qua (cos=0): {total_pairs - nz_upper:,}")
 
-# === Lưu kết quả ===
+# === Kết quả ===
+dist = {f"{b:.1f}-{b+0.1:.1f}": c for b, c in zip(bins, counts)}
+result = {
+    "bins": [f"{b:.1f}-{b+0.1:.1f}" for b in bins],
+    "counts": counts,
+    "total_pairs": total_pairs,
+    "nonzero_pairs": nz_upper,
+    "threshold": CB_THRESHOLD,
+    "distribution": dist
+}
+print("\nPhân bố cosine similarity (step 0.1):")
+for k, v in dist.items():
+    pct = v * 100 / nz_upper if nz_upper else 0
+    print(f"  [{k:7s})  {v:10,} cặp ({pct:.2f}%)")
+
+# === Lưu JSON ===
 os.makedirs(RESULT_DIR, exist_ok=True)
-with open(os.path.join(RESULT_DIR, "cb_similarity_stats.json"), 'w') as f:
-    json.dump(stats, f, indent=2)
+json_path = os.path.join(RESULT_DIR, "cb_similarity_histogram.json")
+with open(json_path, 'w') as f:
+    json.dump(result, f, indent=2)
+print(f"\nĐã lưu JSON: {json_path}")
 
-fig, ax = plt.subplots(figsize=(10, 5))
-ax.hist(sim, bins=100, range=(0, 1), color='steelblue', edgecolor='white', alpha=0.7)
-for p, c, ls in [(50, 'red', '-'), (75, 'orange', '--'), (90, 'purple', ':'), (99, 'darkred', ':')]:
-    ax.axvline(np.percentile(sim, p), color=c, linestyle=ls, label=f'p{p}={np.percentile(sim, p):.3f}')
-ax.axvline(0.3, color='green', ls='-', lw=2, label='threshold (0.3)')
-ax.set_xlabel('Cosine similarity'); ax.set_ylabel('Frequency'); ax.legend()
-plt.savefig(os.path.join(RESULT_DIR, "cb_similarity_distribution.png"), dpi=150, bbox_inches='tight')
+# === Vẽ biểu đồ ===
+fig, ax = plt.subplots(figsize=(10, 6))
+bar_labels = [f"{b:.1f}" for b in bins]
+bar_centers = np.arange(len(bins)) + 0.05
+ax.bar(bar_centers, counts, width=0.09, color='steelblue', edgecolor='white', alpha=0.8)
+ax.axvline(0.3, color='green', ls='-', lw=2, label=f'threshold={CB_THRESHOLD}')
+ax.set_xticks([b + 0.05 for b in range(10)])
+ax.set_xticklabels(bar_labels)
+ax.set_xlabel('Cosine similarity')
+ax.set_ylabel('Số cặp (nonzero)')
+ax.set_title('Phân bố cosine similarity (full matrix, step 0.1)')
+ax.legend()
+ax.grid(axis='y', alpha=0.3)
+
+png_path = os.path.join(RESULT_DIR, "cb_similarity_histogram.png")
+plt.savefig(png_path, dpi=150, bbox_inches='tight')
 plt.close()
-print(f"\nDone! Kết quả tại {RESULT_DIR}/")
+print(f"Đã lưu biểu đồ: {png_path}")
+print("Hoàn tất!")
