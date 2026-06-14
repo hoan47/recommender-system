@@ -313,7 +313,8 @@ def main():
 
     # ---- CB Filter chi tiết ----
     if show_cb_detail and show_ensemble_cb:
-        ensemble_recs = results.get("Ensemble + CB", {}).get("recs", [])
+        # Lấy candidate từ kết quả gốc trước CB filter để hiển thị CB similarity chi tiết
+        ensemble_recs = results.get("Ensemble (w/o CB)", {}).get("recs", [])
         if ensemble_recs:
             st.markdown("---")
             st.markdown("## 🎯 CB Filter Chi Tiết (Ensemble + CB)")
