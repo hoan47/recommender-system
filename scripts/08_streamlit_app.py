@@ -285,7 +285,8 @@ def main():
                     color: var(--text-color);">
             <h3 style="margin:0; color: #4CAF50;">📦 SẢN PHẨM MỤC TIÊU</h3>
             <p style="margin:5px 0;"><b>ID:</b> {product_id}</p>
-            <p style="margin:5px 0;"><b>Tên:</b> {product_row['display_name']}</p>
+            <p style="margin:5px 0;"><b>Tên (VI):</b> {product_row['display_name']}</p>
+            <p style="margin:5px 0;"><b>Tên (EN):</b> {product_row['product_name']}</p>
         </div>
         """,
             unsafe_allow_html=True,
