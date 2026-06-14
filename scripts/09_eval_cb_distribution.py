@@ -161,13 +161,16 @@ def plot_histogram(similarities, save_path):
         ax1.axvline(val, color=c, linestyle=':', alpha=0.7, label=f'P{p}={val:.3f}')
     ax1.legend(fontsize=8)
     
-    # Zoom vào vùng >= 0.3 — nơi substitute xuất hiện
+    # Đồ thị 2: Lấy HẾT tất cả các cặp có similarity > 0
     ax2 = axes[1]
-    mask_high = similarities >= 0.3
-    ax2.hist(similarities[mask_high], bins=50, color='coral', edgecolor='white', alpha=0.8)
+    mask_positive = similarities > 0  # Lấy toàn bộ các cặp có điểm tương đồng dương
+    
+    ax2.hist(similarities[mask_positive], bins=50, color='coral', edgecolor='white', alpha=0.8)
     ax2.set_xlabel('Cosine Similarity')
     ax2.set_ylabel('Số cặp')
-    ax2.set_title(f'Zoom: similarity >= 0.3 (n={mask_high.sum():,})')
+    ax2.set_title(f'Phân phối các cặp có similarity > 0 (n={mask_positive.sum():,})')
+    
+    # Giữ lại các đường line đánh dấu mốc điểm cao nếu bạn cần quan sát
     ax2.axvline(0.7, color='red', linestyle='--', alpha=0.7, label='0.7')
     ax2.axvline(0.8, color='darkred', linestyle='--', alpha=0.7, label='0.8')
     ax2.axvline(0.9, color='maroon', linestyle='--', alpha=0.7, label='0.9')
