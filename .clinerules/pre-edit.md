@@ -26,3 +26,10 @@
 
 ## 5. Hỏi user khi không chắc chắn
 - Khi không chắc chắn về điều gì → hỏi lại user trước khi làm
+
+## 6. Kiểm tra execute_command bắt buộc
+TRƯỚC mỗi lần gọi `execute_command`, phải kiểm tra tất cả các mục sau:
+
+- [ ] Command có gọi file `.py`, `.sh`, `.js`, `.bat` nằm trong project không? (VD: `python scripts/...`, `python .\scripts\...`, `./scripts/...`, `node src/...`)
+- [ ] Nếu CÓ → KHÔNG được gọi `execute_command`, thay bằng `ask_followup_question` yêu cầu user tự chạy
+- [ ] Nếu KHÔNG → chỉ được gọi cho: pip, python -c "code inline ngắn", git, mkdir, dir, cd, copy, del, echo, type, findstr, npm, docker, kubectl
