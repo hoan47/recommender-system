@@ -9,20 +9,34 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 from src.config import CB_N_GRAM_RANGE, CB_MAX_FEATURES, CB_ANALYZER
 
-# Regex đơn giản: chỉ giữ a-z, space (bỏ số, ký tự đặc biệt)
-_PATTERN_CLEAN = re.compile(r'[^a-zA-Z\s]+')
+# Regex cleaning — 3 bước tối ưu cho tên sản phẩm Instacart
+_PATTERN_SPEC_PARAM = re.compile(
+    r'\b(size|spf|posted|uploaded|bags|buns|tablets|sheets)\s*\d+(\.\d+)?\b',
+    re.IGNORECASE
+)
+_PATTERN_UNIT = re.compile(
+    r'\b\d+(\.\d+)?\s*(mg|mcg|g|iu|oz|fl|floz|gallon|gal|qt|liter|l|ml|lb|lbs|ct|count|pk|pack|loads|sheets|sticks|pieces|slices|tablets|refills|in|inch|ply|calories?|calorie|t|m|year|months?|x)\b',
+    re.IGNORECASE
+)
+_PATTERN_NON_ALPHA = re.compile(r'[^a-zA-Z\s]+')
 
 
 def _clean_product_name(name: str) -> str:
     """
-    Làm sạch tên sản phẩm đơn giản:
-      - Xoá tất cả ký tự không phải a-zA-Z hoặc space
-      - Lowercase
-      - Chuẩn hoá khoảng trắng
+    Làm sạch tên sản phẩm với 3 bước regex:
+      1. Xoá từ chỉ thông số đứng trước số (vd: "size 12", "bags 10")
+      2. Xoá đơn vị đo lường đứng sau số (vd: "16 oz", "2 lb")
+      3. Xoá tất cả ký tự số và ký tự đặc biệt còn sót lại
     """
     if not name or not isinstance(name, str):
         return ''
-    text = _PATTERN_CLEAN.sub(' ', name)
+    # Bước 1: xoá từ chỉ thông số + số (vd: "size 12" → "")
+    text = _PATTERN_SPEC_PARAM.sub(' ', name)
+    # Bước 2: xoá số + đơn vị (vd: "16 oz" → "")
+    text = _PATTERN_UNIT.sub(' ', text)
+    # Bước 3: xoá ký tự đặc biệt, giữ lại a-z + space
+    text = _PATTERN_NON_ALPHA.sub(' ', text)
+    # Chuẩn hoá khoảng trắng + lowercase
     text = ' '.join(text.split())
     return text.lower()
 
