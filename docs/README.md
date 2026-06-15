@@ -32,6 +32,7 @@ recommender-system/
 │   ├── 07_ensemble.py       # Ensemble + test
 │   ├── 08_streamlit_app.py  # Streamlit Dashboard UI
 │   ├── 09_eval_cb_distribution.py  # Đánh giá phân bố CB similarity → chọn ENS_CB_THRESHOLD
+│   ├── 10_generate_survey.py       # Tạo file survey cho LLM đánh giá
 ├── src/                     # Source code
 │   ├── config.py            # Cấu hình tập trung
 │   ├── evaluation/          # (dự trữ cho đánh giá sau)
@@ -105,6 +106,9 @@ streamlit run scripts/08_streamlit_app.py
 
 # Bước 9: Đánh giá phân bố CB similarity (chọn ENS_CB_THRESHOLD)
 python scripts/09_eval_cb_distribution.py
+
+# Bước 10: Tạo file survey cho LLM đánh giá (cần đã train đủ models 01→07)
+python scripts/10_generate_survey.py
 ```
 
 ## Lưu Ý
