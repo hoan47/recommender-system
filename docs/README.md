@@ -21,8 +21,6 @@ recommender-system/
 │   ├── README.md            # File này — tổng quan & cấu trúc
 │   ├── data_survey.md       # Khảo sát & thống kê dữ liệu
 │   ├── models.md            # Mục đích dự án & phương pháp model
-│   ├── implementation_plan.md # Kế hoạch triển khai chi tiết
-│   └── progress.md          # Bảng theo dõi tiến độ
 ├── models/                  # Model output — không commit
 ├── results/                 # Kết quả — không commit
 ├── scripts/                 # Script chạy từng bước riêng lẻ
@@ -62,8 +60,6 @@ recommender-system/
 |------|-------|
 | `docs/data_survey.md` | Khảo sát chi tiết tập dữ liệu Instacart |
 | `docs/models.md` | Mục đích dự án, phân biệt bài toán, chiến lược dữ liệu & phương pháp |
-| `docs/implementation_plan.md` | Kế hoạch triển khai chi tiết — thứ tự code, module, pipeline |
-| `docs/progress.md` | Bảng theo dõi tiến độ — hiện trạng file, model đã train |
 
 ## Cách chạy
 
