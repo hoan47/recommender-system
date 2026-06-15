@@ -12,7 +12,7 @@ def get_excluded_product_ids(products_df):
     Xác định product_id cần loại bỏ dựa trên cấu hình filter.
 
     Quy tắc: Loại toàn bộ sản phẩm thuộc EXCLUDED_DEPARTMENTS
-
+             hoặc EXCLUDED_AISLES.
 
     Args:
         products_df: DataFrame [product_id, aisle_id, department_id, ...]
@@ -25,6 +25,10 @@ def get_excluded_product_ids(products_df):
     # --- Lọc theo department ---
     dept_mask = products_df['department_id'].isin(EXCLUDED_DEPARTMENTS)
     excluded.update(products_df.loc[dept_mask, 'product_id'].tolist())
+
+    # --- Lọc theo aisle (non-food aisles) ---
+    aisle_mask = products_df['aisle_id'].isin(EXCLUDED_AISLES)
+    excluded.update(products_df.loc[aisle_mask, 'product_id'].tolist())
 
     return excluded
 

@@ -50,7 +50,7 @@ CB_COUNT_MAX_FEATURES = 15000   # Count Vectorizer: max features
 # ============================================================
 # Hyperparameters — Ochiai
 # ============================================================
-OCHIAI_MIN_SUPPORT = 10     # pair xuất hiện < 30 lần → bỏ qua
+OCHIAI_MIN_SUPPORT = 10     # pair xuất hiện < 10 lần → bỏ qua
 OCHIAI_TOP_K = 100          # số candidate giữ lại cho mỗi product (trước ensemble)
 
 # ============================================================
