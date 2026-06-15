@@ -199,9 +199,9 @@ def build_multi_field_vectors(fields_dict):
         )
         matrix = tfidf.fit_transform(texts)
 
-        # Scale theo trọng số
+        # Scale theo trọng số và đảm bảo giữ nguyên kiểu CSR Matrix thưa
         if weight != 1.0:
-            matrix = matrix * weight
+            matrix = (matrix * weight).tocsr()
 
         print(f"    -> shape: {matrix.shape}, nnz: {matrix.nnz}")
         vectors.append(matrix)
