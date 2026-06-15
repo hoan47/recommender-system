@@ -83,14 +83,6 @@ MW_TOP_K = 100
 MW_METAPATH_BEHAVIORAL_RATIO = 0.5   # 50% Behavioral, 50% Semantic
 
 # ============================================================
-# Hyperparameters — Association Rules (từ co-occurrence matrix)
-# ============================================================
-ARM_MIN_SUPPORT = 0.0001        # support threshold (tỷ lệ)
-ARM_MIN_CONFIDENCE = 0.1        # confidence threshold
-ARM_MIN_LIFT = 1.5              # lift threshold
-ARM_TOP_K = 100
-
-# ============================================================
 # Hyperparameters — Ensemble
 # ============================================================
 ENS_ALPHA = 0.5                 # trọng số Item-CF (Ochiai)

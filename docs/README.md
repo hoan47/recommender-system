@@ -29,7 +29,6 @@ recommender-system/
 │   ├── 03_item_cf.py        # Train Item-CF (Item-Based Collaborative Filtering)
 │   ├── 04_item2vec.py       # Train Item2Vec
 │   ├── 05_metapath2vec.py   # Train Metapath2Vec (IKG embedding + Metapath Walk)
-│   ├── 06_assoc_rules.py    # Train Association Rules
 │   ├── 07_ensemble.py       # Ensemble + test
 │   ├── 08_streamlit_app.py  # Streamlit Dashboard UI
 │   ├── 09_eval_cb_distribution.py  # Đánh giá phân bố CB similarity → chọn ENS_CB_THRESHOLD
@@ -45,7 +44,6 @@ recommender-system/
 │   │   └── _numba_ops.py    # Numba-accelerated operations (co-occurrence counting, adjacency CSR)
 │   └── models/              # Các model recommendation
 │       ├── __init__.py
-│       ├── assoc_rules.py
 │       ├── cb_filter.py
 │       ├── item_cf.py       # Item-Based Collaborative Filtering (Ochiai + Confidence)
 │       ├── metapath2vec.py
@@ -76,7 +74,6 @@ python scripts/02_cb_filter.py
 python scripts/03_item_cf.py
 python scripts/04_item2vec.py
 python scripts/05_metapath2vec.py
-python scripts/06_assoc_rules.py
 python scripts/07_ensemble.py
 
 # Chạy toàn bộ bằng cmd ngoài không dùng vscode đỡ nóng máy (nhớ xóa dữ liệu trong models)
@@ -100,10 +97,7 @@ python scripts/04_item2vec.py
 # Bước 5: Train Metapath2Vec (IKG embedding, ~5-8 phút)
 python scripts/05_metapath2vec.py
 
-# Bước 6: Train Association Rules (~2-5 phút)
-python scripts/06_assoc_rules.py
-
-# Bước 7: Test Ensemble + CB Filter
+# Bước 6: Test Ensemble + CB Filter
 python scripts/07_ensemble.py
 
 # Bước 8: Streamlit Dashboard

@@ -18,7 +18,6 @@ import streamlit as st
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.config import MODEL_DIR, PROCESSED_DIR, ENS_CB_THRESHOLD
-from src.models.assoc_rules import AssocRulesModel
 from src.models.ensemble import EnsembleModel
 
 # ============================================================
@@ -49,11 +48,6 @@ def load_products_vi():
 def load_models():
     """Load tất cả models đã train (chạy 1 lần, cache)."""
     models = {}
-
-    with st.spinner("Đang load Association Rules..."):
-        arm = AssocRulesModel()
-        arm.load(os.path.join(MODEL_DIR, "assoc_rules"))
-    models["arm"] = arm
 
     with st.spinner("Đang load Ensemble (Item-CF + Item2Vec + Metapath2Vec + CB Filter)..."):
         ensemble = EnsembleModel.load()
@@ -102,10 +96,6 @@ def get_all_recommendations(product_id, top_k, models):
     t0 = time.time()
     recs = models["mw"].recommend(product_id, top_k=top_k)
     results["Metapath2Vec"] = {"recs": recs, "time": time.time() - t0}
-
-    t0 = time.time()
-    recs = models["arm"].recommend(product_id, top_k=top_k)
-    results["AssocRules"] = {"recs": recs, "time": time.time() - t0}
 
     t0 = time.time()
     recs = recommend_ensemble_with_topk(
@@ -209,7 +199,6 @@ def main():
     show_item_cf = st.sidebar.checkbox("Item-CF", value=True)
     show_i2v = st.sidebar.checkbox("Item2Vec", value=True)
     show_mw = st.sidebar.checkbox("Metapath2Vec", value=True)
-    show_arm = st.sidebar.checkbox("Association Rules", value=True)
     show_ensemble_no_cb = st.sidebar.checkbox("Ensemble (w/o CB)", value=True)
     show_ensemble_cb = st.sidebar.checkbox("Ensemble + CB", value=True)
 
@@ -264,8 +253,6 @@ def main():
         model_names.append("Item2Vec")
     if show_mw:
         model_names.append("Metapath2Vec")
-    if show_arm:
-        model_names.append("AssocRules")
     if show_ensemble_no_cb:
         model_names.append("Ensemble (w/o CB)")
     if show_ensemble_cb:
