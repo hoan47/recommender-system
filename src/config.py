@@ -96,12 +96,14 @@ ENS_CB_THRESHOLD = 0.25          # ngưỡng CB filter khi dùng hybrid ensemble
 # Product Filter Strategy
 # Lọc non-food products khỏi train data để model chỉ học
 # các pattern mua kèm thực phẩm (grocery).
+# Dùng department name thay vì ID để dễ đọc & đồng bộ với survey.
 # ============================================================
-EXCLUDED_DEPARTMENTS = [8, 11, 17, 2, 21]
-# pets (8), personal care (11), household (17), other (2), missing (21)
-
-EXCLUDED_AISLES = [82, 102]
-# baby accessories (82), baby bath body care (102)
-# Giữ aisle 92 (baby food formula) — thực phẩm cho trẻ
+EXCLUDED_DEPARTMENT_NAMES = ['other', 'pets', 'personal care', 'household', 'babies', 'missing']
+# other — không phân loại rõ ràng
+# pets — thức ăn, phụ kiện thú cưng
+# personal care — sữa tắm, dầu gội, kem đánh răng, mỹ phẩm
+# household — đồ gia dụng, bột giặt, giấy vệ sinh, túi nilon
+# babies — tã bỉm, khăn ướt, đồ chơi, phụ kiện em bé, kể cả baby food formula
+# missing — dữ liệu lỗi/thiếu thông tin ngành hàng
 
 RANDOM_SEED = 42

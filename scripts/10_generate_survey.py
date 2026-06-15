@@ -25,19 +25,8 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.config import MODEL_DIR, PROCESSED_DIR, RANDOM_SEED, DEPARTMENTS_FILE, PRODUCTS_FILE
-
-
-# ============================================================
-# Cấu hình
-# ============================================================
-EXCLUDED_DEPARTMENT_NAMES = ['other', 'pets', 'personal care', 'household', 'babies', 'missing']
-# other — không phân loại rõ ràng
-# pets — thức ăn, phụ kiện thú cưng
-# personal care — sữa tắm, dầu gội, kem đánh răng, mỹ phẩm
-# household — đồ gia dụng, bột giặt, giấy vệ sinh, túi nilon
-# babies — tã bỉm, khăn ướt, đồ chơi, phụ kiện em bé
-# missing — dữ liệu lỗi/thiếu thông tin ngành hàng
+from src.config import MODEL_DIR, PROCESSED_DIR, RANDOM_SEED, EXCLUDED_DEPARTMENT_NAMES
+from src.features.product_filter import get_excluded_product_ids
 
 N_TARGETS = 5_000               # tổng số target product
 TOP_POPULAR_RATIO = 0.75        # 75% top bán chạy
@@ -57,30 +46,30 @@ def load_products():
     return products
 
 
-def get_food_product_ids():
+def get_food_product_ids(products=None):
     """
     Xác định product_id thuộc Food & Beverage dựa trên department name.
     
-    Đọc departments.csv để map tên department → department_id,
-    sau đó đọc products.csv gốc để lấy product_id thuộc các department
-    KHÔNG nằm trong EXCLUDED_DEPARTMENT_NAMES.
+    Dùng get_excluded_product_ids() từ product_filter (đồng bộ với config),
+    trả về set product_id của tất cả sản phẩm KHÔNG bị exclude.
+    
+    Args:
+        products: DataFrame products (có cột department_id, product_id).
+                  Nếu None thì tự load từ parquet.
     
     Returns:
         set[int] — các product_id thuộc thực phẩm (food)
     """
-    departments = pd.read_csv(DEPARTMENTS_FILE)
-    excluded_dept_ids = set(
-        departments[departments['department'].isin(EXCLUDED_DEPARTMENT_NAMES)]['department_id']
-    )
+    if products is None:
+        products = load_products()
     
-    products_raw = pd.read_csv(PRODUCTS_FILE)
-    food_mask = ~products_raw['department_id'].isin(excluded_dept_ids)
-    food_pids = set(products_raw.loc[food_mask, 'product_id'])
+    excluded_pids = get_excluded_product_ids(products)
+    all_pids = set(products['product_id'])
+    food_pids = all_pids - excluded_pids
     
-    print(f"  Tổng sản phẩm (products.csv): {len(products_raw):,}")
-    print(f"  Food products: {len(food_pids):,} ({(len(food_pids)/len(products_raw))*100:.1f}%)")
-    print(f"  Non-Food bị loại: {len(products_raw) - len(food_pids):,} "
-          f"({(1 - len(food_pids)/len(products_raw))*100:.1f}%)")
+    print(f"  Tổng sản phẩm: {len(all_pids):,}")
+    print(f"  Food products: {len(food_pids):,} ({len(food_pids)/len(all_pids)*100:.1f}%)")
+    print(f"  Non-Food bị loại: {len(excluded_pids):,} ({len(excluded_pids)/len(all_pids)*100:.1f}%)")
     
     return food_pids
 
@@ -258,7 +247,7 @@ def main():
 
     # 1b. Xác định food products
     print("\n🍏 Đang xác định Food & Beverage products...")
-    food_pids = get_food_product_ids()
+    food_pids = get_food_product_ids(products)
 
     # 2. Load tất cả model
     print("\n🧠 Đang load models...")
