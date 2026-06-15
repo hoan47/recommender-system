@@ -70,6 +70,9 @@ def _init_compiled_stopwords():
     else:
         _REGEX_SPECIAL_STOPWORDS = re.compile(r'$^')
 
+# === TỐI ƯU HIỆU NĂNG: Khởi tạo luôn ở tầng Global, chạy 1 lần duy nhất khi import file ===
+_init_compiled_stopwords()
+
 
 def _clean_text_preprocessor(text):
     """Hàm tiền xử lý chuỗi: Tốc độ cao cực hạn nhờ loại bỏ hoàn toàn vòng lặp for."""
@@ -82,8 +85,7 @@ def _clean_text_preprocessor(text):
     # 2. Xóa sạch dung tích, kích thước dựa trên Regex định sẵn
     text = _PATTERN_CLEAN.sub("", text)
 
-    # 3. Ép hiệu năng: Quét sạch toàn bộ Stopwords trong 2 nốt nhạc (Không dùng vòng lặp)
-    _init_compiled_stopwords()
+    # 3. Quét sạch toàn bộ Stopwords cực nhanh bằng Regex đã compile sẵn toàn cục
     text = _REGEX_SPECIAL_STOPWORDS.sub('', text)
     text = _REGEX_WORD_STOPWORDS.sub('', text)
 
@@ -175,7 +177,8 @@ def cb_ensemble_similarity(product_vectors_tfidf, product_vectors_count,
     sum_b = np.array(bin_b.sum(axis=1)).ravel()
 
     # Overlap Coefficient công thức mới: phủ định độ dài câu dài
-    min_lengths = np.minimum(sum_a, sum_b)
+    # === TRÁNH BUG: Ép kiểu .ravel() để mảng min_lengths phẳng hoàn toàn 1D ===
+    min_lengths = np.minimum(sum_a, sum_b).ravel()
 
     sim_count = np.divide(intersection, min_lengths,
                           out=np.zeros_like(intersection, dtype=float),
