@@ -30,8 +30,17 @@ CHUNKSIZE = 500000  # số records mỗi chunk khi đọc file prior 32.4M recor
 # ============================================================
 # Hyperparameters — CB (Content-Based Vectorizer)
 # ============================================================
-CB_N_GRAM_RANGE = (1, 2)    # TF-IDF: word 1-gram đến 2-gram
+CB_N_GRAM_RANGE = (1, 2)    # TF-IDF: word 1-gram đến 2-gram (tên sản phẩm)
 CB_MAX_FEATURES = 15000      # TF-IDF: max số features từ tên sản phẩm
+
+# CB Multi-field — trọng số cho từng trường tiếng Việt
+CB_NAME_WEIGHT = 1.0         # trọng số tên sản phẩm (quan trọng nhất)
+CB_AISLE_WEIGHT = 0.5        # trọng số aisle (trung bình)
+CB_DEPT_WEIGHT = 0.2         # trọng số department (tổng quát nhất)
+CB_AISLE_N_GRAM_RANGE = (1, 1)   # aisle ngắn, chỉ unigram
+CB_AISLE_MAX_FEATURES = 500       # 127 aisle × vài từ → 500 đủ
+CB_DEPT_N_GRAM_RANGE = (1, 1)     # department ngắn, chỉ unigram
+CB_DEPT_MAX_FEATURES = 100        # 20 dept × vài từ → 100 đủ
 
 # Ensemble Count + TF-IDF
 CB_ALPHA = 0.5                  # trọng số Count Vectorizer (TF-IDF weight = 1 - alpha)

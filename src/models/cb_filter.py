@@ -14,9 +14,13 @@ from src.config import (
     CB_N_GRAM_RANGE, CB_MAX_FEATURES,
     CB_COUNT_N_GRAM_RANGE, CB_COUNT_MAX_FEATURES,
     CB_ALPHA,
+    CB_NAME_WEIGHT, CB_AISLE_WEIGHT, CB_DEPT_WEIGHT,
+    CB_AISLE_N_GRAM_RANGE, CB_AISLE_MAX_FEATURES,
+    CB_DEPT_N_GRAM_RANGE, CB_DEPT_MAX_FEATURES,
 )
 from src.features.vectorizer import (
     build_product_vectors, build_count_vectors,
+    build_multi_field_vectors,
     cb_ensemble_similarity,
 )
 
@@ -71,11 +75,11 @@ class CBFilter:
     def fit(self, products_df, ngram_range=None, max_features=None):
         """
         Pre-compute product vectors 1 lần — vector hóa sản phẩm bằng cả
-        Count Vectorizer và TF-IDF.
+        Count Vectorizer và TF-IDF multi-field (name + aisle + department).
 
         Args:
-            products_df: DataFrame [product_id, product_name, aisle_id, ...]
-            (product_name đã là tiếng Việt sau load_products)
+            products_df: DataFrame [product_id, product_name, aisle, department, ...]
+            (product_name, aisle, department đã là tiếng Việt sau load_products)
             ngram_range: tuple (min_n, max_n) cho TF-IDF (default: self.ngram_range)
             max_features: int, max features cho TF-IDF (default: self.max_features)
         """
@@ -84,20 +88,40 @@ class CBFilter:
         if max_features is None:
             max_features = self.max_features
 
-        print("CBFilter: Đang vector hóa sản phẩm (tiếng Việt)...")
-        # Lấy text_data từ cột product_name (đã là tiếng Việt sau load_products)
-        text_data = products_df['product_name'].fillna('').tolist()
+        print("CBFilter: Đang vector hóa sản phẩm (tiếng Việt, multi-field)...")
+        # Lấy text_data từ các cột tiếng Việt
+        text_name = products_df['product_name'].fillna('').tolist()
+        text_aisle = products_df['aisle'].fillna('').tolist()
+        text_dept = products_df['department'].fillna('').tolist()
 
-        # 1. TF-IDF vectors
-        print("  [1/2] TF-IDF vectors:")
-        self.product_vectors_tfidf, _ = build_product_vectors(
-            text_data, ngram_range=ngram_range, max_features=max_features
-        )
+        # 1. TF-IDF multi-field: name + aisle + department (có trọng số)
+        print("  [1/2] TF-IDF multi-field (name + aisle + department):")
+        fields_dict = {
+            'name': {
+                'texts': text_name,
+                'weight': CB_NAME_WEIGHT,
+                'ngram_range': ngram_range,
+                'max_features': max_features,
+            },
+            'aisle': {
+                'texts': text_aisle,
+                'weight': CB_AISLE_WEIGHT,
+                'ngram_range': CB_AISLE_N_GRAM_RANGE,
+                'max_features': CB_AISLE_MAX_FEATURES,
+            },
+            'dept': {
+                'texts': text_dept,
+                'weight': CB_DEPT_WEIGHT,
+                'ngram_range': CB_DEPT_N_GRAM_RANGE,
+                'max_features': CB_DEPT_MAX_FEATURES,
+            },
+        }
+        self.product_vectors_tfidf, self._vectorizers = build_multi_field_vectors(fields_dict)
 
-        # 2. Count vectors (L2-normalized)
-        print("  [2/2] Count vectors (L2-normalized):")
+        # 2. Count vectors (L2-normalized) — chỉ trên product_name (giữ nguyên)
+        print("  [2/2] Count vectors (L2-normalized) — chỉ trên product_name:")
         self.product_vectors_count, _ = build_count_vectors(
-            text_data,
+            text_name,
             ngram_range=self.count_ngram_range,
             max_features=self.count_max_features,
         )
@@ -107,9 +131,10 @@ class CBFilter:
             self.product_id_to_idx[pid] = i
 
         print(f"CBFilter: Đã vector hóa {len(self.product_id_to_idx)} sản phẩm.")
-        print(f"  TF-IDF shape:  {self.product_vectors_tfidf.shape}")
-        print(f"  Count shape:   {self.product_vectors_count.shape}")
-        print(f"  Alpha (Count) = {self.alpha:.2f}")
+        print(f"  TF-IDF multi-field shape:  {self.product_vectors_tfidf.shape}")
+        print(f"  Count shape:               {self.product_vectors_count.shape}")
+        print(f"  Alpha (Count)              = {self.alpha:.2f}")
+        print(f"  Trọng số: name={CB_NAME_WEIGHT}, aisle={CB_AISLE_WEIGHT}, dept={CB_DEPT_WEIGHT}")
 
     def filter(self, product_a_id: int, candidates, threshold: float):
         """

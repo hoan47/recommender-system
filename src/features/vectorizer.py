@@ -152,6 +152,67 @@ def build_count_vectors(text_data, ngram_range=CB_COUNT_N_GRAM_RANGE,
     return count_matrix, count_vec
 
 
+def build_multi_field_vectors(fields_dict):
+    """
+    Xây dựng ma trận TF-IDF cho nhiều trường (name, aisle, department),
+    scale từng trường theo trọng số, ghép ngang bằng hstack.
+
+    Args:
+        fields_dict: dict, mỗi key là tên field, value là dict:
+            {
+                'texts': list[str],            # danh sách text của field đó
+                'weight': float,               # trọng số (scale vector)
+                'ngram_range': tuple,          # (min_n, max_n) cho TF-IDF
+                'max_features': int,           # max features cho TF-IDF
+            }
+            Ví dụ:
+            {
+                'name': {'texts': names, 'weight': 1.0, 'ngram_range': (1,2), 'max_features': 15000},
+                'aisle': {'texts': aisles, 'weight': 0.5, 'ngram_range': (1,1), 'max_features': 500},
+                'dept': {'texts': depts, 'weight': 0.2, 'ngram_range': (1,1), 'max_features': 100},
+            }
+
+    Returns:
+        sparse.csr_matrix: ma trận ghép (n_samples, tổng số features đã scale)
+        list: các TfidfVectorizer đã fit (để sau dùng cho inference nếu cần)
+    """
+    from scipy.sparse import hstack as sparse_hstack
+
+    vectors = []
+    vectorizers = []
+
+    for field_name, field_cfg in fields_dict.items():
+        texts = field_cfg['texts']
+        weight = field_cfg['weight']
+        ngram_range = field_cfg['ngram_range']
+        max_features = field_cfg['max_features']
+
+        print(f"  [{field_name}] TF-IDF (ngram_range={ngram_range}, "
+              f"max_features={max_features}, weight={weight})...")
+
+        tfidf = TfidfVectorizer(
+            ngram_range=ngram_range,
+            max_features=max_features,
+            analyzer='word',
+            preprocessor=_clean_text_preprocessor,
+            stop_words=None,
+        )
+        matrix = tfidf.fit_transform(texts)
+
+        # Scale theo trọng số
+        if weight != 1.0:
+            matrix = matrix * weight
+
+        print(f"    -> shape: {matrix.shape}, nnz: {matrix.nnz}")
+        vectors.append(matrix)
+        vectorizers.append(tfidf)
+
+    # Ghép ngang
+    combined = sparse_hstack(vectors, format='csr')
+    print(f"  [combined] shape: {combined.shape}")
+    return combined, vectorizers
+
+
 def cb_ensemble_similarity(product_vectors_tfidf, product_vectors_count,
                            product_a_idx, candidate_indices, alpha=CB_ALPHA):
     """

@@ -27,12 +27,45 @@ def _load_products_vi() -> pd.DataFrame:
     return None
 
 
+def _load_aisles_vi() -> pd.DataFrame:
+    """
+    Đọc file aisles_vi.csv (bản dịch tiếng Việt).
+    
+    Returns:
+        DataFrame columns: [aisle_id, aisle_vi]
+    """
+    import os
+    from src.config import PROCESSED_DIR
+    vi_path = os.path.join(PROCESSED_DIR, "aisles_vi.csv")
+    if os.path.exists(vi_path):
+        return pd.read_csv(vi_path)
+    print("[WARN] Không tìm thấy aisles_vi.csv, bỏ qua bản dịch tiếng Việt.")
+    return None
+
+
+def _load_departments_vi() -> pd.DataFrame:
+    """
+    Đọc file departments_vi.csv (bản dịch tiếng Việt).
+    
+    Returns:
+        DataFrame columns: [department_id, department_vi]
+    """
+    import os
+    from src.config import PROCESSED_DIR
+    vi_path = os.path.join(PROCESSED_DIR, "departments_vi.csv")
+    if os.path.exists(vi_path):
+        return pd.read_csv(vi_path)
+    print("[WARN] Không tìm thấy departments_vi.csv, bỏ qua bản dịch tiếng Việt.")
+    return None
+
+
 def load_products(use_vietnamese: bool = True) -> pd.DataFrame:
     """
     Đọc products.csv, merge với aisles.csv và departments.csv.
     
     Nếu use_vietnamese=True và có file products_vi.csv, cột product_name
     sẽ được ghi đè bằng product_name_vi (tiếng Việt).
+    Tương tự: aisle và department cũng được ghi đè bằng bản dịch tiếng Việt.
 
     Args:
         use_vietnamese: có ghi đè tên sản phẩm bằng tiếng Việt không
@@ -48,7 +81,7 @@ def load_products(use_vietnamese: bool = True) -> pd.DataFrame:
     products = products.merge(aisles, on='aisle_id', how='left')
     products = products.merge(departments, on='department_id', how='left')
     
-    # Ghi đè product_name bằng tiếng Việt nếu có
+    # Ghi đè product_name, aisle, department bằng tiếng Việt nếu có
     if use_vietnamese:
         products_vi = _load_products_vi()
         if products_vi is not None:
@@ -58,6 +91,20 @@ def load_products(use_vietnamese: bool = True) -> pd.DataFrame:
             products['product_name'] = products['product_name_vi'].fillna(products['product_name'])
             # Drop cột product_name_vi để giữ schema cũ
             products = products.drop(columns=['product_name_vi'])
+        
+        # Ghi đè aisle bằng tiếng Việt
+        aisles_vi = _load_aisles_vi()
+        if aisles_vi is not None:
+            products = products.merge(aisles_vi, on='aisle_id', how='left')
+            products['aisle'] = products['aisle_vi'].fillna(products['aisle'])
+            products = products.drop(columns=['aisle_vi'])
+        
+        # Ghi đè department bằng tiếng Việt
+        departments_vi = _load_departments_vi()
+        if departments_vi is not None:
+            products = products.merge(departments_vi, on='department_id', how='left')
+            products['department'] = products['department_vi'].fillna(products['department'])
+            products = products.drop(columns=['department_vi'])
     
     return products
 
