@@ -26,7 +26,7 @@ from src.features.vectorizer import cb_similarity
 # ─────────────────────────────────────────────────────────────
 # TUỲ CHỈNH — thoải mái sửa sau
 # ─────────────────────────────────────────────────────────────
-N_EXAMPLES = 20      # số cặp cho mỗi overlap (đặt 1K, có thể giảm nếu chậm)
+N_EXAMPLES =   1000      # số cặp cho mỗi overlap (đặt 1K, có thể giảm nếu chậm)
 MAX_OVERLAP = 10         # từ 1 đến 10 từ trùng
 MAX_BUCKET_TRIES = 5_000_000  # giới hạn lấy mẫu trong bucket (tránh treo vô hạn)
 

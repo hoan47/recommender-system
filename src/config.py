@@ -35,8 +35,8 @@ CB_MAX_FEATURES = 15000      # TF-IDF: max số features từ tên sản phẩm
 
 # CB Multi-field — trọng số cho từng trường tiếng Việt
 CB_NAME_WEIGHT = 1.0         # trọng số tên sản phẩm (quan trọng nhất)
-CB_AISLE_WEIGHT = 0.5        # trọng số aisle (trung bình)
-CB_DEPT_WEIGHT = 0.2         # trọng số department (tổng quát nhất)
+CB_AISLE_WEIGHT = 0.8        # trọng số aisle (trung bình)
+CB_DEPT_WEIGHT = 0.6         # trọng số department (tổng quát nhất)
 CB_AISLE_N_GRAM_RANGE = (1, 1)   # aisle ngắn, chỉ unigram
 CB_AISLE_MAX_FEATURES = 500       # 127 aisle × vài từ → 500 đủ
 CB_DEPT_N_GRAM_RANGE = (1, 1)     # department ngắn, chỉ unigram
@@ -93,7 +93,7 @@ ENS_BETA = 0.25                 # trọng số Item2Vec
 ENS_GAMMA = 0.25                # trọng số DeepWalk (graph embedding)
 ENS_TOP_K = 100                 # top-K sau ensemble (trước CB filter)
 ENS_FINAL_K = 10                # top-K cuối cùng output
-ENS_CB_THRESHOLD = 0.1          # ngưỡng CB filter khi dùng hybrid ensemble
+ENS_CB_THRESHOLD = 0.25          # ngưỡng CB filter khi dùng hybrid ensemble
 
 # ============================================================
 # Product Filter Strategy
