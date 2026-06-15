@@ -198,7 +198,7 @@ def main():
     st.sidebar.header("📊 Hiển thị model")
     show_item_cf = st.sidebar.checkbox("Item-CF", value=True)
     show_i2v = st.sidebar.checkbox("Item2Vec", value=True)
-    show_mw = st.sidebar.checkbox("Metapath2Vec", value=True)
+    show_mw = st.sidebar.checkbox("KGMetapath", value=True)
     show_ensemble_no_cb = st.sidebar.checkbox("Ensemble (w/o CB)", value=True)
     show_ensemble_cb = st.sidebar.checkbox("Ensemble + CB", value=True)
 
@@ -252,7 +252,7 @@ def main():
     if show_i2v:
         model_names.append("Item2Vec")
     if show_mw:
-        model_names.append("Metapath2Vec")
+        model_names.append("KGMetapath")
     if show_ensemble_no_cb:
         model_names.append("Ensemble (w/o CB)")
     if show_ensemble_cb:

@@ -306,7 +306,7 @@ class EnsembleModel:
             # Load các sub-model từ MODEL_DIR
             from src.models.item_cf import ItemCFModel
             from src.models.item2vec import Item2VecModel
-            from src.models.metapath2vec import Metapath2VecModel
+            from src.models.kg_metapath import KGMetapathModel
             
             print("  Loading Item-CF...")
             item_cf = ItemCFModel()
@@ -316,9 +316,9 @@ class EnsembleModel:
             i2v = Item2VecModel()
             i2v.load(os.path.join(MODEL_DIR, "item2vec"))
             
-            print("  Loading Metapath2Vec...")
-            mw = Metapath2VecModel()
-            mw.load(os.path.join(MODEL_DIR, "metapath2vec"))
+            print("  Loading KGMetapath...")
+            mw = KGMetapathModel()
+            mw.load(os.path.join(MODEL_DIR, "kg_metapath"))
             
             ensemble.fit(item_cf, i2v, mw, cb)
         

@@ -1,6 +1,6 @@
 """
-Metapath2Vec: Knowledge Graph embedding với Metapath Walk.
-Xây dựng Đồ thị Tri thức đa thể (Heterogeneous Knowledge Graph - IKG)
+KGMetapathModel: Knowledge Graph embedding với Metapath Walk.
+Xây dựng Đồ thị Tri thức đa thể (Heterogeneous Knowledge Graph - KG)
 với 3 loại nút (Product, Aisle, Department) và 2 kịch bản Metapath Walk.
 
 Kịch bản 1 (Behavioral): P1 --CO_OCCUR--> P2 --CO_OCCUR--> P3
@@ -26,11 +26,11 @@ from src.utils._numba_ops import (
 )
 
 
-class Metapath2VecModel:
+class KGMetapathModel:
     """
-    Metapath2Vec: IKG embedding với Metapath Walk có kiểm soát.
+    KGMetapathModel: KG embedding với Metapath Walk có kiểm soát.
     
-    Đồ thị IKG:
+    Đồ thị KG:
       - Node: Product (~49K), Aisle (134), Department (21)
       - Edge: CO_OCCUR (P↔P, từ co-occurrence), BELONGS_TO (P→A), PART_OF (A→D)
     
@@ -58,7 +58,7 @@ class Metapath2VecModel:
         # Đồ thị CO_OCCUR (co-occurrence graph)
         self.graph = None            # adjacency list {node: [(neighbor, weight), ...]}
         self.graph_csr = None        # tuple (indptr, neighbors, weights) — CSR format
-        # Mapping IKG
+        # Mapping KG
         self.product_id_to_idx = {}
         self.idx_to_product_id = {}
         self.product_to_aisle = {}   # product_id → aisle_id
@@ -69,13 +69,13 @@ class Metapath2VecModel:
         
     def fit(self, order_products: pd.DataFrame, products_df: pd.DataFrame):
         """
-        Xây IKG + Metapath Walk + train Word2Vec.
+        Xây KG + Metapath Walk + train Word2Vec.
         
         Args:
             order_products: DataFrame [order_id, product_id, ...]
             products_df: DataFrame [product_id, aisle_id, department_id, ...]
         """
-        print("Metapath2Vec: Bắt đầu fit...")
+        print("KGMetapath: Bắt đầu fit...")
         print(f"  Tham số: dim={self.params['embedding_dim']}, "
               f"walk_length={self.params['walk_length']}, "
               f"num_walks={self.params['num_walks']}, "
@@ -88,8 +88,8 @@ class Metapath2VecModel:
         n_products = len(all_product_ids)
         print(f"  Tổng số product nodes: {n_products:,}")
         
-        # --- Xây mapping IKG: Product → Aisle ---
-        print("  Xây mapping IKG (Product → Aisle)...")
+        # --- Xây mapping KG: Product → Aisle ---
+        print("  Xây mapping KG (Product → Aisle)...")
         for _, row in products_df.iterrows():
             pid = row['product_id']
             aid = row['aisle_id']
@@ -329,7 +329,7 @@ class Metapath2VecModel:
         self._embedding_norms[self._embedding_norms == 0] = 1e-9
         
         print(f"  Embeddings shape: {self.embeddings.shape}")
-        print("Metapath2Vec: Fit hoàn tất.")
+        print("KGMetapath: Fit hoàn tất.")
     
     def recommend(self, product_id: int, top_k: int = None):
         """
@@ -375,7 +375,7 @@ class Metapath2VecModel:
     
     def save(self, path: str):
         """
-        Lưu model ra file (embeddings, metadata, Word2Vec model, IKG mappings).
+        Lưu model ra file (embeddings, metadata, Word2Vec model, KG mappings).
         
         Args:
             path: đường dẫn thư mục đầu ra
@@ -385,7 +385,7 @@ class Metapath2VecModel:
         # Lưu embeddings
         np.save(os.path.join(path, "embeddings.npy"), self.embeddings)
         
-        # Lưu graph + IKG mappings
+        # Lưu graph + KG mappings
         graph_serializable = {
             str(k): [(int(n), int(w)) for n, w in v]
             for k, v in self.graph.items()
@@ -408,11 +408,11 @@ class Metapath2VecModel:
         if self.model is not None:
             self.model.save(os.path.join(path, "word2vec.model"))
         
-        print(f"Metapath2Vec: Đã lưu tại {path}")
+        print(f"KGMetapath: Đã lưu tại {path}")
     
     def load(self, path: str):
         """
-        Load model từ file (embeddings, metadata, Word2Vec model, IKG mappings).
+        Load model từ file (embeddings, metadata, Word2Vec model, KG mappings).
         
         Args:
             path: đường dẫn thư mục đã lưu
@@ -436,7 +436,7 @@ class Metapath2VecModel:
         self.product_id_to_idx = {int(k): int(v) for k, v in metadata['product_id_to_idx'].items()}
         self.idx_to_product_id = {int(k): int(v) for k, v in metadata['idx_to_product_id'].items()}
         
-        # Load IKG mappings
+        # Load KG mappings
         self.product_to_aisle = {int(k): int(v) for k, v in metadata.get('product_to_aisle', {}).items()}
         self.aisle_to_products = {
             int(k): [int(p) for p in v]
@@ -451,7 +451,7 @@ class Metapath2VecModel:
         
         self.graph_csr = None
         
-        print(f"Metapath2Vec: Đã load từ {path}")
+        print(f"KGMetapath: Đã load từ {path}")
         print(f"  Embeddings shape: {self.embeddings.shape}")
-        print(f"  IKG: {len(self.graph)} nodes có CO_OCCUR, "
+        print(f"  KG: {len(self.graph)} nodes có CO_OCCUR, "
               f"{len(self.aisle_to_products)} aisles")

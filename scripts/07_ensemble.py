@@ -16,7 +16,7 @@ from src.config import MODEL_DIR, PROCESSED_DIR
 from src.models.cb_filter import CBFilter
 from src.models.item_cf import ItemCFModel
 from src.models.item2vec import Item2VecModel
-from src.models.metapath2vec import Metapath2VecModel
+from src.models.kg_metapath import KGMetapathModel
 from src.models.ensemble import EnsembleModel
 
 print("="*60)
@@ -28,7 +28,7 @@ checks = [
     ("CB Filter", os.path.join(MODEL_DIR, "cb_filter", "tfidf_vectors.npz")),
     ("Item-CF",   os.path.join(MODEL_DIR, "item_cf", "cooc_matrix.npz")),
     ("Item2Vec",  os.path.join(MODEL_DIR, "item2vec", "word2vec.model")),
-    ("Metapath2Vec",  os.path.join(MODEL_DIR, "metapath2vec", "embeddings.npy")),
+    ("KGMetapath",  os.path.join(MODEL_DIR, "kg_metapath", "embeddings.npy")),
 ]
 for name, path in checks:
     if not os.path.exists(path):
@@ -65,9 +65,9 @@ print("   Item2Vec...")
 i2v = Item2VecModel()
 i2v.load(os.path.join(MODEL_DIR, "item2vec"))
 
-print("   Metapath2Vec...")
-metapath2vec = Metapath2VecModel()
-metapath2vec.load(os.path.join(MODEL_DIR, "metapath2vec"))
+print("   KGMetapath...")
+metapath2vec = KGMetapathModel()
+metapath2vec.load(os.path.join(MODEL_DIR, "kg_metapath"))
 
 print("\n3. Initializing Ensemble...")
 ensemble = EnsembleModel()
