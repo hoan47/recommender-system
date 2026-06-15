@@ -2,7 +2,7 @@
 
 ## Tổng Quan Dự Án
 
-Dự án xây dựng **Hệ thống Gợi ý Mua kèm (Bundle Recommendation System)** dựa trên tập dữ liệu Instacart Market Basket Analysis.
+Dự án xây dựng **Hệ thống Gợi Ý Mua kèm (Bundle Recommendation System)** dựa trên tập dữ liệu Instacart Market Basket Analysis.
 
 ## Cấu Trúc Thư Mục Dự Án
 
@@ -26,7 +26,7 @@ recommender-system/
 ├── scripts/                 # Script chạy từng bước riêng lẻ
 │   ├── 01_load_data.py      # Load & cache dữ liệu
 │   ├── 02_cb_filter.py      # Train CB Filter
-│   ├── 03_ochiai.py         # Train Ochiai + Confidence
+│   ├── 03_item_cf.py        # Train Item-CF (Item-Based Collaborative Filtering)
 │   ├── 04_item2vec.py       # Train Item2Vec
 │   ├── 05_metapath2vec.py   # Train Metapath2Vec (IKG embedding + Metapath Walk)
 │   ├── 06_assoc_rules.py    # Train Association Rules
@@ -47,10 +47,10 @@ recommender-system/
 │       ├── __init__.py
 │       ├── assoc_rules.py
 │       ├── cb_filter.py
+│       ├── item_cf.py       # Item-Based Collaborative Filtering (Ochiai + Confidence)
 │       ├── metapath2vec.py
 │       ├── ensemble.py
-│       ├── item2vec.py
-│       └── ochiai.py
+│       └── item2vec.py
 └── .gitignore               # Loại trừ data/, models/, results/
 ```
 
@@ -73,7 +73,7 @@ pip install -r requirements.txt
 # Chạy từng bước riêng lẻ (không cần chạy lại nếu đã train)
 python scripts/01_load_data.py
 python scripts/02_cb_filter.py
-python scripts/03_ochiai.py
+python scripts/03_item_cf.py
 python scripts/04_item2vec.py
 python scripts/05_metapath2vec.py
 python scripts/06_assoc_rules.py
@@ -91,8 +91,8 @@ python scripts/01_load_data.py
 # Bước 2: Train CB Filter (nếu chưa làm)
 python scripts/02_cb_filter.py
 
-# Bước 3: Train Ochiai (nếu chưa làm)
-python scripts/03_ochiai.py
+# Bước 3: Train Item-CF (nếu chưa làm)
+python scripts/03_item_cf.py
 
 # Bước 4: Train Item2Vec (~5-10 phút)
 python scripts/04_item2vec.py

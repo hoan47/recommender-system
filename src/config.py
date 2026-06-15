@@ -48,10 +48,11 @@ CB_COUNT_N_GRAM_RANGE = (1, 1)  # Count Vectorizer: word unigram (đếm từ đ
 CB_COUNT_MAX_FEATURES = 15000   # Count Vectorizer: max features
 
 # ============================================================
-# Hyperparameters — Ochiai
+# Hyperparameters — Item-CF (Item-Based Collaborative Filtering)
+# Ochiai coefficient = Cosine similarity trên binary vector → Item-Based CF
 # ============================================================
-OCHIAI_MIN_SUPPORT = 10     # pair xuất hiện < 10 lần → bỏ qua
-OCHIAI_TOP_K = 100          # số candidate giữ lại cho mỗi product (trước ensemble)
+ITEMCF_MIN_SUPPORT = 10     # pair xuất hiện < 10 lần → bỏ qua
+ITEMCF_TOP_K = 100          # số candidate giữ lại cho mỗi product (trước ensemble)
 
 # ============================================================
 # Hyperparameters — Item2Vec
@@ -92,7 +93,7 @@ ARM_TOP_K = 100
 # ============================================================
 # Hyperparameters — Ensemble
 # ============================================================
-ENS_ALPHA = 0.5                 # trọng số Ochiai
+ENS_ALPHA = 0.5                 # trọng số Item-CF (Ochiai)
 ENS_BETA = 0.25                 # trọng số Item2Vec
 ENS_GAMMA = 0.25                # trọng số Metapath2Vec (IKG embedding)
 ENS_TOP_K = 100                 # top-K sau ensemble (trước CB filter)

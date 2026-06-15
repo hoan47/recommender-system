@@ -1,6 +1,6 @@
 """
 Association Rules (Baseline).
-Tự implement từ co-occurrence matrix (OchiaiModel) — không cần FP-Growth.
+Tự implement từ co-occurrence matrix (ItemCFModel) — không cần FP-Growth.
 Chạy được trên full dataset.
 """
 import os
@@ -16,7 +16,7 @@ class AssocRulesModel:
     """
     Association Rules — tự implement từ co-occurrence matrix.
     
-    Công thức (dựa trên cooc matrix từ OchiaiModel):
+    Công thức (dựa trên cooc matrix từ ItemCFModel):
       support(A,B)      = cooc[A,B] / total_orders
       confidence(A→B)   = cooc[A,B] / count(A)
       lift(A,B)         = confidence(A,B) / (count(B) / total_orders)
@@ -30,28 +30,28 @@ class AssocRulesModel:
         self.top_k = top_k if top_k is not None else ARM_TOP_K
         
         self.total_orders = 0
-        self.cooc_matrix = None        # CSR matrix (dùng chung với OchiaiModel)
+        self.cooc_matrix = None        # CSR matrix (dùng chung với ItemCFModel)
         self.product_counts = None     # array (n_products,)
         self.product_id_to_idx = {}
         self.idx_to_product_id = {}
         self.rules_df = None           # DataFrame [antecedent, consequent, support, confidence, lift]
     
-    def fit(self, ochiai_model, order_products: pd.DataFrame):
+    def fit(self, item_cf_model, order_products: pd.DataFrame):
         """
-        Xây rules từ co-occurrence matrix của OchiaiModel.
+        Xây rules từ co-occurrence matrix của ItemCFModel.
 
         Args:
-            ochiai_model: OchiaiModel đã train (có cooc_matrix + product_counts)
+            item_cf_model: ItemCFModel đã train (có cooc_matrix + product_counts)
             order_products: DataFrame [order_id, product_id, ...] (để tính total_orders)
         """
         print("AssocRules: Bắt đầu fit...")
         
-        # Copy từ OchiaiModel
-        self.cooc_matrix = ochiai_model.cooc_matrix
-        self.product_counts = ochiai_model.product_counts
-        self.product_id_to_idx = ochiai_model.product_id_to_idx
-        self.idx_to_product_id = ochiai_model.idx_to_product_id
-        self.total_orders = ochiai_model.total_orders
+        # Copy từ ItemCFModel
+        self.cooc_matrix = item_cf_model.cooc_matrix
+        self.product_counts = item_cf_model.product_counts
+        self.product_id_to_idx = item_cf_model.product_id_to_idx
+        self.idx_to_product_id = item_cf_model.idx_to_product_id
+        self.total_orders = item_cf_model.total_orders
         
         n_products = self.cooc_matrix.shape[0]
         print(f"  Số sản phẩm: {n_products}")

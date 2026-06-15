@@ -1,6 +1,6 @@
 """
 Co-occurrence Ensemble + CB Filter.
-Kết hợp Ochiai, Item2Vec, Metapath2Vec bằng weighted score, sau đó lọc substitute bằng CB.
+Kết hợp Item-CF (Ochiai), Item2Vec, Metapath2Vec bằng weighted score, sau đó lọc substitute bằng CB.
 """
 import json
 import os
@@ -19,7 +19,7 @@ class EnsembleModel:
     """
     Co-occurrence Ensemble + CB Filter.
     
-    final_score(A → B) = α × Ochiai_score(A, B)
+    final_score(A → B) = α × ItemCF_score(A, B)
                         + β × Item2Vec_sim(A, B)
                         + γ × Metapath2Vec_sim(A, B)
     
@@ -34,22 +34,22 @@ class EnsembleModel:
         self.top_k = top_k if top_k is not None else ENS_TOP_K
         self.final_k = final_k if final_k is not None else ENS_FINAL_K
         
-        self.ochiai = None
+        self.item_cf = None
         self.item2vec = None
         self.metapath2vec = None
         self.cb_filter = None
     
-    def fit(self, ochiai, item2vec, metapath2vec, cb_filter: CBFilter = None):
+    def fit(self, item_cf, item2vec, metapath2vec, cb_filter: CBFilter = None):
         """
         Gán các model đã train.
         
         Args:
-            ochiai: OchiaiModel instance
+            item_cf: ItemCFModel instance (Item-Based Collaborative Filtering)
             item2vec: Item2VecModel instance
             metapath2vec: Metapath2VecModel instance
             cb_filter: CBFilter instance (optional)
         """
-        self.ochiai = ochiai
+        self.item_cf = item_cf
         self.item2vec = item2vec
         self.metapath2vec = metapath2vec
         self.cb_filter = cb_filter
@@ -103,13 +103,13 @@ class EnsembleModel:
             top_k = self.top_k
 
         # Lấy recommendations từ từng model
-        ochiai_recs = self.ochiai.recommend(product_id, top_k=top_k) if self.ochiai else []
+        item_cf_recs = self.item_cf.recommend(product_id, top_k=top_k) if self.item_cf else []
         i2v_recs = self.item2vec.recommend(product_id, top_k=top_k) if self.item2vec else []
         mw_recs = self.metapath2vec.recommend(product_id, top_k=top_k) if self.metapath2vec else []
 
         # Union candidates
         candidate_ids = set()
-        for pid, _ in ochiai_recs:
+        for pid, _ in item_cf_recs:
             candidate_ids.add(pid)
         for pid, _ in i2v_recs:
             candidate_ids.add(pid)
@@ -120,23 +120,23 @@ class EnsembleModel:
             return []
 
         # Score dicts
-        ochiai_dict = self._build_score_dict(ochiai_recs)
+        item_cf_dict = self._build_score_dict(item_cf_recs)
         i2v_dict = self._build_score_dict(i2v_recs)
         mw_dict = self._build_score_dict(mw_recs)
 
         # Tính weighted score
         candidate_list = list(candidate_ids)
-        ochiai_scores = [ochiai_dict.get(pid, 0) for pid in candidate_list]
+        item_cf_scores = [item_cf_dict.get(pid, 0) for pid in candidate_list]
         i2v_scores = [i2v_dict.get(pid, 0) for pid in candidate_list]
         mw_scores = [mw_dict.get(pid, 0) for pid in candidate_list]
 
-        ochiai_norm = self._normalize(ochiai_scores)
+        item_cf_norm = self._normalize(item_cf_scores)
         i2v_norm = self._normalize(i2v_scores)
         mw_norm = self._normalize(mw_scores)
 
         final_scores = [
             self.alpha * o + self.beta * i + self.gamma * m
-            for o, i, m in zip(ochiai_norm, i2v_norm, mw_norm)
+            for o, i, m in zip(item_cf_norm, i2v_norm, mw_norm)
         ]
 
         # Sort descending
@@ -153,7 +153,7 @@ class EnsembleModel:
         """
         Ensemble recommendation.
         
-        1. Lấy top-K candidate từ mỗi model (Ochiai, Item2Vec, Metapath2Vec)
+        1. Lấy top-K candidate từ mỗi model (Item-CF, Item2Vec, Metapath2Vec)
         2. Union các candidate lại
         3. Tính weighted score cho mỗi candidate
         4. Sort descending
@@ -266,7 +266,7 @@ class EnsembleModel:
         
         Args:
             path: đường dẫn thư mục (default: MODEL_DIR/ensemble)
-            load_sub_models: nếu True, load luôn Ochiai, Item2Vec, Metapath2Vec
+            load_sub_models: nếu True, load luôn Item-CF, Item2Vec, Metapath2Vec
         
         Returns:
             EnsembleModel instance
@@ -304,13 +304,13 @@ class EnsembleModel:
         
         if load_sub_models:
             # Load các sub-model từ MODEL_DIR
-            from src.models.ochiai import OchiaiModel
+            from src.models.item_cf import ItemCFModel
             from src.models.item2vec import Item2VecModel
             from src.models.metapath2vec import Metapath2VecModel
             
-            print("  Loading Ochiai...")
-            ochiai = OchiaiModel()
-            ochiai.load(os.path.join(MODEL_DIR, "ochiai"))
+            print("  Loading Item-CF...")
+            item_cf = ItemCFModel()
+            item_cf.load(os.path.join(MODEL_DIR, "item_cf"))
             
             print("  Loading Item2Vec...")
             i2v = Item2VecModel()
@@ -320,6 +320,6 @@ class EnsembleModel:
             mw = Metapath2VecModel()
             mw.load(os.path.join(MODEL_DIR, "metapath2vec"))
             
-            ensemble.fit(ochiai, i2v, mw, cb)
+            ensemble.fit(item_cf, i2v, mw, cb)
         
         return ensemble

@@ -1,5 +1,9 @@
 """
-Ochiai + Confidence Score.
+Item-Based Collaborative Filtering (Item-CF) — Ochiai + Confidence Score.
+Trước đây gọi là OchiaiModel, đổi tên cho đúng bản chất thuật toán:
+Ochiai coefficient = Cosine similarity trên binary vector (mỗi sản phẩm
+là binary vector với chiều là các order) → Item-Based CF.
+
 Pairwise co-occurrence model với score có hướng.
 
 Cải tiến Numba: dùng count_pairs_numba() để đếm co-occurrence pairs
@@ -12,24 +16,25 @@ from scipy import sparse
 from tqdm import tqdm
 import pandas as pd
 
-from src.config import OCHIAI_MIN_SUPPORT, OCHIAI_TOP_K
+from src.config import ITEMCF_MIN_SUPPORT, ITEMCF_TOP_K
 from src.utils._numba_ops import count_pairs_numba
 
 
-class OchiaiModel:
+class ItemCFModel:
     """
-    Ochiai + Confidence Score.
+    Item-Based Collaborative Filtering (Item-CF) — Ochiai + Confidence Score.
     
     score(A → B) = ochiai(A,B) * conf(A→B) * log1p(cnt(A,B))
     
     - ochiai = cnt / sqrt(count(A) * count(B))  — đối xứng, normalize
+      (tương đương Cosine similarity trên binary vector)
     - conf_{A→B} = cnt / count(A)               — bất đối xứng, có hướng
     - log_ab = log1p(cnt)                       — frequency bonus
     """
     
     def __init__(self, min_support: int = None, top_k: int = None):
-        self.min_support = min_support if min_support is not None else OCHIAI_MIN_SUPPORT
-        self.top_k = top_k if top_k is not None else OCHIAI_TOP_K
+        self.min_support = min_support if min_support is not None else ITEMCF_MIN_SUPPORT
+        self.top_k = top_k if top_k is not None else ITEMCF_TOP_K
         self.cooc_matrix = None          # CSR (n_products, n_products) — co-occurrence counts
         self.product_counts = None       # array (n_products,) — count(A)
         self.n_products = 0
@@ -44,7 +49,7 @@ class OchiaiModel:
             order_products: DataFrame [order_id, product_id, ...]
             products_df: DataFrame [product_id, ...]
         """
-        print("OchiaiModel: Bắt đầu fit...")
+        print("ItemCFModel: Bắt đầu fit...")
         
         # Mapping product_id → idx
         all_product_ids = sorted(products_df['product_id'].unique())
@@ -132,7 +137,7 @@ class OchiaiModel:
         self.total_orders = order_products['order_id'].nunique()
         print(f"  Total orders: {self.total_orders}")
         
-        print("OchiaiModel: Fit hoàn tất.")
+        print("ItemCFModel: Fit hoàn tất.")
     
     def _compute_scores(self, product_idx: int):
         """
@@ -181,7 +186,7 @@ class OchiaiModel:
 
         Args:
             product_id: int — ID sản phẩm đầu vào
-            top_k: int — số lượng gợi ý (default: OCHIAI_TOP_K)
+            top_k: int — số lượng gợi ý (default: ITEMCF_TOP_K)
 
         Returns:
             list (product_id, score) — sorted giảm dần theo score
@@ -215,7 +220,7 @@ class OchiaiModel:
         Lưu model ra file (cooc matrix + metadata + product counts).
 
         Args:
-            path: đường dẫn thư mục đầu ra (vd: models/ochiai/)
+            path: đường dẫn thư mục đầu ra (vd: models/item_cf/)
         """
         os.makedirs(path, exist_ok=True)
         
@@ -241,14 +246,14 @@ class OchiaiModel:
                    delimiter=',', header='product_id,count', comments='',
                    fmt='%d')
         
-        print(f"OchiaiModel: Đã lưu tại {path}")
+        print(f"ItemCFModel: Đã lưu tại {path}")
     
     def load(self, path: str):
         """
         Load model từ file (cooc matrix + metadata + product counts).
 
         Args:
-            path: đường dẫn thư mục đã lưu (vd: models/ochiai/)
+            path: đường dẫn thư mục đã lưu (vd: models/item_cf/)
         """
         self.cooc_matrix = sparse.load_npz(os.path.join(path, "cooc_matrix.npz"))
         
@@ -263,6 +268,6 @@ class OchiaiModel:
         self.product_counts = np.array(metadata['product_counts'], dtype=np.int32)
         self.total_orders = int(metadata['total_orders'])
         
-        print(f"OchiaiModel: Đã load từ {path}")
+        print(f"ItemCFModel: Đã load từ {path}")
         print(f"  Số sản phẩm: {self.n_products}")
         print(f"  Non-zero entries: {self.cooc_matrix.nnz}")

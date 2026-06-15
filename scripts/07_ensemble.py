@@ -14,7 +14,7 @@ import scipy.sparse
 
 from src.config import MODEL_DIR, PROCESSED_DIR
 from src.models.cb_filter import CBFilter
-from src.models.ochiai import OchiaiModel
+from src.models.item_cf import ItemCFModel
 from src.models.item2vec import Item2VecModel
 from src.models.metapath2vec import Metapath2VecModel
 from src.models.ensemble import EnsembleModel
@@ -26,7 +26,7 @@ print("="*60)
 # Kiem tra cac model da train chua
 checks = [
     ("CB Filter", os.path.join(MODEL_DIR, "cb_filter", "tfidf_vectors.npz")),
-    ("Ochiai",    os.path.join(MODEL_DIR, "ochiai", "cooc_matrix.npz")),
+    ("Item-CF",   os.path.join(MODEL_DIR, "item_cf", "cooc_matrix.npz")),
     ("Item2Vec",  os.path.join(MODEL_DIR, "item2vec", "word2vec.model")),
     ("Metapath2Vec",  os.path.join(MODEL_DIR, "metapath2vec", "embeddings.npy")),
 ]
@@ -57,9 +57,9 @@ with open(os.path.join(MODEL_DIR, "cb_filter", "product_id_to_idx.json")) as f:
     cb.product_id_to_idx = {int(k): v for k, v in json.load(f).items()}
 print(f"   -> {len(cb.product_id_to_idx)} products")
 
-print("   Ochiai...")
-ochiai = OchiaiModel()
-ochiai.load(os.path.join(MODEL_DIR, "ochiai"))
+print("   Item-CF...")
+item_cf = ItemCFModel()
+item_cf.load(os.path.join(MODEL_DIR, "item_cf"))
 
 print("   Item2Vec...")
 i2v = Item2VecModel()
@@ -71,7 +71,7 @@ metapath2vec.load(os.path.join(MODEL_DIR, "metapath2vec"))
 
 print("\n3. Initializing Ensemble...")
 ensemble = EnsembleModel()
-ensemble.fit(ochiai, i2v, metapath2vec, cb)
+ensemble.fit(item_cf, i2v, metapath2vec, cb)
 
 # Save ensemble model de 08_streamlit_app.py load 1 lan
 print("\n   Saving Ensemble model...")

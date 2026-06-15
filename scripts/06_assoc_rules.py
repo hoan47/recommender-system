@@ -1,7 +1,7 @@
 """
 Bước 6: Association Rules — từ co-occurrence matrix.
 Chạy riêng: python scripts/06_assoc_rules.py
-Yêu cầu: scripts/01_load_data.py + scripts/03_ochiai.py đã chạy
+Yêu cầu: scripts/01_load_data.py + scripts/03_item_cf.py đã chạy
 Output: models/assoc_rules/ (rules.csv + metadata.json)
 """
 import os
@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd
 
 from src.config import MODEL_DIR, PROCESSED_DIR
-from src.models.ochiai import OchiaiModel
+from src.models.item_cf import ItemCFModel
 from src.models.assoc_rules import AssocRulesModel
 
 print("="*60)
@@ -25,10 +25,10 @@ if not os.path.exists(data_path):
     print("ERROR: Chua co data! Chay scripts/01_load_data.py truoc.")
     sys.exit(1)
 
-# Kiem tra Ochiai da train chua
-ochiai_path = os.path.join(MODEL_DIR, "ochiai")
-if not os.path.exists(os.path.join(ochiai_path, "cooc_matrix.npz")):
-    print("ERROR: Chua co OchiaiModel! Chay scripts/03_ochiai.py truoc.")
+# Kiem tra Item-CF da train chua
+item_cf_path = os.path.join(MODEL_DIR, "item_cf")
+if not os.path.exists(os.path.join(item_cf_path, "cooc_matrix.npz")):
+    print("ERROR: Chua co ItemCFModel! Chay scripts/03_item_cf.py truoc.")
     sys.exit(1)
 
 print("\n1. Loading data...")
@@ -36,9 +36,9 @@ order_products = pd.read_parquet(data_path)
 products = pd.read_parquet(products_path)
 print(f"   -> {len(order_products)} records, {len(products)} products")
 
-print("\n2. Loading OchiaiModel...")
-ochiai = OchiaiModel()
-ochiai.load(ochiai_path)
+print("\n2. Loading ItemCFModel...")
+item_cf = ItemCFModel()
+item_cf.load(item_cf_path)
 
 # Kiem tra neu da train
 save_path = os.path.join(MODEL_DIR, "assoc_rules")
@@ -49,7 +49,7 @@ if os.path.exists(os.path.join(save_path, "rules.csv")):
 else:
     print("\n3. Training AssocRules...")
     arm = AssocRulesModel()
-    arm.fit(ochiai, order_products)
+    arm.fit(item_cf, order_products)
     arm.save(save_path)
 
 # Test thu

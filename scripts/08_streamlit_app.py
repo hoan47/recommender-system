@@ -1,6 +1,6 @@
 """
 Streamlit App — Bundle Recommendation System (Instacart).
-Hiển thị gợi ý mua kèm từ các model: Ochiai, Item2Vec, Metapath2Vec, Ensemble + CB Filter.
+Hiển thị gợi ý mua kèm từ các model: Item-CF, Item2Vec, Metapath2Vec, Ensemble + CB Filter.
 Dữ liệu tiếng Việt từ products.parquet (product_name đã là tiếng Việt sau 01_load_data.py)
 
 Chạy: streamlit run scripts/08_streamlit_app.py
@@ -55,12 +55,12 @@ def load_models():
         arm.load(os.path.join(MODEL_DIR, "assoc_rules"))
     models["arm"] = arm
 
-    with st.spinner("Đang load Ensemble (Ochiai + Item2Vec + Metapath2Vec + CB Filter)..."):
+    with st.spinner("Đang load Ensemble (Item-CF + Item2Vec + Metapath2Vec + CB Filter)..."):
         ensemble = EnsembleModel.load()
     models["ensemble"] = ensemble
 
     # Sub-models được truy xuất qua ensemble để lấy recommendations riêng
-    models["ochiai"] = ensemble.ochiai
+    models["item_cf"] = ensemble.item_cf
     models["i2v"] = ensemble.item2vec
     models["mw"] = ensemble.metapath2vec
     models["cb"] = ensemble.cb_filter
@@ -92,8 +92,8 @@ def get_all_recommendations(product_id, top_k, models):
     results = {}
 
     t0 = time.time()
-    recs = models["ochiai"].recommend(product_id, top_k=top_k)
-    results["Ochiai"] = {"recs": recs, "time": time.time() - t0}
+    recs = models["item_cf"].recommend(product_id, top_k=top_k)
+    results["Item-CF"] = {"recs": recs, "time": time.time() - t0}
 
     t0 = time.time()
     recs = models["i2v"].recommend(product_id, top_k=top_k)
@@ -206,7 +206,7 @@ def main():
     )
 
     st.sidebar.header("📊 Hiển thị model")
-    show_ochiai = st.sidebar.checkbox("Ochiai", value=True)
+    show_item_cf = st.sidebar.checkbox("Item-CF", value=True)
     show_i2v = st.sidebar.checkbox("Item2Vec", value=True)
     show_mw = st.sidebar.checkbox("Metapath2Vec", value=True)
     show_arm = st.sidebar.checkbox("Association Rules", value=True)
@@ -258,8 +258,8 @@ def main():
     st.markdown("## 📊 So Sánh Các Model")
 
     model_names = []
-    if show_ochiai:
-        model_names.append("Ochiai")
+    if show_item_cf:
+        model_names.append("Item-CF")
     if show_i2v:
         model_names.append("Item2Vec")
     if show_mw:
