@@ -25,17 +25,25 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.config import MODEL_DIR, PROCESSED_DIR, RANDOM_SEED
+from src.config import MODEL_DIR, PROCESSED_DIR, RANDOM_SEED, DEPARTMENTS_FILE, PRODUCTS_FILE
 
 
 # ============================================================
 # Cấu hình
 # ============================================================
-N_TARGETS = 10_000           # tổng số target product
-TOP_POPULAR_RATIO = 0.75     # 75% top bán chạy
-RANDOM_RATIO = 0.25          # 25% random từ pool safe
-TOP_K = 10                   # top-10 gợi ý từ mỗi model
-MIN_COUNT = 10               # ngưỡng safe: product phải xuất hiện >= 10 lần
+EXCLUDED_DEPARTMENT_NAMES = ['other', 'pets', 'personal care', 'household', 'babies', 'missing']
+# other — không phân loại rõ ràng
+# pets — thức ăn, phụ kiện thú cưng
+# personal care — sữa tắm, dầu gội, kem đánh răng, mỹ phẩm
+# household — đồ gia dụng, bột giặt, giấy vệ sinh, túi nilon
+# babies — tã bỉm, khăn ướt, đồ chơi, phụ kiện em bé
+# missing — dữ liệu lỗi/thiếu thông tin ngành hàng
+
+N_TARGETS = 5_000               # tổng số target product
+TOP_POPULAR_RATIO = 0.75        # 75% top bán chạy
+RANDOM_RATIO = 0.25             # 25% random từ pool safe
+TOP_K = 10                      # top-10 gợi ý từ mỗi model
+MIN_COUNT = 10                  # ngưỡng safe: product phải xuất hiện >= 10 lần
 SURVEY_DIR = os.path.join(MODEL_DIR, "..", "data", "survey")
 OUTPUT_FILE = os.path.join(SURVEY_DIR, "survey_samples.csv")
 
@@ -47,6 +55,34 @@ def load_products():
     """Load sản phẩm (tên tiếng Việt)."""
     products = pd.read_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
     return products
+
+
+def get_food_product_ids():
+    """
+    Xác định product_id thuộc Food & Beverage dựa trên department name.
+    
+    Đọc departments.csv để map tên department → department_id,
+    sau đó đọc products.csv gốc để lấy product_id thuộc các department
+    KHÔNG nằm trong EXCLUDED_DEPARTMENT_NAMES.
+    
+    Returns:
+        set[int] — các product_id thuộc thực phẩm (food)
+    """
+    departments = pd.read_csv(DEPARTMENTS_FILE)
+    excluded_dept_ids = set(
+        departments[departments['department'].isin(EXCLUDED_DEPARTMENT_NAMES)]['department_id']
+    )
+    
+    products_raw = pd.read_csv(PRODUCTS_FILE)
+    food_mask = ~products_raw['department_id'].isin(excluded_dept_ids)
+    food_pids = set(products_raw.loc[food_mask, 'product_id'])
+    
+    print(f"  Tổng sản phẩm (products.csv): {len(products_raw):,}")
+    print(f"  Food products: {len(food_pids):,} ({(len(food_pids)/len(products_raw))*100:.1f}%)")
+    print(f"  Non-Food bị loại: {len(products_raw) - len(food_pids):,} "
+          f"({(1 - len(food_pids)/len(products_raw))*100:.1f}%)")
+    
+    return food_pids
 
 
 def load_all_models():
@@ -110,10 +146,10 @@ def get_product_counts(models):
     return product_counts, idx_to_pid
 
 
-def build_safe_pool(models, product_counts, idx_to_pid):
+def build_safe_pool(models, product_counts, idx_to_pid, food_pids):
     """
-    Pool safe: product có count >= MIN_COUNT và cả 3 model đều recommend được
-    (có embedding / có trong từ điển).
+    Pool safe: product có count >= MIN_COUNT, thuộc food,
+    và cả 3 model đều recommend được (có embedding / có trong từ điển).
     """
     safe_pids = set()
     item_cf = models['item_cf']
@@ -124,6 +160,9 @@ def build_safe_pool(models, product_counts, idx_to_pid):
     for idx in range(n_products):
         pid = idx_to_pid[idx]
         if product_counts[idx] < MIN_COUNT:
+            continue
+        # Chỉ giữ food products
+        if pid not in food_pids:
             continue
         # Kiểm tra cả 3 model
         if pid not in item_cf.product_id_to_idx:
@@ -151,9 +190,10 @@ def recommend_ensemble_with_topk(ensemble, product_id, top_k, use_cb_filter):
         ensemble.top_k = orig_top
 
 
-def get_candidates_for_product(models, product_id, top_k=TOP_K):
+def get_candidates_for_product(models, product_id, top_k=TOP_K, food_pids=None):
     """
     Union top-K từ tất cả model.
+    Chỉ giữ candidate thuộc food_pids (nếu được cung cấp).
     Trả về set các product_id candidate.
     Phiên bản này dùng recommend() trực tiếp (không qua get_raw_candidates).
     """
@@ -198,6 +238,10 @@ def get_candidates_for_product(models, product_id, top_k=TOP_K):
     except Exception:
         pass
 
+    # Lọc chỉ giữ food candidates
+    if food_pids is not None:
+        candidates &= food_pids
+
     return candidates
 
 
@@ -212,6 +256,10 @@ def main():
     pid_to_name = dict(zip(products['product_id'], products['product_name']))
     print(f"  Tổng sản phẩm: {len(products)}")
 
+    # 1b. Xác định food products
+    print("\n🍏 Đang xác định Food & Beverage products...")
+    food_pids = get_food_product_ids()
+
     # 2. Load tất cả model
     print("\n🧠 Đang load models...")
     models = load_all_models()
@@ -219,9 +267,9 @@ def main():
     # 3. Lấy product counts
     product_counts, idx_to_pid = get_product_counts(models)
 
-    # 4. Xây pool safe
+    # 4. Xây pool safe (chỉ food products)
     print("\n🔒 Đang xây pool safe...")
-    safe_pids = build_safe_pool(models, product_counts, idx_to_pid)
+    safe_pids = build_safe_pool(models, product_counts, idx_to_pid, food_pids)
     print(f"  Pool safe: {len(safe_pids):,} sản phẩm")
 
     if len(safe_pids) < N_TARGETS:
@@ -265,7 +313,7 @@ def main():
         if (i + 1) % 500 == 0:
             print(f"  Đã xử lý {i+1:,}/{len(targets):,} targets...")
 
-        candidates = get_candidates_for_product(models, pid_a, top_k=TOP_K)
+        candidates = get_candidates_for_product(models, pid_a, top_k=TOP_K, food_pids=food_pids)
         
         if not candidates:
             continue
