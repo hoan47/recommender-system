@@ -27,7 +27,7 @@ recommender-system/
 │   ├── 01_load_data.py      # Load & cache dữ liệu
 │   ├── 02_cb_filter.py      # Train CB Filter
 │   ├── 03_item_cf.py        # Train Item-CF (Item-Based Collaborative Filtering)
-│   ├── 04_item2vec.py       # Train Item2Vec
+│   ├── 04_item_cf_neural.py # Train Item2Vec (Neural Item-Based CF)
 │   ├── 05_kg_metapath.py    # Train KGMetapath (KG embedding + Metapath Walk)
 │   ├── 07_ensemble.py       # Ensemble + test
 │   ├── 08_streamlit_app.py  # Streamlit Dashboard UI
@@ -48,7 +48,7 @@ recommender-system/
 │       ├── item_cf.py       # Item-Based Collaborative Filtering (Ochiai + Confidence)
 │       ├── kg_metapath.py
 │       ├── ensemble.py
-│       └── item2vec.py
+│       └── item_cf_neural.py
 └── .gitignore               # Loại trừ data/, models/, results/
 ```
 
@@ -72,7 +72,7 @@ pip install -r requirements.txt
 python scripts/01_load_data.py
 python scripts/02_cb_filter.py
 python scripts/03_item_cf.py
-python scripts/04_item2vec.py
+python scripts/04_item_cf_neural.py
 python scripts/05_kg_metapath.py
 python scripts/07_ensemble.py
 
@@ -92,7 +92,7 @@ python scripts/02_cb_filter.py
 python scripts/03_item_cf.py
 
 # Bước 4: Train Item2Vec (~5-10 phút)
-python scripts/04_item2vec.py
+python scripts/04_item_cf_neural.py
 
 # Bước 5: Train KGMetapath (KG embedding, ~5-8 phút)
 python scripts/05_kg_metapath.py

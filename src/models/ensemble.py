@@ -305,15 +305,15 @@ class EnsembleModel:
         if load_sub_models:
             # Load các sub-model từ MODEL_DIR
             from src.models.item_cf import ItemCFModel
-            from src.models.item2vec import Item2VecModel
+            from src.models.item_cf_neural import ItemCFNeuralModel
             from src.models.kg_metapath import KGMetapathModel
             
             print("  Loading Item-CF...")
             item_cf = ItemCFModel()
             item_cf.load(os.path.join(MODEL_DIR, "item_cf"))
             
-            print("  Loading Item2Vec...")
-            i2v = Item2VecModel()
+            print("  Loading Item2Vec (Neural CF)...")
+            i2v = ItemCFNeuralModel()
             i2v.load(os.path.join(MODEL_DIR, "item2vec"))
             
             print("  Loading KGMetapath...")

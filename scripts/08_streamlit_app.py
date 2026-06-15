@@ -55,7 +55,7 @@ def load_models():
 
     # Sub-models được truy xuất qua ensemble để lấy recommendations riêng
     models["item_cf"] = ensemble.item_cf
-    models["i2v"] = ensemble.item2vec
+    models["i2v"] = ensemble.item2vec  # ItemCFNeuralModel
     models["mw"] = ensemble.metapath2vec
     models["cb"] = ensemble.cb_filter
 
@@ -91,7 +91,7 @@ def get_all_recommendations(product_id, top_k, models):
 
     t0 = time.time()
     recs = models["i2v"].recommend(product_id, top_k=top_k)
-    results["Item2Vec"] = {"recs": recs, "time": time.time() - t0}
+    results["Item2Vec (Neural CF)"] = {"recs": recs, "time": time.time() - t0}
 
     t0 = time.time()
     recs = models["mw"].recommend(product_id, top_k=top_k)
@@ -197,7 +197,7 @@ def main():
 
     st.sidebar.header("📊 Hiển thị model")
     show_item_cf = st.sidebar.checkbox("Item-CF", value=True)
-    show_i2v = st.sidebar.checkbox("Item2Vec", value=True)
+    show_i2v = st.sidebar.checkbox("Item2Vec (Neural CF)", value=True)
     show_mw = st.sidebar.checkbox("KGMetapath", value=True)
     show_ensemble_no_cb = st.sidebar.checkbox("Ensemble (w/o CB)", value=True)
     show_ensemble_cb = st.sidebar.checkbox("Ensemble + CB", value=True)
@@ -250,7 +250,7 @@ def main():
     if show_item_cf:
         model_names.append("Item-CF")
     if show_i2v:
-        model_names.append("Item2Vec")
+        model_names.append("Item2Vec (Neural CF)")
     if show_mw:
         model_names.append("KGMetapath")
     if show_ensemble_no_cb:

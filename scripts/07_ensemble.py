@@ -15,7 +15,7 @@ import scipy.sparse
 from src.config import MODEL_DIR, PROCESSED_DIR
 from src.models.cb_filter import CBFilter
 from src.models.item_cf import ItemCFModel
-from src.models.item2vec import Item2VecModel
+from src.models.item_cf_neural import ItemCFNeuralModel
 from src.models.kg_metapath import KGMetapathModel
 from src.models.ensemble import EnsembleModel
 
@@ -61,8 +61,8 @@ print("   Item-CF...")
 item_cf = ItemCFModel()
 item_cf.load(os.path.join(MODEL_DIR, "item_cf"))
 
-print("   Item2Vec...")
-i2v = Item2VecModel()
+print("   Item2Vec (Neural CF)...")
+i2v = ItemCFNeuralModel()
 i2v.load(os.path.join(MODEL_DIR, "item2vec"))
 
 print("   KGMetapath...")

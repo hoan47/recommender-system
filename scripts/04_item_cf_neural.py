@@ -1,6 +1,6 @@
 """
-Bước 4: Item2Vec — Word2Vec Skip-gram trên giỏ hàng.
-Chạy riêng: python scripts/04_item2vec.py
+Bước 4: Item2Vec (Neural Item-Based CF) — Word2Vec Skip-gram trên giỏ hàng.
+Chạy riêng: python scripts/04_item_cf_neural.py
 Yêu cầu: scripts/01_load_data.py đã chạy
 Output: models/item2vec/ (word2vec.model + mapping.json)
 """
@@ -11,10 +11,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd
 
 from src.config import MODEL_DIR, PROCESSED_DIR
-from src.models.item2vec import Item2VecModel
+from src.models.item_cf_neural import ItemCFNeuralModel
 
 print("="*60)
-print("  BUOC 4: ITEM2VEC (WORD2VEC)")
+print("  BUOC 4: ITEM2VEC (NEURAL CF)")
 print("="*60)
 
 # Load data da cache
@@ -33,11 +33,11 @@ print(f"   -> {len(order_products)} records, {len(products)} products")
 save_path = os.path.join(MODEL_DIR, "item2vec")
 if os.path.exists(os.path.join(save_path, "word2vec.model")):
     print("\n2. Item2Vec da train, loading...")
-    i2v = Item2VecModel()
+    i2v = ItemCFNeuralModel()
     i2v.load(save_path)
 else:
     print("\n2. Training Item2Vec...")
-    i2v = Item2VecModel()
+    i2v = ItemCFNeuralModel()
     i2v.fit(order_products, products)
     i2v.save(save_path)
 

@@ -1,6 +1,7 @@
 """
-Item2Vec: Word2Vec Skip-gram trên giỏ hàng.
-Học embedding cho từng sản phẩm từ ngữ cảnh mua hàng.
+Item2Vec (Neural Item-Based CF): Word2Vec Skip-gram trên giỏ hàng.
+Học embedding cho từng sản phẩm từ ngữ cảnh mua hàng (co-occurrence).
+Đây là biến thể Neural của Item-Based Collaborative Filtering.
 """
 import os
 import json
@@ -15,11 +16,12 @@ from src.config import (
 )
 
 
-class Item2VecModel:
+class ItemCFNeuralModel:
     """
-    Item2Vec: Word2Vec Skip-gram trên giỏ hàng.
+    Item2Vec (Neural Item-Based CF): Word2Vec Skip-gram trên giỏ hàng.
     
     Mỗi đơn hàng là 1 "câu", mỗi sản phẩm là 1 "từ".
+    Học embedding từ co-occurrence context → Neural Item-Based CF.
     """
     
     def __init__(self, vector_size=None, window=None, min_count=None,
@@ -44,7 +46,7 @@ class Item2VecModel:
             order_products: DataFrame [order_id, product_id, ...]
             products_df: DataFrame [product_id, ...]
         """
-        print("Item2Vec: Bắt đầu fit...")
+        print("ItemCFNeural: Bắt đầu fit...")
         
         # Mapping product_id → str (gensim yêu cầu string tags)
         all_product_ids = sorted(products_df['product_id'].unique())
@@ -90,7 +92,7 @@ class Item2VecModel:
         )
         
         print(f"  Từ vựng: {len(self.model.wv)} products")
-        print("Item2Vec: Fit hoàn tất.")
+        print("ItemCFNeural: Fit hoàn tất.")
     
     def recommend(self, product_id: int, top_k: int = None):
         """
@@ -137,7 +139,7 @@ class Item2VecModel:
         with open(os.path.join(path, "mapping.json"), 'w') as f:
             json.dump(mapping, f)
         
-        print(f"Item2Vec: Đã lưu tại {path}")
+        print(f"ItemCFNeural: Đã lưu tại {path}")
     
     def load(self, path: str):
         """
@@ -154,5 +156,5 @@ class Item2VecModel:
         self.product_id_to_idx = {int(k): int(v) for k, v in mapping['product_id_to_idx'].items()}
         self.idx_to_product_id = {int(k): int(v) for k, v in mapping['idx_to_product_id'].items()}
         
-        print(f"Item2Vec: Đã load từ {path}")
+        print(f"ItemCFNeural: Đã load từ {path}")
         print(f"  Từ vựng: {len(self.model.wv)}")
