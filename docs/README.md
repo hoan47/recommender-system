@@ -28,7 +28,7 @@ recommender-system/
 │   ├── 02_cb_filter.py      # Train CB Filter
 │   ├── 03_ochiai.py         # Train Ochiai + Confidence
 │   ├── 04_item2vec.py       # Train Item2Vec
-│   ├── 05_deepwalk.py       # Train DeepWalk
+│   ├── 05_metapath2vec.py   # Train Metapath2Vec (IKG embedding + Metapath Walk)
 │   ├── 06_assoc_rules.py    # Train Association Rules
 │   ├── 07_ensemble.py       # Ensemble + test
 │   ├── 08_streamlit_app.py  # Streamlit Dashboard UI
@@ -47,7 +47,7 @@ recommender-system/
 │       ├── __init__.py
 │       ├── assoc_rules.py
 │       ├── cb_filter.py
-│       ├── deepwalk.py
+│       ├── metapath2vec.py
 │       ├── ensemble.py
 │       ├── item2vec.py
 │       └── ochiai.py
@@ -75,7 +75,7 @@ python scripts/01_load_data.py
 python scripts/02_cb_filter.py
 python scripts/03_ochiai.py
 python scripts/04_item2vec.py
-python scripts/05_deepwalk.py
+python scripts/05_metapath2vec.py
 python scripts/06_assoc_rules.py
 python scripts/07_ensemble.py
 
@@ -97,8 +97,8 @@ python scripts/03_ochiai.py
 # Bước 4: Train Item2Vec (~5-10 phút)
 python scripts/04_item2vec.py
 
-# Bước 5: Train DeepWalk (~3-5 phút)
-python scripts/05_deepwalk.py
+# Bước 5: Train Metapath2Vec (IKG embedding, ~5-8 phút)
+python scripts/05_metapath2vec.py
 
 # Bước 6: Train Association Rules (~2-5 phút)
 python scripts/06_assoc_rules.py

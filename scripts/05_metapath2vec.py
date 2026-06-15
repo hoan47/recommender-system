@@ -1,9 +1,13 @@
 """
-DeepWalk: Graph-based embedding.
-Xây đồ thị sản phẩm dựa trên co-occurrence, học embedding qua uniform random walk.
-Chạy riêng: python scripts/05_deepwalk.py
+Metapath2Vec: IKG-based embedding với Metapath Walk.
+Xây dựng Đồ thị Tri thức đa thể (Heterogeneous Knowledge Graph),
+sau đó áp dụng 2 kịch bản duyệt đồ thị định hướng ngữ nghĩa:
+  1. Behavioral: P --CO_OCCUR--> P --CO_OCCUR--> P
+  2. Semantic:   P --BELONGS_TO--> A --random--> P
+
+Chạy riêng: python scripts/05_metapath2vec.py
 Yêu cầu: scripts/01_load_data.py đã chạy
-Output: models/deepwalk/ (embeddings.npy + metadata.json + word2vec.model)
+Output: models/metapath2vec/ (embeddings.npy + metadata.json + word2vec.model)
 """
 import os
 import sys
@@ -12,10 +16,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd
 
 from src.config import MODEL_DIR, PROCESSED_DIR
-from src.models.deepwalk import DeepWalkModel
+from src.models.metapath2vec import Metapath2VecModel
 
 print("="*60)
-print("  BUOC 5: DEEPWALK (GRAPH EMBEDDING)")
+print("  BUOC 5: METAPATH2VEC (IKG EMBEDDING)")
 print("="*60)
 
 # Load data da cache
@@ -31,14 +35,14 @@ products = pd.read_parquet(products_path)
 print(f"   -> {len(order_products)} records, {len(products)} products")
 
 # Kiem tra neu da train
-save_path = os.path.join(MODEL_DIR, "deepwalk")
+save_path = os.path.join(MODEL_DIR, "metapath2vec")
 if os.path.exists(os.path.join(save_path, "embeddings.npy")):
-    print("\n2. DeepWalk da train, loading...")
-    model = DeepWalkModel()
+    print("\n2. Metapath2Vec da train, loading...")
+    model = Metapath2VecModel()
     model.load(save_path)
 else:
-    print("\n2. Training DeepWalk...")
-    model = DeepWalkModel()
+    print("\n2. Training Metapath2Vec (IKG + Metapath Walk)...")
+    model = Metapath2VecModel()
     model.fit(order_products, products)
     model.save(save_path)
     print(f"   -> Saved to {save_path}")

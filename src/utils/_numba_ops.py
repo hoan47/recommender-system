@@ -115,7 +115,7 @@ def count_pairs_numba(order_indices, order_ptr, n_products):
 
 
 # ===========================================================================
-# Graph adjacency CSR builder (dùng chung cho DeepWalk)
+# Graph adjacency CSR builder (dùng chung cho Metapath2Vec)
 # ===========================================================================
 
 @njit

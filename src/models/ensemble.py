@@ -1,6 +1,6 @@
 """
 Co-occurrence Ensemble + CB Filter.
-Kết hợp Ochiai, Item2Vec, DeepWalk bằng weighted score, sau đó lọc substitute bằng CB.
+Kết hợp Ochiai, Item2Vec, Metapath2Vec bằng weighted score, sau đó lọc substitute bằng CB.
 """
 import json
 import os
@@ -21,7 +21,7 @@ class EnsembleModel:
     
     final_score(A → B) = α × Ochiai_score(A, B)
                         + β × Item2Vec_sim(A, B)
-                        + γ × DeepWalk_sim(A, B)
+                        + γ × Metapath2Vec_sim(A, B)
     
     Có thể save/load toàn bộ model ensemble (bao gồm các sub-models) bằng 1 lệnh.
     """
@@ -36,22 +36,22 @@ class EnsembleModel:
         
         self.ochiai = None
         self.item2vec = None
-        self.deepwalk = None
+        self.metapath2vec = None
         self.cb_filter = None
     
-    def fit(self, ochiai, item2vec, deepwalk, cb_filter: CBFilter = None):
+    def fit(self, ochiai, item2vec, metapath2vec, cb_filter: CBFilter = None):
         """
         Gán các model đã train.
         
         Args:
             ochiai: OchiaiModel instance
             item2vec: Item2VecModel instance
-            deepwalk: DeepWalkModel instance
+            metapath2vec: Metapath2VecModel instance
             cb_filter: CBFilter instance (optional)
         """
         self.ochiai = ochiai
         self.item2vec = item2vec
-        self.deepwalk = deepwalk
+        self.metapath2vec = metapath2vec
         self.cb_filter = cb_filter
         
         print(f"Ensemble: Đã gán models (α={self.alpha}, β={self.beta}, γ={self.gamma})")
@@ -105,7 +105,7 @@ class EnsembleModel:
         # Lấy recommendations từ từng model
         ochiai_recs = self.ochiai.recommend(product_id, top_k=top_k) if self.ochiai else []
         i2v_recs = self.item2vec.recommend(product_id, top_k=top_k) if self.item2vec else []
-        dw_recs = self.deepwalk.recommend(product_id, top_k=top_k) if self.deepwalk else []
+        mw_recs = self.metapath2vec.recommend(product_id, top_k=top_k) if self.metapath2vec else []
 
         # Union candidates
         candidate_ids = set()
@@ -113,7 +113,7 @@ class EnsembleModel:
             candidate_ids.add(pid)
         for pid, _ in i2v_recs:
             candidate_ids.add(pid)
-        for pid, _ in dw_recs:
+        for pid, _ in mw_recs:
             candidate_ids.add(pid)
 
         if not candidate_ids:
@@ -122,21 +122,21 @@ class EnsembleModel:
         # Score dicts
         ochiai_dict = self._build_score_dict(ochiai_recs)
         i2v_dict = self._build_score_dict(i2v_recs)
-        dw_dict = self._build_score_dict(dw_recs)
+        mw_dict = self._build_score_dict(mw_recs)
 
         # Tính weighted score
         candidate_list = list(candidate_ids)
         ochiai_scores = [ochiai_dict.get(pid, 0) for pid in candidate_list]
         i2v_scores = [i2v_dict.get(pid, 0) for pid in candidate_list]
-        dw_scores = [dw_dict.get(pid, 0) for pid in candidate_list]
+        mw_scores = [mw_dict.get(pid, 0) for pid in candidate_list]
 
         ochiai_norm = self._normalize(ochiai_scores)
         i2v_norm = self._normalize(i2v_scores)
-        dw_norm = self._normalize(dw_scores)
+        mw_norm = self._normalize(mw_scores)
 
         final_scores = [
-            self.alpha * o + self.beta * i + self.gamma * d
-            for o, i, d in zip(ochiai_norm, i2v_norm, dw_norm)
+            self.alpha * o + self.beta * i + self.gamma * m
+            for o, i, m in zip(ochiai_norm, i2v_norm, mw_norm)
         ]
 
         # Sort descending
@@ -153,7 +153,7 @@ class EnsembleModel:
         """
         Ensemble recommendation.
         
-        1. Lấy top-K candidate từ mỗi model (O, I, D)
+        1. Lấy top-K candidate từ mỗi model (Ochiai, Item2Vec, Metapath2Vec)
         2. Union các candidate lại
         3. Tính weighted score cho mỗi candidate
         4. Sort descending
@@ -219,7 +219,7 @@ class EnsembleModel:
         """
         Lưu ensemble model (config + cb_filter) vào thư mục.
         
-        Chỉ lưu config và CB Filter (sub-models đã được lưu riêng ở steps 03-05).
+        Chỉ lưu config và CB Filter (sub-models đã được lưu riêng ở steps 03-05, 05 là Metapath2Vec).
         
         Args:
             path: đường dẫn thư mục lưu (default: MODEL_DIR/ensemble)
@@ -266,7 +266,7 @@ class EnsembleModel:
         
         Args:
             path: đường dẫn thư mục (default: MODEL_DIR/ensemble)
-            load_sub_models: nếu True, load luôn Ochiai, Item2Vec, DeepWalk
+            load_sub_models: nếu True, load luôn Ochiai, Item2Vec, Metapath2Vec
         
         Returns:
             EnsembleModel instance
@@ -306,7 +306,7 @@ class EnsembleModel:
             # Load các sub-model từ MODEL_DIR
             from src.models.ochiai import OchiaiModel
             from src.models.item2vec import Item2VecModel
-            from src.models.deepwalk import DeepWalkModel
+            from src.models.metapath2vec import Metapath2VecModel
             
             print("  Loading Ochiai...")
             ochiai = OchiaiModel()
@@ -316,10 +316,10 @@ class EnsembleModel:
             i2v = Item2VecModel()
             i2v.load(os.path.join(MODEL_DIR, "item2vec"))
             
-            print("  Loading DeepWalk...")
-            dw = DeepWalkModel()
-            dw.load(os.path.join(MODEL_DIR, "deepwalk"))
+            print("  Loading Metapath2Vec...")
+            mw = Metapath2VecModel()
+            mw.load(os.path.join(MODEL_DIR, "metapath2vec"))
             
-            ensemble.fit(ochiai, i2v, dw, cb)
+            ensemble.fit(ochiai, i2v, mw, cb)
         
         return ensemble

@@ -65,17 +65,21 @@ I2V_WORKERS = 4
 I2V_TOP_K = 100
 
 # ============================================================
-# Hyperparameters — DeepWalk (graph embedding, uniform random walk)
+# Hyperparameters — Metapath2Vec (IKG embedding, Metapath Walk)
+# Xây dựng Đồ thị Tri thức đa thể với 2 kịch bản Metapath Walk:
+#   1. Behavioral: P --CO_OCCUR--> P --CO_OCCUR--> P
+#   2. Semantic:   P --BELONGS_TO--> A --random--> P
 # ============================================================
-DW_EMBEDDING_DIM = 128
-DW_WALK_LENGTH = 25
-DW_NUM_WALKS = 20
-DW_WORKERS = 4
-DW_WINDOW = 10
-DW_NEGATIVE = 10
-DW_EPOCHS = 20
-DW_EDGE_THRESHOLD = 10
-DW_TOP_K = 100
+MW_EMBEDDING_DIM = 128
+MW_WALK_LENGTH = 25
+MW_NUM_WALKS = 20
+MW_WORKERS = 4
+MW_WINDOW = 10
+MW_NEGATIVE = 10
+MW_EPOCHS = 20
+MW_EDGE_THRESHOLD = 10
+MW_TOP_K = 100
+MW_METAPATH_BEHAVIORAL_RATIO = 0.5   # 50% Behavioral, 50% Semantic
 
 # ============================================================
 # Hyperparameters — Association Rules (từ co-occurrence matrix)
@@ -90,7 +94,7 @@ ARM_TOP_K = 100
 # ============================================================
 ENS_ALPHA = 0.5                 # trọng số Ochiai
 ENS_BETA = 0.25                 # trọng số Item2Vec
-ENS_GAMMA = 0.25                # trọng số DeepWalk (graph embedding)
+ENS_GAMMA = 0.25                # trọng số Metapath2Vec (IKG embedding)
 ENS_TOP_K = 100                 # top-K sau ensemble (trước CB filter)
 ENS_FINAL_K = 10                # top-K cuối cùng output
 ENS_CB_THRESHOLD = 0.25          # ngưỡng CB filter khi dùng hybrid ensemble

@@ -16,7 +16,7 @@ from src.config import MODEL_DIR, PROCESSED_DIR
 from src.models.cb_filter import CBFilter
 from src.models.ochiai import OchiaiModel
 from src.models.item2vec import Item2VecModel
-from src.models.deepwalk import DeepWalkModel
+from src.models.metapath2vec import Metapath2VecModel
 from src.models.ensemble import EnsembleModel
 
 print("="*60)
@@ -28,7 +28,7 @@ checks = [
     ("CB Filter", os.path.join(MODEL_DIR, "cb_filter", "tfidf_vectors.npz")),
     ("Ochiai",    os.path.join(MODEL_DIR, "ochiai", "cooc_matrix.npz")),
     ("Item2Vec",  os.path.join(MODEL_DIR, "item2vec", "word2vec.model")),
-    ("DeepWalk",  os.path.join(MODEL_DIR, "deepwalk", "embeddings.npy")),
+    ("Metapath2Vec",  os.path.join(MODEL_DIR, "metapath2vec", "embeddings.npy")),
 ]
 for name, path in checks:
     if not os.path.exists(path):
@@ -65,13 +65,13 @@ print("   Item2Vec...")
 i2v = Item2VecModel()
 i2v.load(os.path.join(MODEL_DIR, "item2vec"))
 
-print("   DeepWalk...")
-deepwalk = DeepWalkModel()
-deepwalk.load(os.path.join(MODEL_DIR, "deepwalk"))
+print("   Metapath2Vec...")
+metapath2vec = Metapath2VecModel()
+metapath2vec.load(os.path.join(MODEL_DIR, "metapath2vec"))
 
 print("\n3. Initializing Ensemble...")
 ensemble = EnsembleModel()
-ensemble.fit(ochiai, i2v, deepwalk, cb)
+ensemble.fit(ochiai, i2v, metapath2vec, cb)
 
 # Save ensemble model de 08_streamlit_app.py load 1 lan
 print("\n   Saving Ensemble model...")

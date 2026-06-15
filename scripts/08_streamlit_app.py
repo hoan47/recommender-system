@@ -1,6 +1,6 @@
 """
 Streamlit App — Bundle Recommendation System (Instacart).
-Hiển thị gợi ý mua kèm từ các model: Ochiai, Item2Vec, DeepWalk, Ensemble + CB Filter.
+Hiển thị gợi ý mua kèm từ các model: Ochiai, Item2Vec, Metapath2Vec, Ensemble + CB Filter.
 Dữ liệu tiếng Việt từ products.parquet (product_name đã là tiếng Việt sau 01_load_data.py)
 
 Chạy: streamlit run scripts/08_streamlit_app.py
@@ -55,14 +55,14 @@ def load_models():
         arm.load(os.path.join(MODEL_DIR, "assoc_rules"))
     models["arm"] = arm
 
-    with st.spinner("Đang load Ensemble (Ochiai + Item2Vec + DeepWalk + CB Filter)..."):
+    with st.spinner("Đang load Ensemble (Ochiai + Item2Vec + Metapath2Vec + CB Filter)..."):
         ensemble = EnsembleModel.load()
     models["ensemble"] = ensemble
 
     # Sub-models được truy xuất qua ensemble để lấy recommendations riêng
     models["ochiai"] = ensemble.ochiai
     models["i2v"] = ensemble.item2vec
-    models["dw"] = ensemble.deepwalk
+    models["mw"] = ensemble.metapath2vec
     models["cb"] = ensemble.cb_filter
 
     return models
@@ -100,8 +100,8 @@ def get_all_recommendations(product_id, top_k, models):
     results["Item2Vec"] = {"recs": recs, "time": time.time() - t0}
 
     t0 = time.time()
-    recs = models["dw"].recommend(product_id, top_k=top_k)
-    results["DeepWalk"] = {"recs": recs, "time": time.time() - t0}
+    recs = models["mw"].recommend(product_id, top_k=top_k)
+    results["Metapath2Vec"] = {"recs": recs, "time": time.time() - t0}
 
     t0 = time.time()
     recs = models["arm"].recommend(product_id, top_k=top_k)
@@ -208,7 +208,7 @@ def main():
     st.sidebar.header("📊 Hiển thị model")
     show_ochiai = st.sidebar.checkbox("Ochiai", value=True)
     show_i2v = st.sidebar.checkbox("Item2Vec", value=True)
-    show_dw = st.sidebar.checkbox("DeepWalk", value=True)
+    show_mw = st.sidebar.checkbox("Metapath2Vec", value=True)
     show_arm = st.sidebar.checkbox("Association Rules", value=True)
     show_ensemble_no_cb = st.sidebar.checkbox("Ensemble (w/o CB)", value=True)
     show_ensemble_cb = st.sidebar.checkbox("Ensemble + CB", value=True)
@@ -262,8 +262,8 @@ def main():
         model_names.append("Ochiai")
     if show_i2v:
         model_names.append("Item2Vec")
-    if show_dw:
-        model_names.append("DeepWalk")
+    if show_mw:
+        model_names.append("Metapath2Vec")
     if show_arm:
         model_names.append("AssocRules")
     if show_ensemble_no_cb:
