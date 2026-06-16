@@ -547,27 +547,17 @@ Dữ liệu khảo sát được lưu trong thư mục `data/survey/`, gồm cá
 
 Mỗi dòng là một cặp `(A → B)` từ union top-10 của 5 model (Item-CF, Item2Vec, KGMetapath, Ensemble, Ensemble+CB).
 
-#### 5.3.2 File raw LLM response: `llm_raw_responses/gemini_responses.json`
+#### 5.3.2 File raw LLM response: `llm_raw_responses/gemini_responses.csv`
 
-File JSON chứa mảng các object, mỗi object tương ứng một target A:
+File CSV chứa danh sách các cặp sản phẩm được LLM đánh giá là complementary, mỗi dòng một cặp:
 
-```json
-{
-  "target_id": "48220",
-  "target_name": "Sữa Chua Vị Đào Từ Sữa Hạnh Nhân",
-  "recommendations": {
-    "6740": "Salad rau trộn",
-    "47209": "Sinh tố trái cây",
-    "4350": "Bánh mì kẹp phô mai"
-  }
-}
-```
+| Cột | Kiểu | Mô tả |
+|---|---|---|
+| `product_A_id` | int | ID sản phẩm đầu vào (target) |
+| `product_B_id` | int | ID sản phẩm ứng viên được LLM chọn |
+| `description` | str | Món ăn tạo thành khi kết hợp A+B |
 
-Trong đó:
-- `target_id` = product_A_id
-- `recommendations` = dict mapping `product_B_id` → `description` (tên món ăn tạo thành)
-- **Chỉ các sản phẩm B được LLM đánh giá là complementary mới xuất hiện trong `recommendations`**
-- Các B không được chọn mặc định có `llm_label = 0`
+File này **chỉ chứa các cặp complementary** (llm_label=1). Các cặp trong `survey_samples.csv` không xuất hiện trong file này mặc định có `llm_label = 0`.
 
 #### 5.3.3 File output: `survey_labeled.csv` (tạo bởi script 11)
 
@@ -593,12 +583,12 @@ Gửi cho LLM (Gemini 2.0 Flash) theo prompt:
    chọn các B thực sự mua kèm để tạo thành món ăn"
         │
         ▼
-llm_raw_responses/gemini_responses.json
-  (JSON array: target_id + recommendations{bid: description})
+llm_raw_responses/gemini_responses.csv
+  (CSV: product_A_id,product_B_id,description — chỉ chứa các cặp complementary)
         │
         ▼
 scripts/11_process_llm_results.py
-  - Parse JSON → ghép với survey_samples.csv
+  - Parse CSV → ghép với survey_samples.csv
   - Gán llm_label=1 nếu B ∈ recommendations, else 0
   - Xuất survey_labeled.csv (6 cột)
   - Tính metrics cho union 5 models

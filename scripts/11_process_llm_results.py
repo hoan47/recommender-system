@@ -4,17 +4,17 @@
 Pipeline:
   1. Doc survey_samples.csv (4 cot: A_id, A_name, B_id, B_name)
   2. Doc LLM raw responses tu data/survey/llm_raw_responses/
-     (JSON array, moi object co target_id + recommendations{bid: description})
-  3. Ghep: voi moi (A_id, B_id), gan llm_label=1 neu B trong recommendations, else 0
+     (CSV: product_A_id,product_B_id,description — chi chua cac cap complementary)
+  3. Ghep: voi moi (A_id, B_id), gan llm_label=1 neu B trong LLM response, else 0
   4. Xuat survey_labeled.csv (6 cot)
-  5. Tinh metrics (Precision@10, Recall@10, F1@10, Hit@10) cho tung model
+  5. Tinh metrics (Precision, Recall, F1, Hit) cho union cac model
 
 Usage:
   python scripts/11_process_llm_results.py
 """
 import os
 import sys
-import json
+import csv
 import glob
 import pandas as pd
 import numpy as np
@@ -53,45 +53,33 @@ def load_survey_samples():
 
 def load_llm_responses():
     """
-    Doc tat ca JSON tu llm_raw_responses/.
+    Doc tat ca CSV tu llm_raw_responses/.
+    CSV format: product_A_id,product_B_id,description
     Tra ve dict: (target_id) -> dict{bid: description}
     """
     print("  Doc LLM raw responses...")
     all_responses = {}
     
-    json_files = glob.glob(os.path.join(LLM_RESPONSES_DIR, "*.json"))
-    if not json_files:
-        print("    KHONG tim thay file JSON nao trong", LLM_RESPONSES_DIR)
+    csv_files = glob.glob(os.path.join(LLM_RESPONSES_DIR, "*.csv"))
+    if not csv_files:
+        print("    KHONG tim thay file CSV nao trong", LLM_RESPONSES_DIR)
         return all_responses
     
-    for json_file in json_files:
-        with open(json_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        # Support ca array va single object
-        if isinstance(data, list):
-            responses = data
-        else:
-            responses = [data]
-        
-        for resp in responses:
-            target_id = resp.get('target_id')
-            if not target_id:
-                continue
-            
-            # recommendations co the la dict hoac list cac dict
-            recs = resp.get('recommendations', {})
-            if isinstance(recs, list):
-                recs = {r.get('product_B_id', r.get('bid', '')): r.get('description', '')
-                        for r in recs if r.get('product_B_id') or r.get('bid')}
-            
-            recommendations = {}
-            for bid, description in recs.items():
-                bid_str = str(bid).strip()
-                if bid_str:
-                    recommendations[bid_str] = str(description).strip()
-            
-            all_responses[target_id] = recommendations
+    for csv_file in csv_files:
+        with open(csv_file, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                target_id = row.get('product_A_id', '').strip()
+                bid = row.get('product_B_id', '').strip()
+                description = row.get('description', '').strip()
+                
+                if not target_id or not bid:
+                    continue
+                
+                if target_id not in all_responses:
+                    all_responses[target_id] = {}
+                
+                all_responses[target_id][bid] = description
     
     total_labeled = sum(len(recs) for recs in all_responses.values())
     print(f"    {len(all_responses)} targets duoc LLM danh gia")
@@ -298,8 +286,8 @@ def main():
     
     if not llm_responses:
         print("\n⚠️  Khong co LLM responses. Thoat.")
-        print("   Dat file JSON vao:", LLM_RESPONSES_DIR)
-        print("   Format: [{'target_id':'123','recommendations':{'456':'Mo ta','789':'Mo ta'}},...]")
+        print("   Dat file CSV vao:", LLM_RESPONSES_DIR)
+        print("   Format: product_A_id,product_B_id,description")
         return
     
     # 3. Tao survey_labeled.csv
