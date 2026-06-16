@@ -17,6 +17,11 @@ recommender-system/
 │   ├── products.csv                # 49K records
 │   ├── processed/                  # Dữ liệu đã xử lý (parquet) — không commit
 │   └── survey/                     # Survey samples — không commit
+│       ├── survey_samples.csv      # Input: (A_id, A_name, B_id, B_name) — union top-10 từ 5 model
+│       ├── llm_raw_responses/      # Raw JSON responses từ LLM (Gemini 2.0 Flash...)
+│       │   └── gemini_responses.json  # File mẫu giả lập (20 targets)
+│       ├── survey_labeled.csv      # Output: 6 cột (4 gốc + llm_label + description)
+│       └── survey_stats.txt        # Thống kê nhanh
 ├── docs/                    # Tài liệu dự án
 │   ├── README.md            # File này — tổng quan & cấu trúc
 │   ├── data_survey.md       # Khảo sát & thống kê dữ liệu
@@ -33,6 +38,7 @@ recommender-system/
 │   ├── 08_streamlit_app.py  # Streamlit Dashboard UI
 │   ├── 09_eval_cb_distribution.py  # Đánh giá phân bố CB similarity → chọn ENS_CB_THRESHOLD
 │   ├── 10_generate_survey.py       # Tạo file survey cho LLM đánh giá
+│   ├── 11_process_llm_results.py   # Xử lý LLM response → ground truth + metrics
 ├── src/                     # Source code
 │   ├── config.py            # Cấu hình tập trung
 │   ├── evaluation/          # (dự trữ cho đánh giá sau)
@@ -109,6 +115,10 @@ python scripts/09_eval_cb_distribution.py
 
 # Bước 10: Tạo file survey cho LLM đánh giá (cần đã train đủ models 01→07)
 python scripts/10_generate_survey.py
+
+# Bước 11: Xử lý LLM response → ground truth + metrics
+# (cần đặt file JSON từ LLM vào data/survey/llm_raw_responses/ trước)
+python scripts/11_process_llm_results.py
 ```
 
 ## Lưu Ý

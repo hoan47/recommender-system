@@ -534,24 +534,84 @@ Tất cả các model được đánh giá trên **cùng một bộ mẫu** (cù
 
 ### 5.3 Cấu trúc dữ liệu (Schema)
 
-Dữ liệu khảo sát được lưu trong thư mục `data/survey/`, mỗi model một file CSV riêng (hoặc chung với cột `model_name`). Schema dự kiến:
+Dữ liệu khảo sát được lưu trong thư mục `data/survey/`, gồm các file sau:
+
+#### 5.3.1 File input: `survey_samples.csv` (tạo bởi script 10)
+
+| Cột | Kiểu | Mô tả |
+|---|---|---|
+| `product_A_id` | int | ID sản phẩm đầu vào (target) |
+| `product_A_name` | str | Tên sản phẩm A (tiếng Việt) |
+| `product_B_id` | int | ID sản phẩm ứng viên |
+| `product_B_name` | str | Tên sản phẩm B (tiếng Việt) |
+
+Mỗi dòng là một cặp `(A → B)` từ union top-10 của 5 model (Item-CF, Item2Vec, KGMetapath, Ensemble, Ensemble+CB).
+
+#### 5.3.2 File raw LLM response: `llm_raw_responses/gemini_responses.json`
+
+File JSON chứa mảng các object, mỗi object tương ứng một target A:
+
+```json
+{
+  "target_id": "48220",
+  "target_name": "Sữa Chua Vị Đào Từ Sữa Hạnh Nhân",
+  "recommendations": {
+    "6740": "Salad rau trộn",
+    "47209": "Sinh tố trái cây",
+    "4350": "Bánh mì kẹp phô mai"
+  }
+}
+```
+
+Trong đó:
+- `target_id` = product_A_id
+- `recommendations` = dict mapping `product_B_id` → `description` (tên món ăn tạo thành)
+- **Chỉ các sản phẩm B được LLM đánh giá là complementary mới xuất hiện trong `recommendations`**
+- Các B không được chọn mặc định có `llm_label = 0`
+
+#### 5.3.3 File output: `survey_labeled.csv` (tạo bởi script 11)
 
 | Cột | Kiểu | Mô tả |
 |---|---|---|
 | `product_A_id` | int | ID sản phẩm đầu vào |
-| `product_B_id` | int | ID sản phẩm được hỏi |
-| `model_name` | str | Tên model tạo ra mẫu này (`item_cf`, `item2vec`, `kg_metapath`, `ensemble_cb`) |
-| `source` | str | `"top5"` hoặc `"noise"` |
+| `product_A_name` | str | Tên sản phẩm A |
+| `product_B_id` | int | ID sản phẩm ứng viên |
+| `product_B_name` | str | Tên sản phẩm B |
 | `llm_label` | int | 1 = complementary, 0 = not complementary |
-| `llm_reasoning` | str (optional) | Giải thích ngắn từ LLM về lý do đánh giá |
+| `description` | str | Món ăn tạo thành khi kết hợp A+B (rỗng nếu llm_label=0) |
 
 ---
 
-### 5.4 Các chỉ số đánh giá (Metrics)
+### 5.4 Pipeline xử lý (script 11)
+
+```
+survey_samples.csv (4 cột — union top-10 từ 5 model)
+        │
+        ▼
+Gửi cho LLM (Gemini 2.0 Flash) theo prompt:
+  "Với sản phẩm A, trong danh sách B dưới đây,
+   chọn các B thực sự mua kèm để tạo thành món ăn"
+        │
+        ▼
+llm_raw_responses/gemini_responses.json
+  (JSON array: target_id + recommendations{bid: description})
+        │
+        ▼
+scripts/11_process_llm_results.py
+  - Parse JSON → ghép với survey_samples.csv
+  - Gán llm_label=1 nếu B ∈ recommendations, else 0
+  - Xuất survey_labeled.csv (6 cột)
+  - Tính metrics cho union 5 models
+  - Xuất survey_stats.txt
+```
+
+---
+
+### 5.6 Các chỉ số đánh giá (Metrics)
 
 Tất cả các chỉ số được tính trên top-10 gợi ý của mỗi model, sử dụng ground truth từ LLM.
 
-#### 5.4.1 Precision@10
+#### 5.6.1 Precision@10
 
 ```python
 Precision@10 = số lượng gợi ý đúng (complementary) trong top-10 / 10
@@ -559,7 +619,7 @@ Precision@10 = số lượng gợi ý đúng (complementary) trong top-10 / 10
 
 **Ý nghĩa**: Trong số 10 sản phẩm được gợi ý, có bao nhiêu sản phẩm thực sự là mua kèm?
 
-#### 5.4.2 Recall@10
+#### 5.6.2 Recall@10
 
 ```python
 Recall@10 = số lượng gợi ý đúng trong top-10 / tổng số sản phẩm complementary (trong ground truth)
@@ -567,7 +627,7 @@ Recall@10 = số lượng gợi ý đúng trong top-10 / tổng số sản phẩ
 
 **Ý nghĩa**: Model đã gợi ý được bao nhiêu phần trăm sản phẩm mua kèm thực sự?
 
-#### 5.4.3 F1@10
+#### 5.6.3 F1@10
 
 ```python
 F1@10 = 2 × (Precision@10 × Recall@10) / (Precision@10 + Recall@10)
@@ -575,7 +635,7 @@ F1@10 = 2 × (Precision@10 × Recall@10) / (Precision@10 + Recall@10)
 
 **Ý nghĩa**: Trung bình điều hòa giữa Precision và Recall — đánh giá tổng thể.
 
-#### 5.4.4 Hit@10
+#### 5.6.4 Hit@10
 
 ```python
 Hit@10 = 1 nếu có ít nhất 1 gợi ý đúng trong top-10, ngược lại = 0
@@ -585,7 +645,7 @@ Hit@10 = 1 nếu có ít nhất 1 gợi ý đúng trong top-10, ngược lại =
 
 ---
 
-### 5.5 Cách dùng để so sánh model
+### 5.7 Cách dùng để so sánh model
 
 Mỗi model được đánh giá trên cả 4 chỉ số. Kết quả được tổng hợp trong bảng so sánh:
 
