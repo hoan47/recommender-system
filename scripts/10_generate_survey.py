@@ -28,9 +28,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.config import MODEL_DIR, PROCESSED_DIR, RANDOM_SEED, EXCLUDED_DEPARTMENT_NAMES
 from src.features.product_filter import get_excluded_product_ids
 
-N_TARGETS = 5_000               # tổng số target product
-TOP_POPULAR_RATIO = 0.75        # 75% top bán chạy
-RANDOM_RATIO = 0.25             # 25% random từ pool safe
+N_TARGETS = 10_000               # tổng số target product
+TOP_POPULAR_RATIO = 1        # 100% top bán chạy
+RANDOM_RATIO = 0             # 0% random từ pool safe
 TOP_K = 10                      # top-10 gợi ý từ mỗi model
 MIN_COUNT = 10                  # ngưỡng safe: product phải xuất hiện >= 10 lần
 SURVEY_DIR = os.path.join(MODEL_DIR, "..", "data", "survey")
