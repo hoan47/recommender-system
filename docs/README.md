@@ -38,7 +38,6 @@ recommender-system/
 │   ├── 08_streamlit_app.py  # Streamlit Dashboard UI
 │   ├── 09_eval_cb_distribution.py  # Đánh giá phân bố CB similarity → chọn ENS_CB_THRESHOLD
 │   ├── 10_generate_survey.py       # Tạo file survey cho LLM đánh giá
-│   ├── 11_process_llm_results.py   # Xử lý LLM response → ground truth + metrics
 ├── src/                     # Source code
 │   ├── config.py            # Cấu hình tập trung
 │   ├── evaluation/          # (dự trữ cho đánh giá sau)
@@ -116,9 +115,6 @@ python scripts/09_eval_cb_distribution.py
 # Bước 10: Tạo file survey cho LLM đánh giá (cần đã train đủ models 01→07)
 python scripts/10_generate_survey.py
 
-# Bước 11: Xử lý LLM response → ground truth + metrics
-# (cần đặt file JSON từ LLM vào data/survey/llm_raw_responses/ trước)
-python scripts/11_process_llm_results.py
 ```
 
 ## Lưu Ý

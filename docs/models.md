@@ -585,14 +585,6 @@ Gửi cho LLM (Gemini 2.0 Flash) theo prompt:
         ▼
 llm_raw_responses/gemini_responses.csv
   (CSV: product_A_id,product_B_id,description — chỉ chứa các cặp complementary)
-        │
-        ▼
-scripts/11_process_llm_results.py
-  - Parse CSV → ghép với survey_samples.csv
-  - Gán llm_label=1 nếu B ∈ recommendations, else 0
-  - Xuất survey_labeled.csv (6 cột)
-  - Tính metrics cho union 5 models
-  - Xuất survey_stats.txt
 ```
 
 ---
