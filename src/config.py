@@ -51,7 +51,7 @@ CB_COUNT_MAX_FEATURES = 15000   # Count Vectorizer: max features
 # Hyperparameters — Item-CF (Item-Based Collaborative Filtering)
 # Ochiai coefficient = Cosine similarity trên binary vector → Item-Based CF
 # ============================================================
-ITEMCF_MIN_SUPPORT = 10     # pair xuất hiện < 10 lần → bỏ qua
+ITEMCF_MIN_SUPPORT = 5     # pair xuất hiện < 5 lần → bỏ qua
 ITEMCF_TOP_K = 100          # số candidate giữ lại cho mỗi product (trước ensemble)
 
 # ============================================================
