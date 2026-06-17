@@ -24,8 +24,6 @@ print("="*60)
 print("\n1. Loading products...")
 products = load_products()
 print(f"   -> {len(products)} products")
-products.to_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
-print(f"   -> Saved to {PROCESSED_DIR}products.parquet")
 
 print("\n2. Loading order_products (prior + train)...")
 order_products = load_order_products(use_prior=True, use_train=True)
@@ -45,8 +43,15 @@ print(f"   -> Đã loại {removed:,} records ({removed/len(order_products)*100:
 print(f"   -> Còn lại: {len(order_products):,} records")
 print(f"   -> Số đơn hàng còn lại: {order_products['order_id'].nunique():,}")
 
-# Lưu dạng parquet (nén tốt hơn CSV)
-order_products.to_parquet(os.path.join(PROCESSED_DIR, "order_products.parquet"))
-print(f"   -> Saved to {PROCESSED_DIR}order_products.parquet")
+# Lọc products: chỉ giữ sản phẩm thực phẩm (food) — đồng bộ với order_products đã lọc
+products_filtered = products[~products['product_id'].isin(excluded_ids)]
+print(f"\n4. Lọc products: {len(products_filtered)} sản phẩm (giảm từ {len(products)})")
 
-print("\n Done! 2 files saved (order_products.parquet đã được lọc).")
+# Lưu dạng parquet
+products_filtered.to_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
+print(f"   -> Saved {PROCESSED_DIR}products.parquet (đã lọc, {len(products_filtered)} products)")
+
+order_products.to_parquet(os.path.join(PROCESSED_DIR, "order_products.parquet"))
+print(f"   -> Saved {PROCESSED_DIR}order_products.parquet (đã lọc)")
+
+print(f"\n Done! 2 files saved (cả products lẫn order_products đều đã lọc non-food).")
