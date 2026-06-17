@@ -6,8 +6,8 @@ Item-CF, Item2Vec, KGMetapath.
 Ensemble không được dùng vì nó chỉ weighted sum của 3 model trên,
 không tự sinh candidate mới.
 
-Output: data/survey/survey_samples.csv (4 cột)
-  product_A_id, product_A_name, product_B_id, product_B_name
+Output: data/survey/survey_samples.csv (6 cột)
+  product_A_id, product_A_name, product_A_dept, product_B_id, product_B_name, product_B_dept
 
 Cách chọn target:
   - Pool safe: product có count >= 10 và cả 3 model recommend được
@@ -168,6 +168,7 @@ def main():
     print("\n📦 Đang load sản phẩm...")
     products = load_products()
     pid_to_name = dict(zip(products['product_id'], products['product_name']))
+    pid_to_dept = dict(zip(products['product_id'], products['department']))
     print(f"  Tổng sản phẩm: {len(products)}")
 
     # 2. Load tất cả model
@@ -239,8 +240,10 @@ def main():
             rows.append({
                 'product_A_id': pid_a,
                 'product_A_name': name_a,
+                'product_A_dept': pid_to_dept.get(pid_a, ''),
                 'product_B_id': pid_b,
                 'product_B_name': name_b,
+                'product_B_dept': pid_to_dept.get(pid_b, ''),
             })
 
     # 7. Xuất file
@@ -253,7 +256,7 @@ def main():
     print(f"   Số dòng: {len(df):,}")
     print(f"   Số target có gợi ý: {df['product_A_id'].nunique():,}")
     print(f"   Trung bình gợi ý/target: {len(df) / df['product_A_id'].nunique():.1f}")
-    print(f"\n📋 Cấu trúc file: product_A_id, product_A_name, product_B_id, product_B_name")
+    print(f"\n📋 Cấu trúc file: product_A_id, product_A_name, product_A_dept, product_B_id, product_B_name, product_B_dept")
     print("\n👉 Cách dùng tiếp theo:")
     print("   1. Đưa file survey cho LLM")
     print("   2. Yêu cầu LLM đánh giá từng cặp (A,B): complementary (1) hay không (0)")
