@@ -1,39 +1,35 @@
 """
-Bước 7: Đánh giá model bằng LLM — ground truth từ Gemini responses.
-Chạy riêng: python scripts/model/07_eval_llm.py
-Yêu cầu: scripts/model/01-06 đã chạy + gemini_responses_filtered.csv đã có
-Output: results/llm_eval_results.csv (Precision, Recall, F1, Hit cho từng model)
+11 — Đánh giá các model gợi ý mua kèm dùng ground truth từ LLM (Gemini).
 
 Cách hoạt động:
 1. Load gemini_responses_filtered.csv làm ground truth (các cặp complementary = label 1)
 2. Load từng model đã train (Item-CF, Item2Vec, KGMetapath, Ensemble, Ensemble+CB)
 3. Với mỗi product_A_id có trong ground truth:
-   - Gọi model.recommend(product_A_id) — set top_k/final_k trước nếu cần
+   - Gọi model.recommend(product_A_id, top_k=10)
    - Đối chiếu top-10 với ground truth
    - Tính Precision@10, Recall@10, F1@10, Hit@10
 4. Tính trung bình các metrics cho mỗi model
 5. In bảng so sánh và lưu kết quả
 
-Ground truth file: data/survey/llm_raw_responses/gemini_responses_filtered.csv
-  - 3 cột: product_A_id, product_B_id, description
-  - Mỗi dòng là 1 cặp complementary (llm_label = 1)
-  - Các cặp không có trong file này mặc định là not complementary (llm_label = 0)
+Cách dùng:
+   python scripts/11_eval_llm.py
+
+Yêu cầu:
+   - Đã train xong tất cả model (scripts/03 → 07)
+   - File data/survey/llm_raw_responses/gemini_responses_filtered.csv tồn tại
 """
 import os
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
 import numpy as np
 import pandas as pd
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from src.config import MODEL_DIR, RESULT_DIR
 
-print("="*60)
-print("  BƯỚC 7: LLM EVALUATION")
-print("="*60)
 
 # ============================================================
-# Đường dẫn
+# Đường dẫn ground truth
 # ============================================================
 GT_PATH = os.path.join(
     MODEL_DIR, "..", "data", "survey",
@@ -143,7 +139,7 @@ def evaluate_model(model, model_name, gt, top_k=10, valid_product_ids=None, **re
             if 'use_cb_filter' in recommend_kwargs:
                 recs = model.recommend(pid_a, use_cb_filter=recommend_kwargs['use_cb_filter'])
             else:
-                recs = model.recommend(pid_a)
+                recs = model.recommend(pid_a, top_k=top_k)
         except KeyError:
             # Product không tồn tại trong model vocabulary
             n_skipped += 1
@@ -222,11 +218,16 @@ def print_results(results):
 # 4. Main
 # ============================================================
 def main():
-    print("\n1. Loading ground truth từ Gemini responses...")
+    print("=" * 60)
+    print("SCRIPT 11: ĐÁNH GIÁ MODEL BẰNG LLM GROUND TRUTH")
+    print("=" * 60)
+    
+    # 1. Load ground truth
+    print("\n📖 Đang load ground truth từ Gemini responses...")
     gt = load_ground_truth()
     
     # 2. Load models
-    print("\n2. Loading models...")
+    print("\n🧠 Đang load các model...")
     
     print("  Loading Item-CF...")
     item_cf = load_item_cf()
@@ -244,37 +245,36 @@ def main():
     item_cf_valid = set(item_cf.product_id_to_idx.keys())
     i2v_valid = set(int(k) for k in item2vec.model.wv.key_to_index.keys())
     mw_valid = set(kg_metapath.product_id_to_idx.keys())
-    # Ensemble dùng chung product space với item_cf
-    ensemble_valid = set(item_cf.product_id_to_idx.keys())
+    ensemble_valid = set(ensemble.item_cf.product_id_to_idx.keys())  # ensemble dùng chung product space
     
     # 3. Đánh giá từng model
-    print("\n3. Evaluating models...")
+    print("\n📊 Đang đánh giá các model...")
     results = []
     
-    print("  Item-CF...")
+    # Item-CF
+    print("  Evaluating Item-CF...")
     r = evaluate_model(item_cf, "Item-CF", gt, valid_product_ids=item_cf_valid)
     results.append(r)
-    print(f"    P@10={r['precision@10']:.4f} R@10={r['recall@10']:.4f} F1@10={r['f1@10']:.4f} Hit@10={r['hit@10']:.4f} (eval={r['n_evaluated']}, skip={r['n_skipped']})")
     
-    print("  Item2Vec...")
+    # Item2Vec
+    print("  Evaluating Item2Vec...")
     r = evaluate_model(item2vec, "Item2Vec", gt, valid_product_ids=i2v_valid)
     results.append(r)
-    print(f"    P@10={r['precision@10']:.4f} R@10={r['recall@10']:.4f} F1@10={r['f1@10']:.4f} Hit@10={r['hit@10']:.4f} (eval={r['n_evaluated']}, skip={r['n_skipped']})")
     
-    print("  KGMetapath...")
+    # KGMetapath
+    print("  Evaluating KGMetapath...")
     r = evaluate_model(kg_metapath, "KGMetapath", gt, valid_product_ids=mw_valid)
     results.append(r)
-    print(f"    P@10={r['precision@10']:.4f} R@10={r['recall@10']:.4f} F1@10={r['f1@10']:.4f} Hit@10={r['hit@10']:.4f} (eval={r['n_evaluated']}, skip={r['n_skipped']})")
     
-    print("  Ensemble (w/o CB)...")
+    # Ensemble (w/o CB)
+    print("  Evaluating Ensemble (w/o CB)...")
     r = evaluate_model(ensemble, "Ensemble (w/o CB)", gt, valid_product_ids=ensemble_valid, use_cb_filter=False)
     results.append(r)
-    print(f"    P@10={r['precision@10']:.4f} R@10={r['recall@10']:.4f} F1@10={r['f1@10']:.4f} Hit@10={r['hit@10']:.4f} (eval={r['n_evaluated']}, skip={r['n_skipped']})")
     
-    print("  Ensemble + CB...")
+    # Ensemble + CB
+    print("  Evaluating Ensemble + CB...")
     r = evaluate_model(ensemble, "Ensemble + CB", gt, valid_product_ids=ensemble_valid, use_cb_filter=True)
     results.append(r)
-    print(f"    P@10={r['precision@10']:.4f} R@10={r['recall@10']:.4f} F1@10={r['f1@10']:.4f} Hit@10={r['hit@10']:.4f} (eval={r['n_evaluated']}, skip={r['n_skipped']})")
     
     # 4. In kết quả
     print_results(results)
