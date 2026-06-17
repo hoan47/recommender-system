@@ -31,7 +31,6 @@ class CBFilter:
 
     Sử dụng ensemble Count + TF-IDF để tính similarity giữa sản phẩm.
     Chỉ tính on-demand cho các cặp được đề xuất,
-    không pre-compute full matrix 49K x 49K.
     """
 
     def __init__(self, ngram_range=None, max_features: int = None,
