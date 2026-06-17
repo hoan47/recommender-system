@@ -1,18 +1,22 @@
 """
 Bước 7: Đánh giá model bằng LLM (LLM Evaluation).
 Chạy riêng: python scripts/model/07_eval_llm.py
-Yêu cầu: scripts/model/01-06 đã chạy + survey_samples.csv đã có
+Yêu cầu: scripts/model/01-06 đã chạy + gemini_responses_filtered.csv đã có
 Output: results/llm_eval_results.csv (Precision, Recall, F1, Hit cho từng model)
+
+Ground truth: data/survey/llm_raw_responses/gemini_responses_filtered.csv
+  - 3 cột: product_A_id, product_B_id, description
+  - Mỗi dòng là 1 cặp complementary (llm_label = 1)
+  - Các cặp không có trong file này mặc định là not complementary (llm_label = 0)
 """
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-import json
 import numpy as np
 import pandas as pd
 
-from src.config import MODEL_DIR, PROCESSED_DIR, RESULT_DIR
+from src.config import MODEL_DIR
 from src.models.item_cf import ItemCFModel
 from src.models.item_cf_neural import ItemCFNeuralModel
 from src.models.kg_metapath import KGMetapathModel
@@ -22,26 +26,39 @@ print("="*60)
 print("  BƯỚC 7: LLM EVALUATION")
 print("="*60)
 
-RESULT_DIR = os.path.join(MODEL_DIR, "..", "results")
-SURVEY_DIR = os.path.join(MODEL_DIR, "..", "data", "survey")
-LABELED_FILE = os.path.join(SURVEY_DIR, "survey_labeled.csv")
-PROCESSED_DIR = os.path.join(MODEL_DIR, "..", "data", "processed")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+RESULT_DIR = os.path.join(PROJECT_ROOT, "results")
+SURVEY_DIR = os.path.join(PROJECT_ROOT, "data", "survey")
+GT_FILE = os.path.join(SURVEY_DIR, "llm_raw_responses", "gemini_responses_filtered.csv")
+PROCESSED_DIR = os.path.join(PROJECT_ROOT, "data", "processed")
 
 # Các model cần đánh giá
 MODEL_NAMES = ['item_cf', 'item2vec', 'kg_metapath', 'ensemble', 'ensemble_cb']
 
 TOP_K = 10
-N_TARGETS = 100  # số target dùng để eval (test nhanh)
 
 
-def load_labeled_data():
-    """Load ground truth từ survey_labeled.csv."""
-    df = pd.read_csv(LABELED_FILE)
-    # Tạo set complementary pairs
+def load_ground_truth():
+    """
+    Load ground truth từ gemini_responses_filtered.csv.
+    
+    File này chỉ chứa các cặp complementary (label=1).
+    Xây set comp_pairs = {(A_id, B_id), ...} để tra cứu nhanh.
+    
+    Returns:
+        comp_pairs: set[(int, int)] — các cặp complementary
+        all_targets: list[int] — các target product A duy nhất
+    """
+    df = pd.read_csv(GT_FILE)
     comp_pairs = set()
-    for _, row in df[df['llm_label'] == 1].iterrows():
-        comp_pairs.add((row['product_A_id'], row['product_B_id']))
-    return df, comp_pairs
+    for _, row in df.iterrows():
+        comp_pairs.add((int(row['product_A_id']), int(row['product_B_id'])))
+    
+    all_targets = sorted(df['product_A_id'].unique())
+    
+    print(f"   -> {len(comp_pairs):,} complementary pairs")
+    print(f"   -> {len(all_targets):,} unique target products")
+    return comp_pairs, all_targets
 
 
 def load_models():
@@ -70,9 +87,16 @@ def load_models():
     return models
 
 
-def evaluate_model(model, model_name, targets, products, comp_pairs, top_k=TOP_K):
+def evaluate_model(model, model_name, targets, comp_pairs, top_k=TOP_K):
     """
     Đánh giá một model trên tập target.
+    
+    Args:
+        model: model object (có method recommend)
+        model_name: str
+        targets: list[int] — các product_id target
+        comp_pairs: set[(int, int)] — ground truth complementary
+        top_k: int
     
     Returns:
         dict: precision, recall, f1, hit
@@ -126,30 +150,26 @@ def evaluate_model(model, model_name, targets, products, comp_pairs, top_k=TOP_K
 
 
 def main():
-    print("\n1. Loading ground truth...")
-    df_labeled, comp_pairs = load_labeled_data()
-    print(f"   -> {len(comp_pairs)} complementary pairs")
-    print(f"   -> {df_labeled['product_A_id'].nunique()} unique targets")
+    print("\n1. Loading ground truth từ gemini_responses_filtered.csv...")
+    comp_pairs, all_targets = load_ground_truth()
 
     print("\n2. Loading products...")
     products = pd.read_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
-    pid_to_name = dict(zip(products['product_id'], products['product_name']))
+    print(f"   -> {len(products)} products")
 
     print("\n3. Loading models...")
     models = load_models()
     # Thêm ensemble_cb (dùng cùng ensemble model nhưng bật CB filter)
     models['ensemble_cb'] = models['ensemble']
 
-    # Lấy targets từ labeled data
-    all_targets = sorted(df_labeled['product_A_id'].unique())
-    targets = all_targets[:N_TARGETS]
+    targets = all_targets
     print(f"\n4. Evaluating {len(targets)} targets (top-{TOP_K})...")
 
     results = []
     for model_name in MODEL_NAMES:
         print(f"\n   Evaluating {model_name}...")
         result = evaluate_model(
-            models[model_name], model_name, targets, products, comp_pairs
+            models[model_name], model_name, targets, comp_pairs
         )
         results.append(result)
         print(f"     Precision@{TOP_K}: {result['precision']:.4f}")
