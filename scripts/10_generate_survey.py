@@ -1,7 +1,10 @@
 """
 10 — Tạo file survey cho LLM đánh giá.
-Với mỗi target product (10K), union top-10 từ 5 model:
-Item-CF, Item2Vec, KGMetapath, Ensemble, Ensemble+CB.
+Với mỗi target product (10K), union top-10 từ 3 model gốc:
+Item-CF, Item2Vec, KGMetapath.
+
+Ensemble không được dùng vì nó chỉ weighted sum của 3 model trên,
+không tự sinh candidate mới.
 
 Output: data/survey/survey_samples.csv (4 cột)
   product_A_id, product_A_name, product_B_id, product_B_name
@@ -80,15 +83,6 @@ def load_all_models():
     except Exception as e:
         missing.append(f"KGMetapath (chạy scripts/05_kg_metapath.py): {e}")
 
-    # 4. Ensemble + CB
-    try:
-        from src.models.ensemble import EnsembleModel
-        ensemble = EnsembleModel.load(load_sub_models=False)
-        models['ensemble'] = ensemble
-        print("  ✅ Ensemble loaded")
-    except Exception as e:
-        missing.append(f"Ensemble (chạy scripts/07_ensemble.py): {e}")
-
     if missing:
         print("\n❌ THIẾU MODEL — cần chạy các script sau:")
         for m in missing:
@@ -133,20 +127,6 @@ def build_safe_pool(models, product_counts, idx_to_pid):
     return sorted(safe_pids)
 
 
-def recommend_ensemble_with_topk(ensemble, product_id, top_k, use_cb_filter):
-    """Wrapper: set final_k + top_k tạm thời để lấy đúng số lượng gợi ý."""
-    orig_final = ensemble.final_k
-    orig_top = ensemble.top_k
-    ensemble.final_k = top_k
-    if top_k > ensemble.top_k:
-        ensemble.top_k = top_k
-    try:
-        return ensemble.recommend(product_id, use_cb_filter=use_cb_filter)
-    finally:
-        ensemble.final_k = orig_final
-        ensemble.top_k = orig_top
-
-
 def get_candidates_for_product(models, product_id, top_k=TOP_K):
     """
     Union top-K từ tất cả model.
@@ -172,24 +152,6 @@ def get_candidates_for_product(models, product_id, top_k=TOP_K):
     # KGMetapath
     try:
         recs = models['kg_metapath'].recommend(product_id, top_k=top_k)
-        candidates.update(pid for pid, _ in recs)
-    except Exception:
-        pass
-
-    # Ensemble (w/o CB) — dùng wrapper
-    try:
-        recs = recommend_ensemble_with_topk(
-            models['ensemble'], product_id, top_k, use_cb_filter=False
-        )
-        candidates.update(pid for pid, _ in recs)
-    except Exception:
-        pass
-
-    # Ensemble + CB
-    try:
-        recs = recommend_ensemble_with_topk(
-            models['ensemble'], product_id, top_k, use_cb_filter=True
-        )
         candidates.update(pid for pid, _ in recs)
     except Exception:
         pass
@@ -254,7 +216,7 @@ def main():
 
     # 6. Lấy candidate cho từng target
     print(f"\n🔄 Đang lấy candidates cho {len(targets):,} targets...")
-    print(f"  (Mỗi target union top-{TOP_K} từ 5 model, có thể mất thời gian)")
+    print(f"  (Mỗi target union top-{TOP_K} từ 3 model, có thể mất thời gian)")
     
     rows = []
     for i, pid_a in enumerate(targets):
