@@ -164,8 +164,9 @@ def evaluate_model(model, model_name, gt, top_k=10, valid_product_ids=None, **re
         if n_true == 0:
             continue  # không có ground truth cho product này, bỏ qua
         
-        # Precision: chia cho số lượng recommend thực tế (nếu < top_k vẫn chính xác)
-        precision = n_correct / n_recs if n_recs > 0 else 0.0
+        # Precision@K chuẩn: luôn chia cho K
+        # Nếu model trả về ít hơn K items, các vị trí thiếu được coi là không relevant → precision giảm
+        precision = n_correct / top_k
         recall = n_correct / n_true
         f1 = 2 * precision * recall / (precision + recall + 1e-10)
         hit = 1 if n_correct > 0 else 0
