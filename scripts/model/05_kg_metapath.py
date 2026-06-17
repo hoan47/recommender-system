@@ -1,17 +1,12 @@
 """
-KG Metapath: KG-based embedding với Metapath Walk.
-Xây dựng Đồ thị Tri thức đa thể (Heterogeneous Knowledge Graph),
-sau đó áp dụng 2 kịch bản duyệt đồ thị định hướng ngữ nghĩa:
-  1. Behavioral: P --CO_OCCUR--> P --CO_OCCUR--> P
-  2. Semantic:   P --BELONGS_TO--> A --random--> P
-
-Chạy riêng: python scripts/05_kg_metapath.py
-Yêu cầu: scripts/01_load_data.py đã chạy
+Bước 5: KG Metapath — KG embedding với Metapath Walk.
+Chạy riêng: python scripts/model/05_kg_metapath.py
+Yêu cầu: scripts/model/01_load_data.py đã chạy
 Output: models/kg_metapath/ (embeddings.npy + metadata.json + word2vec.model)
 """
 import os
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import pandas as pd
 
@@ -26,7 +21,7 @@ print("="*60)
 data_path = os.path.join(PROCESSED_DIR, "order_products.parquet")
 products_path = os.path.join(PROCESSED_DIR, "products.parquet")
 if not os.path.exists(data_path):
-    print("ERROR: Chua co data! Chay scripts/01_load_data.py truoc.")
+    print("ERROR: Chua co data! Chay scripts/model/01_load_data.py truoc.")
     sys.exit(1)
 
 print("\n1. Loading data...")

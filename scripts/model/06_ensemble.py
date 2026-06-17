@@ -1,13 +1,13 @@
 """
-Bước 7: Ensemble — Co-occurrence Ensemble + CB Filter.
-Chạy riêng: python scripts/07_ensemble.py
-Yêu cầu: các scripts 01-06 đã chạy
-Output: in kết quả recommend cho 4 sản phẩm mẫu
+Bước 6: Ensemble — Co-occurrence Ensemble + CB Filter.
+Chạy riêng: python scripts/model/06_ensemble.py
+Yêu cầu: các scripts model/01-05 đã chạy
+Output: models/ensemble/ (ensemble_model.pkl + mapping)
 """
 import json
 import os
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import pandas as pd
 import scipy.sparse
@@ -20,7 +20,7 @@ from src.models.kg_metapath import KGMetapathModel
 from src.models.ensemble import EnsembleModel
 
 print("="*60)
-print("  BUOC 7: ENSEMBLE + CB FILTER")
+print("  BUOC 6: ENSEMBLE + CB FILTER")
 print("="*60)
 
 # Kiem tra cac model da train chua

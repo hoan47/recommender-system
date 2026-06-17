@@ -88,13 +88,15 @@ Cấu trúc giống hệt `order_products__prior.csv`, dùng cho tập train.
 | **train** | **~131,000** | ~4% | Dữ liệu train có sẵn → DÙNG ĐỂ TRAIN |
 | **test** | **~75,000** | ~2% | Dữ liệu test có sẵn → **KHÔNG DÙNG để đánh giá gợi ý mua kèm** |
 
-> ⚠️ **Lưu ý quan trọng:** Tổng cộng có **33,819,108 dòng** dữ liệu từ `order_products__prior.csv` + `order_products__train.csv` sẽ được sử dụng để train model.
+> ⚠️ **Lưu ý quan trọng:** Tổng cộng có **31,919,315 dòng** dữ liệu sau khi lọc non-food (từ `order_products__prior.csv` + `order_products__train.csv`) sẽ được sử dụng để train model. Đã loại 1,899,791 records non-food.
 
 ### 3.4 Thống kê Sản phẩm
 
 | Chỉ số | Giá trị |
 |--------|---------|
-| Tổng số sản phẩm | **49,689** |
+| Tổng số sản phẩm gốc | **49,689** |
+| Sản phẩm non-food bị loại | **13,507 (27.2%)** |
+| **Sản phẩm food giữ lại** | **36,181** |
 | Tổng số lối đi (aisles) | **134** |
 | Tổng số phòng ban (departments) | **21** |
 
@@ -191,14 +193,14 @@ Dữ liệu được cấu trúc theo **đơn hàng (order)**, mỗi đơn hàng
 ## 5. Đánh Giá Chất Lượng Dữ Liệu
 
 ### 5.1 Ưu điểm
-✅ **Kích thước lớn:** 32+ triệu giao dịch, đủ để huấn luyện model deep learning  
+✅ **Kích thước lớn:** 31.9+ triệu giao dịch (sau lọc non-food), đủ để huấn luyện model deep learning  
 ✅ **Dữ liệu thực tế:** Từ người dùng Instacart thật  
 ✅ **Cấu trúc rõ ràng:** Quan hệ giữa các bảng được thiết kế tốt  
 ✅ **Thông tin phong phú:** Bao gồm thời gian, thứ tự, và tần suất mua lại  
 
 ### 5.2 Hạn chế
 > **Lưu ý về dữ liệu sản phẩm:**
-> - `products.parquet` (49,688 records) — tạo từ `01_load_data.py`, cột `product_name` đã được ghi đè bằng **tiếng Việt** (từ `products_vi.csv`). Dùng cho **tất cả models** (Ochiai, Item2Vec, DeepWalk, Association Rules, CB Filter).
+> - `products.parquet` (36,181 records — đã lọc non-food) — tạo từ `01_load_data.py`, cột `product_name` đã được ghi đè bằng **tiếng Việt** (từ `products_vi.csv`). Dùng cho **tất cả models** (Ochiai, Item2Vec, DeepWalk, Association Rules, CB Filter).
 > - Không còn 2 nguồn riêng biệt nữa — `products.parquet` là nguồn duy nhất cho cả collaborative và content-based.
 
 ⚠️ **Không có thông tin giá:** Không thể tính toán ngân sách hoặc giá trị đơn hàng  
@@ -209,8 +211,8 @@ Dữ liệu được cấu trúc theo **đơn hàng (order)**, mỗi đơn hàng
 
 ## 6. Kết Luận
 
-Tập dữ liệu Instacart là nguồn tài nguyên tuyệt vời cho bài toán **gợi ý mua kèm**. Với hơn **33 triệu giao dịch** từ **206,000+ người dùng** và **49,000+ sản phẩm**, dữ liệu này cung cấp đủ độ phong phú để xây dựng model chất lượng cao.
+Tập dữ liệu Instacart là nguồn tài nguyên tuyệt vời cho bài toán **gợi ý mua kèm**. Với hơn **31.9 triệu giao dịch (sau lọc non-food)** từ **206,000+ người dùng** và **36,181 sản phẩm thực phẩm**, dữ liệu này cung cấp đủ độ phong phú để xây dựng model chất lượng cao.
 
-**Tổng số dòng dữ liệu khả dụng để train:** **33,819,108** (prior + train)
+**Tổng số dòng dữ liệu khả dụng để train:** **31,919,315** (prior + train, đã loại non-food)
 
 ---

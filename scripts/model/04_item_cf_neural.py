@@ -1,12 +1,12 @@
 """
 Bước 4: Item2Vec (Neural Item-Based CF) — Word2Vec Skip-gram trên giỏ hàng.
-Chạy riêng: python scripts/04_item_cf_neural.py
-Yêu cầu: scripts/01_load_data.py đã chạy
+Chạy riêng: python scripts/model/04_item_cf_neural.py
+Yêu cầu: scripts/model/01_load_data.py đã chạy
 Output: models/item2vec/ (word2vec.model + mapping.json)
 """
 import os
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import pandas as pd
 
@@ -21,7 +21,7 @@ print("="*60)
 data_path = os.path.join(PROCESSED_DIR, "order_products.parquet")
 products_path = os.path.join(PROCESSED_DIR, "products.parquet")
 if not os.path.exists(data_path):
-    print("ERROR: Chua co data! Chay scripts/01_load_data.py truoc.")
+    print("ERROR: Chua co data! Chay scripts/model/01_load_data.py truoc.")
     sys.exit(1)
 
 print("\n1. Loading data...")

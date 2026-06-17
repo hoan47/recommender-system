@@ -2,7 +2,9 @@
 
 ## 1. Giới Thiệu Dự Án
 
-Dự án này nhằm xây dựng một **Hệ thống Gợi ý Mua kèm (Bundle Recommendation System)** dựa trên tập dữ liệu Instacart Market Basket Analysis với hơn **33 triệu giao dịch** từ hơn **206,000 người dùng** và **49,000 sản phẩm**.
+Dự án này nhằm xây dựng một **Hệ thống Gợi ý Mua kèm (Bundle Recommendation System)** dựa trên tập dữ liệu Instacart Market Basket Analysis với hơn **31.9 triệu giao dịch** từ hơn **206,000 người dùng** và **36,181 sản phẩm thực phẩm** (đã loại 13,507 non-food).
+
+Dự án chỉ tập trung vào pipeline model chính tại `scripts/model/` (7 bước: 01→07).
 
 Mục tiêu cuối cùng: Khi khách hàng đang chọn một sản phẩm, hệ thống sẽ đề xuất các sản phẩm khác mà khách hàng có **khả năng cao sẽ mua kèm** trong cùng một giỏ hàng.
 
@@ -45,13 +47,14 @@ Dữ liệu `eval_set=test` được tạo ra bằng cách:
 
 ## 3. Chiến Lược Sử Dụng Dữ Liệu
 
-### 3.1 Toàn bộ dữ liệu dùng để TRAIN
+### 3.1 Toàn bộ dữ liệu dùng để TRAIN (đã lọc non-food)
 
-| File | Số dòng | Vai trò |
-|------|---------|---------|
-| `order_products__prior.csv` | **32,434,490** | Dữ liệu lịch sử chính → học mối quan hệ sản phẩm |
-| `order_products__train.csv` | **1,384,618** | Bổ sung thêm dữ liệu train |
-| **Tổng cộng** | **33,819,108** | **Toàn bộ dùng để train model** |
+| File | Số dòng (gốc) | Số dòng (sau lọc) | Vai trò |
+|------|---------------|-------------------|---------|
+| `order_products__prior.csv` | 32,434,490 | ~30.5M | Dữ liệu lịch sử chính → học mối quan hệ sản phẩm |
+| `order_products__train.csv` | 1,384,618 | ~1.3M | Bổ sung thêm dữ liệu train |
+| **Tổng cộng** | **33,819,108** | **31,919,315** | **Toàn bộ dùng để train model** |
+| **Sản phẩm** | 49,688 | **36,181** (food) | **Đã loại 13,507 non-food** |
 
 ### 3.2 Không dùng eval_set=test để đánh giá
 
@@ -168,12 +171,12 @@ Các model co-occurrence học từ hành vi mua hàng thực tế. Khi người
 
 **Bước 1 — Inference-time (không pre-compute full matrix)**
 
-Thay vì tính trước toàn bộ ma trận similarity 49K × 49K (tốn ~10GB RAM), CB chỉ tính similarity **on-demand** cho các cặp (A, B) mà co-occurrence models thực sự đề xuất:
+Thay vì tính trước toàn bộ ma trận similarity 36K × 36K (tốn ~8GB RAM), CB chỉ tính similarity **on-demand** cho các cặp (A, B) mà co-occurrence models thực sự đề xuất:
 
 ```python
 # Vector hóa từng sản phẩm (pre-compute 1 lần)
 # TF-IDF trên product_name (unigram + bigram)
-product_vectors = vectorize_all_products(products_df)  # shape: (49K, D)
+product_vectors = vectorize_all_products(products_df)  # shape: (36K, D)
 
 # Tại inference: chỉ tính similarity cho top candidates
 def cb_similarity(product_a_id, candidate_ids):
@@ -278,13 +281,13 @@ if cnt < MIN_SUPPORT:
     continue  # bỏ qua pair này
 ```
 
-Lý do: pair xuất hiện < 10 lần trên 33M giao dịch là noise thống kê, không đáng tin.
+Lý do: pair xuất hiện < 10 lần trên 31.9M giao dịch là noise thống kê, không đáng tin.
 
 ---
 
 #### Xử lý kỹ thuật
 
-- **Dữ liệu**: 33M records, 49K products → dùng **CSR sparse matrix** để lưu co-occurrence counts
+- **Dữ liệu**: 31.9M records, 36K products → dùng **CSR sparse matrix** để lưu co-occurrence counts
 - **Gợi ý**: Top-K sản phẩm có `score(A → B)` cao nhất với sản phẩm đầu vào A
 
 #### Ưu điểm
@@ -356,12 +359,12 @@ Word2Vec Skip-gram học:
 #### Cấu trúc KG
 
 ```
-Product (P) — 49,000 nodes
+Product (P) — 36,181 nodes (đã loại non-food)
 Aisle (A)   — 134 nodes  
 Department (D) — 21 nodes
 
 Cạnh:
-- P1 --CO_OCCUR--> P2  (đồng xuất hiện ≥ 10 lần, từ ma trận thưa)
+- P1 --CO_OCCUR--> P2  (đồng xuất hiện ≥ threshold, từ ma trận thưa)
 - P  --BELONGS_TO--> A   (quan hệ danh mục)
 - A  --PART_OF--> D      (quan hệ phân cấp)
 ```
@@ -461,7 +464,7 @@ def normalize(scores):
 ### 4.6 Tiêu Chí So Sánh
 
 | Tiêu chí | Item-CF | Item2Vec | KGMetapath | CB Filter | Ensemble (w/o CB) | Ensemble + CB |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
+|---|---|---|---|---|---|---|
 | **Loại CF** | Memory-based Item-CF ✅ | Neural Item-Based CF ✅ | Không phải CF (Graph-based) ❌ | — | — | — |
 | **Vai trò** | Model gợi ý | Model gợi ý | Model gợi ý | Bộ lọc hậu xử lý | Ensemble thuần (ICF+I2V+MW) | Ensemble + Filter |
 | **LLM Eval (Precision@10)** | ? | ? | ? | — ⚠️ | ? | ? (kỳ vọng cao nhất) |
@@ -479,14 +482,15 @@ def normalize(scores):
 
 ### 4.7 Thứ Tự Triển Khai
 
-| Bước | Việc cần làm | Lý do |
-|---|---|---|
-| **1** | **CB — vector hóa sản phẩm** | Pre-compute product vectors (TF-IDF + one-hot). Cần xong trước để dùng làm filter ở bước 7 |
-| **2** | **Item-CF (Item-Based CF)** | Nhanh, hiệu quả, là backbone của ensemble |
-| **3** | **Item2Vec** | Bổ sung ngữ nghĩa cho ensemble |
-| **4** | **KGMetapath** | Xây KG + Metapath Walk, bổ sung high-order relationships + xử lý long-tail |
-| **5** | **Co-occurrence Ensemble** | Kết hợp bước 2+3+4 bằng weighted score |
-| **6** | **CB Diversity Filter** | Áp dụng CB filter lên kết quả ensemble, loại substitute |
+| Bước | Script | Việc cần làm | Lý do |
+|------|--------|-------------|-------|
+| **1** | `model/01_load_data.py` | Load & lọc dữ liệu | Tiền đề cho tất cả các bước sau |
+| **2** | `model/02_cb_filter.py` | Vector hóa sản phẩm (TF-IDF + Count) | Cần xong trước để dùng làm filter ở bước 6 |
+| **3** | `model/03_item_cf.py` | Item-CF (Item-Based CF) | Nhanh, hiệu quả, là backbone của ensemble |
+| **4** | `model/04_item_cf_neural.py` | Item2Vec | Bổ sung ngữ nghĩa cho ensemble |
+| **5** | `model/05_kg_metapath.py` | KGMetapath | Xây KG + Metapath Walk, bổ sung high-order relationships + xử lý long-tail |
+| **6** | `model/06_ensemble.py` | Co-occurrence Ensemble + CB Filter | Kết hợp bước 3+4+5, thêm CB filter loại substitute |
+| **7** | `model/07_eval_llm.py` | LLM Evaluation | Đánh giá tất cả model bằng ground truth từ LLM |
 
 Mỗi bước đều có thể **chạy độc lập** và **đánh giá riêng** qua LLM evaluation (xem **Mục 5**) trước khi tiến sang bước tiếp theo.
 
@@ -572,7 +576,7 @@ File này **chỉ chứa các cặp complementary** (llm_label=1). Các cặp tr
 
 ---
 
-### 5.4 Pipeline xử lý (script 11)
+### 5.4 Pipeline xử lý (script 07_eval_llm)
 
 ```
 survey_samples.csv (4 cột — union top-10 từ 5 model)

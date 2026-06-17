@@ -1,11 +1,11 @@
 """
-Bước 1: Load và cache dữ liệu.
-Chạy riêng: python scripts/01_load_data.py
+Bước 1: Load và cache dữ liệu (đã lọc non-food).
+Chạy riêng: python scripts/model/01_load_data.py
 Output: data/processed/ (các file đã xử lý)
 """
 import os
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.config import PROCESSED_DIR
 from src.features.loader import load_products, load_order_products
