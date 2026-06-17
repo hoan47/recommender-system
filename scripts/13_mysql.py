@@ -194,8 +194,8 @@ def delete_products_not_in_list(conn, keep_ids):
     # discount_invoice_variants
     print("🗑️  Xoá discount_invoice_variants...")
     cursor.execute(f"""
-        DELETE div FROM discount_invoice_variants div
-        JOIN product_variants pv ON div.variant_id = pv.id
+        DELETE d_iv FROM discount_invoice_variants d_iv
+        JOIN product_variants pv ON d_iv.variant_id = pv.id
         WHERE pv.product_id NOT IN {keep_tuple}
     """)
     deleted = cursor.rowcount
