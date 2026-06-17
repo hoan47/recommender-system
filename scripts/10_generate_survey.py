@@ -25,8 +25,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.config import MODEL_DIR, PROCESSED_DIR, RANDOM_SEED, EXCLUDED_DEPARTMENT_NAMES
-from src.features.product_filter import get_excluded_product_ids
+from src.config import MODEL_DIR, PROCESSED_DIR, RANDOM_SEED
 
 N_TARGETS = 10_000               # tổng số target product
 TOP_POPULAR_RATIO = 1        # 100% top bán chạy
@@ -44,34 +43,6 @@ def load_products():
     """Load sản phẩm (tên tiếng Việt)."""
     products = pd.read_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
     return products
-
-
-def get_food_product_ids(products=None):
-    """
-    Xác định product_id thuộc Food & Beverage dựa trên department name.
-    
-    Dùng get_excluded_product_ids() từ product_filter (đồng bộ với config),
-    trả về set product_id của tất cả sản phẩm KHÔNG bị exclude.
-    
-    Args:
-        products: DataFrame products (có cột department_id, product_id).
-                  Nếu None thì tự load từ parquet.
-    
-    Returns:
-        set[int] — các product_id thuộc thực phẩm (food)
-    """
-    if products is None:
-        products = load_products()
-    
-    excluded_pids = get_excluded_product_ids(products)
-    all_pids = set(products['product_id'])
-    food_pids = all_pids - excluded_pids
-    
-    print(f"  Tổng sản phẩm: {len(all_pids):,}")
-    print(f"  Food products: {len(food_pids):,} ({len(food_pids)/len(all_pids)*100:.1f}%)")
-    print(f"  Non-Food bị loại: {len(excluded_pids):,} ({len(excluded_pids)/len(all_pids)*100:.1f}%)")
-    
-    return food_pids
 
 
 def load_all_models():
@@ -135,9 +106,9 @@ def get_product_counts(models):
     return product_counts, idx_to_pid
 
 
-def build_safe_pool(models, product_counts, idx_to_pid, food_pids):
+def build_safe_pool(models, product_counts, idx_to_pid):
     """
-    Pool safe: product có count >= MIN_COUNT, thuộc food,
+    Pool safe: product có count >= MIN_COUNT,
     và cả 3 model đều recommend được (có embedding / có trong từ điển).
     """
     safe_pids = set()
@@ -149,9 +120,6 @@ def build_safe_pool(models, product_counts, idx_to_pid, food_pids):
     for idx in range(n_products):
         pid = idx_to_pid[idx]
         if product_counts[idx] < MIN_COUNT:
-            continue
-        # Chỉ giữ food products
-        if pid not in food_pids:
             continue
         # Kiểm tra cả 3 model
         if pid not in item_cf.product_id_to_idx:
@@ -179,12 +147,11 @@ def recommend_ensemble_with_topk(ensemble, product_id, top_k, use_cb_filter):
         ensemble.top_k = orig_top
 
 
-def get_candidates_for_product(models, product_id, top_k=TOP_K, food_pids=None):
+def get_candidates_for_product(models, product_id, top_k=TOP_K):
     """
     Union top-K từ tất cả model.
-    Chỉ giữ candidate thuộc food_pids (nếu được cung cấp).
     Trả về set các product_id candidate.
-    Phiên bản này dùng recommend() trực tiếp (không qua get_raw_candidates).
+    Dùng recommend() trực tiếp (không qua get_raw_candidates).
     """
     candidates = set()
 
@@ -227,10 +194,6 @@ def get_candidates_for_product(models, product_id, top_k=TOP_K, food_pids=None):
     except Exception:
         pass
 
-    # Lọc chỉ giữ food candidates
-    if food_pids is not None:
-        candidates &= food_pids
-
     return candidates
 
 
@@ -245,10 +208,6 @@ def main():
     pid_to_name = dict(zip(products['product_id'], products['product_name']))
     print(f"  Tổng sản phẩm: {len(products)}")
 
-    # 1b. Xác định food products
-    print("\n🍏 Đang xác định Food & Beverage products...")
-    food_pids = get_food_product_ids(products)
-
     # 2. Load tất cả model
     print("\n🧠 Đang load models...")
     models = load_all_models()
@@ -258,7 +217,7 @@ def main():
 
     # 4. Xây pool safe (chỉ food products)
     print("\n🔒 Đang xây pool safe...")
-    safe_pids = build_safe_pool(models, product_counts, idx_to_pid, food_pids)
+    safe_pids = build_safe_pool(models, product_counts, idx_to_pid)
     print(f"  Pool safe: {len(safe_pids):,} sản phẩm")
 
     if len(safe_pids) < N_TARGETS:
@@ -302,7 +261,7 @@ def main():
         if (i + 1) % 500 == 0:
             print(f"  Đã xử lý {i+1:,}/{len(targets):,} targets...")
 
-        candidates = get_candidates_for_product(models, pid_a, top_k=TOP_K, food_pids=food_pids)
+        candidates = get_candidates_for_product(models, pid_a, top_k=TOP_K)
         
         if not candidates:
             continue
