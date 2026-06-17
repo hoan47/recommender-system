@@ -36,6 +36,10 @@ SCATTER_ALPHA = 0.05
 
 SAVE_IMAGE = os.path.join(RESULT_DIR, "cb_similarity_distribution",
                           "cb_overlap_distribution.png")
+SAVE_HIST_IMAGE = os.path.join(RESULT_DIR, "cb_similarity_distribution",
+                               "cb_score_bins_histogram.png")
+# Số bins score từ 0.0 đến 1.0
+SCORE_BINS = np.arange(0.0, 1.05, 0.1)  # [0.0, 0.1, ..., 1.0]
 # ─────────────────────────────────────────────────────────────
 
 
@@ -300,6 +304,64 @@ def plot_results(data, save_path):
     print(f"  Đồ thị đã lưu: {save_path}")
 
 
+def plot_score_distribution_histogram(data, save_path):
+    """
+    Vẽ histogram phân phối điểm similarity theo score bins (0.0-0.1, ..., 0.9-1.0).
+    Trục Y: Tỷ lệ % cặp sản phẩm đạt mức điểm đó.
+    Gom tất cả các overlap lại để có tổng thể.
+    """
+    tfidf_vals  = []
+    count_vals  = []
+    ensemble_vals = []
+
+    for ov in range(1, MAX_OVERLAP + 1):
+        pairs = data.get(ov, [])
+        for p in pairs:
+            tfidf_vals.append(p[0])
+            count_vals.append(p[1])
+            ensemble_vals.append(p[2])
+
+    labels_map = {
+        'TF-IDF':    (tfidf_vals,  '#1f77b4'),
+        'Overlap':   (count_vals,  '#ff7f0e'),
+        'Ensemble':  (ensemble_vals, '#2ca02c'),
+    }
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    n_bins = len(SCORE_BINS) - 1
+    bar_width = 0.22
+    x_centers = np.arange(n_bins)
+
+    for i, (label, (vals, color)) in enumerate(labels_map.items()):
+        counts, _ = np.histogram(vals, bins=SCORE_BINS)
+        pct = counts / len(vals) * 100
+        offset = (i - 1) * bar_width
+        ax.bar(x_centers + offset, pct, bar_width,
+               color=color, alpha=0.85, label=label,
+               edgecolor='white', linewidth=0.5)
+
+    bin_labels = [f"[{SCORE_BINS[j]:.1f}-{SCORE_BINS[j+1]:.1f})"
+                  for j in range(n_bins - 1)]
+    bin_labels.append(f"[{SCORE_BINS[-2]:.1f}-{SCORE_BINS[-1]:.1f}]")
+
+    ax.set_xticks(x_centers)
+    ax.set_xticklabels(bin_labels, rotation=30, ha='right', fontsize=9)
+    ax.set_xlabel('Score Bins', fontsize=13)
+    ax.set_ylabel('Tỷ lệ % cặp sản phẩm', fontsize=13)
+    ax.set_title('Phân phối điểm CB Similarity theo Score Bins\n'
+                 f'(Tổng {len(tfidf_vals):,} cặp sample, Ensemble α={CB_ALPHA})',
+                 fontsize=14, fontweight='bold')
+    ax.set_ylim(0, max(ax.get_ylim()[1], 50))
+    ax.legend(fontsize=11, loc='upper right')
+    ax.grid(True, alpha=0.3, axis='y')
+
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    fig.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    print(f"  Histogram đã lưu: {save_path}")
+
+
 def print_results(data):
     print()
     print("=" * 140)
@@ -366,8 +428,11 @@ def main():
     print(f"\nRaw data (full): {path_full}  ({len(df):,} dòng)")
 
     # Plot
-    print("\n3. Vẽ đồ thị...")
+    print("\n3. Vẽ đồ thị overlap...")
     plot_results(data, SAVE_IMAGE)
+
+    print("\n4. Vẽ histogram score bins...")
+    plot_score_distribution_histogram(data, SAVE_HIST_IMAGE)
 
     print("\n  HOÀN TẤT!")
 
