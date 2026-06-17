@@ -25,8 +25,11 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.config import MODEL_DIR, PROCESSED_DIR, RANDOM_SEED, EXCLUDED_DEPARTMENT_NAMES
+from src.config import MODEL_DIR, PROCESSED_DIR, RANDOM_SEED
 from src.features.product_filter import get_excluded_product_ids
+
+# Danh sách department KHÔNG phải thực phẩm — dùng để lọc survey cho LLM (LLM không cần đánh giá các mặt hàng này).
+EXCLUDED_DEPARTMENT_NAMES = ['other', 'pets', 'personal care', 'household', 'babies', 'missing']
 
 N_TARGETS = 10_000               # tổng số target product
 TOP_POPULAR_RATIO = 1        # 100% top bán chạy
