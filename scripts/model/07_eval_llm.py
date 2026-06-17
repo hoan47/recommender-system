@@ -82,6 +82,7 @@ def load_models():
 
     # Ensemble
     ensemble = EnsembleModel.load(load_sub_models=False)
+    ensemble.fit(item_cf, i2v, mw, ensemble.cb_filter)
     models['ensemble'] = ensemble
 
     return models
