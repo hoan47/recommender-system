@@ -26,7 +26,7 @@ print("="*60)
 print("  BƯỚC 7: LLM EVALUATION")
 print("="*60)
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RESULT_DIR = os.path.join(PROJECT_ROOT, "results")
 SURVEY_DIR = os.path.join(PROJECT_ROOT, "data", "survey")
 GT_FILE = os.path.join(SURVEY_DIR, "llm_raw_responses", "gemini_responses_filtered.csv")
