@@ -73,7 +73,7 @@ def main():
 
     # 3. Tính CB similarity cho từng cặp
     print("\n🔬 Computing CB similarity for each pair...")
-    THRESHOLD = 0.25  # ngưỡng từ config ENS_CB_THRESHOLD
+    THRESHOLD = 0.2  # ngưỡng từ config ENS_CB_THRESHOLD
 
     keep_mask = []
     n_skipped = 0  # sản phẩm không có vector (cold-start)
