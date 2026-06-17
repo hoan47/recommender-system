@@ -25,8 +25,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.config import MODEL_DIR, RESULT_DIR, PROCESSED_DIR
-from src.features.product_filter import get_excluded_product_ids
+from src.config import MODEL_DIR, RESULT_DIR
 
 
 # ============================================================
@@ -36,43 +35,6 @@ GT_PATH = os.path.join(
     MODEL_DIR, "..", "data", "survey",
     "llm_raw_responses", "gemini_responses_filtered.csv"
 )
-
-
-# ============================================================
-# 0. Load products & food_pids
-# ============================================================
-def load_products():
-    """Load sản phẩm (tên tiếng Việt)."""
-    products = pd.read_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
-    return products
-
-
-def get_food_product_ids(products=None):
-    """
-    Xác định product_id thuộc Food & Beverage dựa trên department name.
-    
-    Dùng get_excluded_product_ids() từ product_filter (đồng bộ với config),
-    trả về set product_id của tất cả sản phẩm KHÔNG bị exclude.
-    
-    Args:
-        products: DataFrame products (có cột department_id, product_id).
-                  Nếu None thì tự load từ parquet.
-    
-    Returns:
-        set[int] — các product_id thuộc thực phẩm (food)
-    """
-    if products is None:
-        products = load_products()
-    
-    excluded_pids = get_excluded_product_ids(products)
-    all_pids = set(products['product_id'])
-    food_pids = all_pids - excluded_pids
-    
-    print(f"  Tổng sản phẩm: {len(all_pids):,}")
-    print(f"  Food products: {len(food_pids):,} ({len(food_pids)/len(all_pids)*100:.1f}%)")
-    print(f"  Non-Food bị loại: {len(excluded_pids):,} ({len(excluded_pids)/len(all_pids)*100:.1f}%)")
-    
-    return food_pids
 
 
 # ============================================================
@@ -135,7 +97,7 @@ def load_ensemble(load_sub_models=True):
 # ============================================================
 # 3. Đánh giá metrics cho 1 model
 # ============================================================
-def evaluate_model(model, model_name, gt, top_k=10, valid_product_ids=None, food_pids=None, **recommend_kwargs):
+def evaluate_model(model, model_name, gt, top_k=10, valid_product_ids=None, **recommend_kwargs):
     """
     Đánh giá model dựa trên ground truth.
     
@@ -145,7 +107,6 @@ def evaluate_model(model, model_name, gt, top_k=10, valid_product_ids=None, food
         gt: dict {product_A_id: set of product_B_id}
         top_k: int (default 10)
         valid_product_ids: set[int] — các product_id mà model biết (nếu None thì bỏ qua filter)
-        food_pids: set[int] — các product_id thuộc food (nếu None thì không filter)
         **recommend_kwargs: các kwargs thêm cho recommend (vd use_cb_filter=True)
     
     Returns:
@@ -195,10 +156,6 @@ def evaluate_model(model, model_name, gt, top_k=10, valid_product_ids=None, food
         # Lấy danh sách product_id từ recommendations (bỏ qua score)
         n_recs = min(len(recs), top_k)
         pred_ids = [pid for pid, _ in recs[:n_recs]]
-        
-        # Lọc chỉ giữ food products (đồng bộ với script 10 — survey chỉ chứa food)
-        if food_pids is not None:
-            pred_ids = [pid for pid in pred_ids if pid in food_pids]
         
         # Đếm số lượng đúng
         n_correct = sum(1 for pid in pred_ids if pid in true_set)
@@ -269,11 +226,6 @@ def main():
     print("\n📖 Đang load ground truth từ Gemini responses...")
     gt = load_ground_truth()
     
-    # 1b. Load products & food_pids (đồng bộ với script 10)
-    print("\n🍏 Đang xác định Food & Beverage products...")
-    products = load_products()
-    food_pids = get_food_product_ids(products)
-    
     # 2. Load models
     print("\n🧠 Đang load các model...")
     
@@ -301,27 +253,27 @@ def main():
     
     # Item-CF
     print("  Evaluating Item-CF...")
-    r = evaluate_model(item_cf, "Item-CF", gt, valid_product_ids=item_cf_valid, food_pids=food_pids)
+    r = evaluate_model(item_cf, "Item-CF", gt, valid_product_ids=item_cf_valid)
     results.append(r)
     
     # Item2Vec
     print("  Evaluating Item2Vec...")
-    r = evaluate_model(item2vec, "Item2Vec", gt, valid_product_ids=i2v_valid, food_pids=food_pids)
+    r = evaluate_model(item2vec, "Item2Vec", gt, valid_product_ids=i2v_valid)
     results.append(r)
     
     # KGMetapath
     print("  Evaluating KGMetapath...")
-    r = evaluate_model(kg_metapath, "KGMetapath", gt, valid_product_ids=mw_valid, food_pids=food_pids)
+    r = evaluate_model(kg_metapath, "KGMetapath", gt, valid_product_ids=mw_valid)
     results.append(r)
     
     # Ensemble (w/o CB)
     print("  Evaluating Ensemble (w/o CB)...")
-    r = evaluate_model(ensemble, "Ensemble (w/o CB)", gt, valid_product_ids=ensemble_valid, food_pids=food_pids, use_cb_filter=False)
+    r = evaluate_model(ensemble, "Ensemble (w/o CB)", gt, valid_product_ids=ensemble_valid, use_cb_filter=False)
     results.append(r)
     
     # Ensemble + CB
     print("  Evaluating Ensemble + CB...")
-    r = evaluate_model(ensemble, "Ensemble + CB", gt, valid_product_ids=ensemble_valid, food_pids=food_pids, use_cb_filter=True)
+    r = evaluate_model(ensemble, "Ensemble + CB", gt, valid_product_ids=ensemble_valid, use_cb_filter=True)
     results.append(r)
     
     # 4. In kết quả
