@@ -575,7 +575,7 @@ File này **chỉ chứa các cặp complementary** (llm_label=1). Các cặp tr
 ### 5.4 Pipeline xử lý (script 11)
 
 ```
-survey_samples.csv (4 cột — union top-10 từ 5 model)
+survey_samples.csv (4 cột — union top-10 từ 5 model, đã lọc chỉ giữ food candidates)
         │
         ▼
 Gửi cho LLM (Gemini 2.0 Flash) theo prompt:
@@ -583,8 +583,16 @@ Gửi cho LLM (Gemini 2.0 Flash) theo prompt:
    chọn các B thực sự mua kèm để tạo thành món ăn"
         │
         ▼
-llm_raw_responses/gemini_responses.csv
-  (CSV: product_A_id,product_B_id,description — chỉ chứa các cặp complementary)
+llm_raw_responses/gemini_responses_filtered.csv
+  (CSV: product_A_id,product_B_id — chỉ chứa các cặp complementary food–food)
+        │
+        ▼
+Script 11: load ground truth + từng model → recommend → 
+  lọc predictions chỉ giữ food candidates (đồng bộ với script 10) →
+  tính Precision@10, Recall@10, F1@10, Hit@10
+        │
+        ▼
+results/llm_eval_results.csv (bảng so sánh 5 model)
 ```
 
 ---

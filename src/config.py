@@ -93,3 +93,6 @@ ENS_FINAL_K = 10                # top-K cuối cùng output
 ENS_CB_THRESHOLD = 0.25          # ngưỡng CB filter khi dùng hybrid ensemble
 
 RANDOM_SEED = 42
+
+# Danh sách department KHÔNG phải thực phẩm — dùng để lọc survey cho LLM (LLM không cần đánh giá các mặt hàng này).
+EXCLUDED_DEPARTMENT_NAMES = ['other', 'pets', 'personal care', 'household', 'babies', 'missing']
