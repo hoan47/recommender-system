@@ -572,6 +572,16 @@ File này **chỉ chứa các cặp complementary** (llm_label=1). Các cặp tr
 
 ---
 
+> **📌 Ghi chú về phạm vi lọc `EXCLUDED_DEPARTMENT_NAMES`:**
+> Việc loại bỏ các sản phẩm thuộc `EXCLUDED_DEPARTMENT_NAMES` (defined trong `src/config.py`):
+> `['other', 'pets', 'personal care', 'household', 'babies', 'missing']`
+> **CHỈ áp dụng ở khâu khảo sát và đánh giá** (script 10, 11, 07) — tức chỉ dùng để
+> lọc survey samples và lọc predictions khi tính metrics, chỉ giữ food candidates.
+> **Toàn bộ dữ liệu training vẫn giữ nguyên** — các model (Item-CF, Item2Vec, KGMetapath,
+> Ensemble) được train trên **tất cả sản phẩm thuộc mọi department**, không loại bỏ gì.
+> Lý do: sản phẩm phi thực phẩm vẫn đóng góp vào co-occurrence giúp model học chính xác
+> hơn, nhưng không phù hợp để LLM đánh giá mua kèm (grocery‑focused).
+
 ### 5.4 Pipeline xử lý (script 11)
 
 ```
