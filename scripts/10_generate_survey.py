@@ -25,7 +25,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.config import MODEL_DIR, PROCESSED_DIR, RANDOM_SEED
+from src.config import MODEL_DIR, PROCESSED_DIR, RANDOM_SEED, EXCLUDED_DEPARTMENT_NAMES
 from src.features.product_filter import get_excluded_product_ids
 
 N_TARGETS = 10_000               # tổng số target product

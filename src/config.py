@@ -92,7 +92,18 @@ ENS_TOP_K = 100                 # top-K sau ensemble (trước CB filter)
 ENS_FINAL_K = 10                # top-K cuối cùng output
 ENS_CB_THRESHOLD = 0.25          # ngưỡng CB filter khi dùng hybrid ensemble
 
-RANDOM_SEED = 42
-
-# Danh sách department KHÔNG phải thực phẩm — dùng để lọc survey cho LLM (LLM không cần đánh giá các mặt hàng này).
+# ============================================================
+# Product Filter Strategy
+# Lọc non-food products khỏi train data để model chỉ học
+# các pattern mua kèm thực phẩm (grocery).
+# Dùng department name thay vì ID để dễ đọc & đồng bộ với survey.
+# ============================================================
 EXCLUDED_DEPARTMENT_NAMES = ['other', 'pets', 'personal care', 'household', 'babies', 'missing']
+# other — không phân loại rõ ràng
+# pets — thức ăn, phụ kiện thú cưng
+# personal care — sữa tắm, dầu gội, kem đánh răng, mỹ phẩm
+# household — đồ gia dụng, bột giặt, giấy vệ sinh, túi nilon
+# babies — tã bỉm, khăn ướt, đồ chơi, phụ kiện em bé, kể cả baby food formula
+# missing — dữ liệu lỗi/thiếu thông tin ngành hàng
+
+RANDOM_SEED = 42

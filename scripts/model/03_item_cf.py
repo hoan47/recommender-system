@@ -1,7 +1,7 @@
 """
 Bước 3: Item-Based Collaborative Filtering (Item-CF) — Ochiai + Confidence Score.
-Chạy riêng: python scripts/03_item_cf.py
-Yêu cầu: scripts/01_load_data.py đã chạy
+Chạy riêng: python scripts/model/03_item_cf.py
+Yêu cầu: scripts/model/01_load_data.py đã chạy
 Output: models/item_cf/ (cooc_matrix.npz + metadata.json)
 """
 import os
@@ -21,7 +21,7 @@ print("="*60)
 data_path = os.path.join(PROCESSED_DIR, "order_products.parquet")
 products_path = os.path.join(PROCESSED_DIR, "products.parquet")
 if not os.path.exists(data_path):
-    print("ERROR: Chua co data! Chay scripts/01_load_data.py truoc.")
+    print("ERROR: Chua co data! Chay scripts/model/01_load_data.py truoc.")
     sys.exit(1)
 
 print("\n1. Loading data...")

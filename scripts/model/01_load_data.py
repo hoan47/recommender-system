@@ -1,5 +1,5 @@
 """
-Bước 1: Load và cache dữ liệu — toàn bộ 49,688 products (KHÔNG lọc non-food).
+Bước 1: Load và cache dữ liệu (đã lọc non-food).
 Chạy riêng: python scripts/model/01_load_data.py
 Output: data/processed/ (các file đã xử lý)
 """
@@ -9,11 +9,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from src.config import PROCESSED_DIR
 from src.features.loader import load_products, load_order_products
+from src.features.product_filter import (
+    get_excluded_product_ids,
+    filter_order_products,
+    get_filter_stats,
+)
 
 os.makedirs(PROCESSED_DIR, exist_ok=True)
 
 print("="*60)
-print("  BƯỚC 1: LOAD DATA — 49,688 products, 33.8M records")
+print("  BƯỚC 1: LOAD DATA + FILTER STRATEGY")
 print("="*60)
 
 print("\n1. Loading products...")
@@ -22,14 +27,31 @@ print(f"   -> {len(products)} products")
 
 print("\n2. Loading order_products (prior + train)...")
 order_products = load_order_products(use_prior=True, use_train=True)
-print(f"   -> {len(order_products):,} records")
-print(f"   -> {order_products['order_id'].nunique():,} unique orders")
+print(f"   -> {len(order_products)} records")
+print(f"   -> {order_products['order_id'].nunique()} unique orders")
 
-# Lưu dạng parquet — KHÔNG lọc, giữ toàn bộ 49,688 products
-products.to_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
-print(f"\n3. Saved {PROCESSED_DIR}products.parquet ({len(products)} products)")
+# --- Filter Strategy: loại non-food products ---
+print("\n3. Filtering non-food products...")
+excluded_ids = get_excluded_product_ids(products)
+
+# Thống kê trước khi lọc
+get_filter_stats(products, order_products, excluded_ids)
+
+# Lọc order_products
+order_products, removed = filter_order_products(order_products, excluded_ids)
+print(f"   -> Đã loại {removed:,} records ({removed/len(order_products)*100:.1f}% nếu tính trên dữ liệu sau lọc)")
+print(f"   -> Còn lại: {len(order_products):,} records")
+print(f"   -> Số đơn hàng còn lại: {order_products['order_id'].nunique():,}")
+
+# Lọc products: chỉ giữ sản phẩm thực phẩm (food) — đồng bộ với order_products đã lọc
+products_filtered = products[~products['product_id'].isin(excluded_ids)]
+print(f"\n4. Lọc products: {len(products_filtered)} sản phẩm (giảm từ {len(products)})")
+
+# Lưu dạng parquet
+products_filtered.to_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
+print(f"   -> Saved {PROCESSED_DIR}products.parquet (đã lọc, {len(products_filtered)} products)")
 
 order_products.to_parquet(os.path.join(PROCESSED_DIR, "order_products.parquet"))
-print(f"   Saved {PROCESSED_DIR}order_products.parquet ({len(order_products):,} records)")
+print(f"   -> Saved {PROCESSED_DIR}order_products.parquet (đã lọc)")
 
-print(f"\n Done! 2 files saved (toàn bộ dữ liệu gốc, không lọc non-food).")
+print(f"\n Done! 2 files saved (cả products lẫn order_products đều đã lọc non-food).")

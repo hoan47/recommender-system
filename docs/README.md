@@ -12,7 +12,7 @@ Dự án chỉ tập trung vào **7 bước pipeline model** chính, đặt tron
 recommender-system/
 ├── scripts/
 │   └── model/                 # Pipeline model chính (1→7)
-│       ├── 01_load_data.py    # Load dữ liệu (49,688 products, 33.8M records)
+│       ├── 01_load_data.py    # Load & lọc dữ liệu (loại non-food)
 │       ├── 02_cb_filter.py    # Content-Based Diversity Filter
 │       ├── 03_item_cf.py      # Item-Based Collaborative Filtering (Ochiai + Confidence)
 │       ├── 04_item_cf_neural.py # Item2Vec (Neural Item-Based CF)
@@ -52,11 +52,13 @@ recommender-system/
 
 | Chỉ số | Giá trị |
 |--------|---------|
-| Tổng sản phẩm | **49,688** |
-| Tổng records gốc | **33,819,108** |
-| Số đơn hàng | 3,421,131 |
-
-**Lưu ý:** Pipeline sử dụng toàn bộ dữ liệu gốc, KHÔNG lọc non-food. Ground truth từ Gemini cũng dựa trên 49,688 products.
+| Tổng sản phẩm gốc | 49,688 |
+| Sản phẩm non-food bị loại | 13,507 (27.2%) |
+| **Sản phẩm food giữ lại** | **36,181** |
+| Tổng records gốc | 33,819,108 |
+| Records non-food bị loại | 1,899,791 (6.0%) |
+| **Records food giữ lại** | **31,919,315** |
+| Số đơn hàng sau lọc | 3,318,066 |
 
 ## Tài Liệu Liên Quan
 
@@ -84,6 +86,12 @@ python scripts/model/04_item_cf_neural.py
 python scripts/model/05_kg_metapath.py
 python scripts/model/06_ensemble.py
 python scripts/model/07_eval_llm.py
+
+# Hoặc chạy từ scripts/model/ (trong trường hợp đó sys.path tự xử lý)
+cd scripts/model
+python 01_load_data.py
+python 02_cb_filter.py
+...
 ```
 
 ## Lưu Ý

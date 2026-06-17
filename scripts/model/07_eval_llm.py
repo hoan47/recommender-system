@@ -1,20 +1,10 @@
 """
-Bước 7: Đánh giá model bằng LLM — ground truth từ Gemini responses.
+Bước 7: Đánh giá model bằng LLM (LLM Evaluation).
 Chạy riêng: python scripts/model/07_eval_llm.py
 Yêu cầu: scripts/model/01-06 đã chạy + gemini_responses_filtered.csv đã có
 Output: results/llm_eval_results.csv (Precision, Recall, F1, Hit cho từng model)
 
-Cách hoạt động:
-1. Load gemini_responses_filtered.csv làm ground truth (các cặp complementary = label 1)
-2. Load từng model đã train (Item-CF, Item2Vec, KGMetapath, Ensemble, Ensemble+CB)
-3. Với mỗi product_A_id có trong ground truth:
-   - Gọi model.recommend(product_A_id) — set top_k/final_k trước nếu cần
-   - Đối chiếu top-10 với ground truth
-   - Tính Precision@10, Recall@10, F1@10, Hit@10
-4. Tính trung bình các metrics cho mỗi model
-5. In bảng so sánh và lưu kết quả
-
-Ground truth file: data/survey/llm_raw_responses/gemini_responses_filtered.csv
+Ground truth: data/survey/llm_raw_responses/gemini_responses_filtered.csv
   - 3 cột: product_A_id, product_B_id, description
   - Mỗi dòng là 1 cặp complementary (llm_label = 1)
   - Các cặp không có trong file này mặc định là not complementary (llm_label = 0)
@@ -26,313 +16,176 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import numpy as np
 import pandas as pd
 
-from src.config import MODEL_DIR, RESULT_DIR, PROCESSED_DIR
-from src.features.product_filter import get_excluded_product_ids
+from src.config import MODEL_DIR
+from src.models.item_cf import ItemCFModel
+from src.models.item_cf_neural import ItemCFNeuralModel
+from src.models.kg_metapath import KGMetapathModel
+from src.models.ensemble import EnsembleModel
 
 print("="*60)
 print("  BƯỚC 7: LLM EVALUATION")
 print("="*60)
 
-# ============================================================
-# Đường dẫn
-# ============================================================
-GT_PATH = os.path.join(
-    MODEL_DIR, "..", "data", "survey",
-    "llm_raw_responses", "gemini_responses_filtered.csv"
-)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+RESULT_DIR = os.path.join(PROJECT_ROOT, "results")
+SURVEY_DIR = os.path.join(PROJECT_ROOT, "data", "survey")
+GT_FILE = os.path.join(SURVEY_DIR, "llm_raw_responses", "gemini_responses_filtered.csv")
+PROCESSED_DIR = os.path.join(PROJECT_ROOT, "data", "processed")
+
+# Các model cần đánh giá
+MODEL_NAMES = ['item_cf', 'item2vec', 'kg_metapath', 'ensemble', 'ensemble_cb']
+
+TOP_K = 10
 
 
-# ============================================================
-# 0. Load products & food_pids
-# ============================================================
-def load_products():
-    """Load sản phẩm (tên tiếng Việt)."""
-    products = pd.read_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
-    return products
-
-
-def get_food_product_ids(products=None):
-    """
-    Xác định product_id thuộc Food & Beverage dựa trên department name.
-    
-    Dùng get_excluded_product_ids() từ product_filter (đồng bộ với config),
-    trả về set product_id của tất cả sản phẩm KHÔNG bị exclude.
-    
-    Args:
-        products: DataFrame products (có cột department_id, product_id).
-                  Nếu None thì tự load từ parquet.
-    
-    Returns:
-        set[int] — các product_id thuộc thực phẩm (food)
-    """
-    if products is None:
-        products = load_products()
-    
-    excluded_pids = get_excluded_product_ids(products)
-    all_pids = set(products['product_id'])
-    food_pids = all_pids - excluded_pids
-    
-    print(f"  Tổng sản phẩm: {len(all_pids):,}")
-    print(f"  Food products: {len(food_pids):,} ({len(food_pids)/len(all_pids)*100:.1f}%)")
-    print(f"  Non-Food bị loại: {len(excluded_pids):,} ({len(excluded_pids)/len(all_pids)*100:.1f}%)")
-    
-    return food_pids
-
-
-# ============================================================
-# 1. Load ground truth
-# ============================================================
 def load_ground_truth():
     """
-    Load gemini_responses_filtered.csv — chỉ chứa các cặp complementary.
-    Trả về dict: product_A_id → set of product_B_id
-    """
-    df = pd.read_csv(GT_PATH, encoding='utf-8')
+    Load ground truth từ gemini_responses_filtered.csv.
     
-    # Tạo mapping: product_A_id → set of product_B_id (complementary)
-    gt = {}
-    for _, row in df.iterrows():
-        pid_a = int(row['product_A_id'])
-        pid_b = int(row['product_B_id'])
-        if pid_a not in gt:
-            gt[pid_a] = set()
-        gt[pid_a].add(pid_b)
-    
-    print(f"  Ground truth: {len(gt)} target products, {len(df)} complementary pairs")
-    return gt
-
-
-# ============================================================
-# 2. Load models
-# ============================================================
-def load_item_cf():
-    """Load Item-CF model."""
-    from src.models.item_cf import ItemCFModel
-    model = ItemCFModel()
-    model.load(os.path.join(MODEL_DIR, "item_cf"))
-    return model
-
-
-def load_item2vec():
-    """Load Item2Vec (Neural CF) model."""
-    from src.models.item_cf_neural import ItemCFNeuralModel
-    model = ItemCFNeuralModel()
-    model.load(os.path.join(MODEL_DIR, "item2vec"))
-    return model
-
-
-def load_kg_metapath():
-    """Load KGMetapath model."""
-    from src.models.kg_metapath import KGMetapathModel
-    model = KGMetapathModel()
-    model.load(os.path.join(MODEL_DIR, "kg_metapath"))
-    return model
-
-
-def load_ensemble(load_sub_models=True):
-    """Load Ensemble model (có CB Filter bên trong)."""
-    from src.models.ensemble import EnsembleModel
-    ensemble = EnsembleModel.load(load_sub_models=load_sub_models)
-    return ensemble
-
-
-# ============================================================
-# 3. Đánh giá metrics cho 1 model
-# ============================================================
-def evaluate_model(model, model_name, gt, top_k=10, valid_product_ids=None, food_pids=None, **recommend_kwargs):
-    """
-    Đánh giá model dựa trên ground truth.
-    
-    Args:
-        model: model object (phải có method recommend(product_id, top_k=...))
-        model_name: str (dùng cho in ấn)
-        gt: dict {product_A_id: set of product_B_id}
-        top_k: int (default 10)
-        valid_product_ids: set[int] — các product_id mà model biết (nếu None thì bỏ qua filter)
-        food_pids: set[int] — các product_id thuộc food (nếu None thì không filter)
-        **recommend_kwargs: các kwargs thêm cho recommend (vd use_cb_filter=True)
+    File này chỉ chứa các cặp complementary (label=1).
+    Xây set comp_pairs = {(A_id, B_id), ...} để tra cứu nhanh.
     
     Returns:
-        dict: {model_name: {precision, recall, f1, hit}}
+        comp_pairs: set[(int, int)] — các cặp complementary
+        all_targets: list[int] — các target product A duy nhất
     """
-    precisions = []
-    recalls = []
-    f1s = []
-    hits = []
-    n_skipped = 0
-    n_evaluated = 0
+    df = pd.read_csv(GT_FILE)
+    comp_pairs = set()
+    for _, row in df.iterrows():
+        comp_pairs.add((int(row['product_A_id']), int(row['product_B_id'])))
     
-    # Đảm bảo top_k công bằng:
-    # - Ensemble: set cả top_k (số candidate từ mỗi sub-model) và final_k
-    # - Các model khác: set top_k
-    if hasattr(model, 'final_k'):
-        orig_final_k = model.final_k
-        model.final_k = top_k
-    if hasattr(model, 'top_k'):
-        orig_top_k = model.top_k
-        model.top_k = top_k
+    all_targets = sorted(df['product_A_id'].unique())
     
-    for pid_a, true_set in gt.items():
-        # Pre-filter: bỏ qua nếu model không biết sản phẩm này
-        if valid_product_ids is not None and pid_a not in valid_product_ids:
-            n_skipped += 1
-            continue
-        
-        try:
-            if 'use_cb_filter' in recommend_kwargs:
-                recs = model.recommend(pid_a, use_cb_filter=recommend_kwargs['use_cb_filter'])
-            else:
-                recs = model.recommend(pid_a)
-        except KeyError:
-            # Product không tồn tại trong model vocabulary
-            n_skipped += 1
-            continue
-        except Exception as e:
-            print(f"    ⚠️ Lỗi khi recommend product {pid_a}: {e}")
-            n_skipped += 1
-            continue
-        
-        if not recs:
-            n_skipped += 1
-            continue
-        
-        # Lấy danh sách product_id từ recommendations (bỏ qua score)
-        n_recs = min(len(recs), top_k)
-        pred_ids = [pid for pid, _ in recs[:n_recs]]
-        
-        # Lọc chỉ giữ food products (đồng bộ với script 10 — survey chỉ chứa food)
-        if food_pids is not None:
-            pred_ids = [pid for pid in pred_ids if pid in food_pids]
-        
-        # Đếm số lượng đúng
-        n_correct = sum(1 for pid in pred_ids if pid in true_set)
-        n_true = len(true_set)
-        
-        if n_true == 0:
-            continue  # không có ground truth cho product này, bỏ qua
-        
-        # Precision@K chuẩn: luôn chia cho K
-        # Nếu model trả về ít hơn K items, các vị trí thiếu được coi là không relevant → precision giảm
-        precision = n_correct / top_k
-        recall = n_correct / n_true
-        f1 = 2 * precision * recall / (precision + recall + 1e-10)
-        hit = 1 if n_correct > 0 else 0
-        
-        precisions.append(precision)
-        recalls.append(recall)
-        f1s.append(f1)
-        hits.append(hit)
-        n_evaluated += 1
+    print(f"   -> {len(comp_pairs):,} complementary pairs")
+    print(f"   -> {len(all_targets):,} unique target products")
+    return comp_pairs, all_targets
+
+
+def load_models():
+    """Load các model cần đánh giá."""
+    models = {}
+
+    # Item-CF
+    item_cf = ItemCFModel()
+    item_cf.load(os.path.join(MODEL_DIR, "item_cf"))
+    models['item_cf'] = item_cf
+
+    # Item2Vec
+    i2v = ItemCFNeuralModel()
+    i2v.load(os.path.join(MODEL_DIR, "item2vec"))
+    models['item2vec'] = i2v
+
+    # KGMetapath
+    mw = KGMetapathModel()
+    mw.load(os.path.join(MODEL_DIR, "kg_metapath"))
+    models['kg_metapath'] = mw
+
+    # Ensemble
+    ensemble = EnsembleModel.load(load_sub_models=False)
+    models['ensemble'] = ensemble
+
+    return models
+
+
+def evaluate_model(model, model_name, targets, comp_pairs, top_k=TOP_K):
+    """
+    Đánh giá một model trên tập target.
     
-    # Khôi phục giá trị gốc
-    if hasattr(model, 'final_k'):
-        model.final_k = orig_final_k
-    if hasattr(model, 'top_k'):
-        model.top_k = orig_top_k
+    Args:
+        model: model object (có method recommend)
+        model_name: str
+        targets: list[int] — các product_id target
+        comp_pairs: set[(int, int)] — ground truth complementary
+        top_k: int
     
-    # Tính trung bình
-    result = {
+    Returns:
+        dict: precision, recall, f1, hit
+    """
+    all_precisions = []
+    all_recalls = []
+    all_hits = []
+
+    for pid_a in targets:
+        # Lấy top-k gợi ý
+        if model_name == 'ensemble_cb':
+            recs = model.recommend(pid_a, use_cb_filter=True, top_k=top_k)
+        else:
+            recs = model.recommend(pid_a, top_k=top_k)
+
+        pred_pids = [r[0] for r in recs[:top_k]]
+
+        # Đếm số complementary trong top-k
+        n_complementary = sum(
+            1 for pid_b in pred_pids
+            if (pid_a, pid_b) in comp_pairs
+        )
+
+        # Precision@k
+        precision = n_complementary / top_k
+        all_precisions.append(precision)
+
+        # Hit@k
+        hit = 1 if n_complementary > 0 else 0
+        all_hits.append(hit)
+
+        # Recall@k: số ground truth complementary cho pid_a
+        n_gt = sum(1 for (a, b) in comp_pairs if a == pid_a)
+        recall = n_complementary / n_gt if n_gt > 0 else 0
+        all_recalls.append(recall)
+
+    # Average
+    avg_precision = np.mean(all_precisions) if all_precisions else 0
+    avg_recall = np.mean(all_recalls) if all_recalls else 0
+    avg_hit = np.mean(all_hits) if all_hits else 0
+    f1 = 2 * avg_precision * avg_recall / (avg_precision + avg_recall) if (avg_precision + avg_recall) > 0 else 0
+
+    return {
         'model': model_name,
-        'n_targets': len(gt),
-        'n_evaluated': n_evaluated,
-        'n_skipped': n_skipped,
-        'precision@10': np.mean(precisions) if precisions else 0.0,
-        'recall@10': np.mean(recalls) if recalls else 0.0,
-        'f1@10': np.mean(f1s) if f1s else 0.0,
-        'hit@10': np.mean(hits) if hits else 0.0,
+        'precision': round(avg_precision, 4),
+        'recall': round(avg_recall, 4),
+        'f1': round(f1, 4),
+        'hit': round(avg_hit, 4),
+        'n_targets': len(targets),
     }
-    return result
 
 
-def print_results(results):
-    """In bảng so sánh kết quả."""
-    print("\n" + "=" * 80)
-    print("KẾT QUẢ ĐÁNH GIÁ MODEL — GROUND TRUTH TỪ LLM (Gemini)")
-    print("=" * 80)
-    
-    header = f"{'Model':<25} {'Targets':>8} {'Eval':>8} {'Skip':>8} {'P@10':>8} {'R@10':>8} {'F1@10':>8} {'Hit@10':>8}"
-    print(header)
-    print("-" * 80)
-    
-    for r in results:
-        line = f"{r['model']:<25} {r['n_targets']:>8} {r['n_evaluated']:>8} {r['n_skipped']:>8} {r['precision@10']:>8.4f} {r['recall@10']:>8.4f} {r['f1@10']:>8.4f} {r['hit@10']:>8.4f}"
-        print(line)
-    
-    print("=" * 80)
-
-
-# ============================================================
-# 4. Main
-# ============================================================
 def main():
-    print("\n1. Loading ground truth từ Gemini responses...")
-    gt = load_ground_truth()
-    
-    # 1b. Load products & food_pids (đồng bộ với script 10)
-    print("\n🍏 Đang xác định Food & Beverage products...")
-    products = load_products()
-    food_pids = get_food_product_ids(products)
-    
-    # 2. Load models
-    print("\n2. Loading models...")
-    
-    print("  Loading Item-CF...")
-    item_cf = load_item_cf()
-    
-    print("  Loading Item2Vec...")
-    item2vec = load_item2vec()
-    
-    print("  Loading KGMetapath...")
-    kg_metapath = load_kg_metapath()
-    
-    print("  Loading Ensemble (w/ sub-models)...")
-    ensemble = load_ensemble(load_sub_models=True)
-    
-    # Xác định valid product IDs cho từng model (pre-filter ground truth)
-    item_cf_valid = set(item_cf.product_id_to_idx.keys())
-    i2v_valid = set(int(k) for k in item2vec.model.wv.key_to_index.keys())
-    mw_valid = set(kg_metapath.product_id_to_idx.keys())
-    # Ensemble dùng chung product space với item_cf
-    ensemble_valid = set(item_cf.product_id_to_idx.keys())
-    
-    # 3. Đánh giá từng model
-    print("\n3. Evaluating models...")
+    print("\n1. Loading ground truth từ gemini_responses_filtered.csv...")
+    comp_pairs, all_targets = load_ground_truth()
+
+    print("\n2. Loading products...")
+    products = pd.read_parquet(os.path.join(PROCESSED_DIR, "products.parquet"))
+    print(f"   -> {len(products)} products")
+
+    print("\n3. Loading models...")
+    models = load_models()
+    # Thêm ensemble_cb (dùng cùng ensemble model nhưng bật CB filter)
+    models['ensemble_cb'] = models['ensemble']
+
+    targets = all_targets
+    print(f"\n4. Evaluating {len(targets)} targets (top-{TOP_K})...")
+
     results = []
-    
-    print("  Item-CF...")
-    r = evaluate_model(item_cf, "Item-CF", gt, valid_product_ids=item_cf_valid, food_pids=food_pids)
-    results.append(r)
-    print(f"    P@10={r['precision@10']:.4f} R@10={r['recall@10']:.4f} F1@10={r['f1@10']:.4f} Hit@10={r['hit@10']:.4f} (eval={r['n_evaluated']}, skip={r['n_skipped']})")
-    
-    print("  Item2Vec...")
-    r = evaluate_model(item2vec, "Item2Vec", gt, valid_product_ids=i2v_valid, food_pids=food_pids)
-    results.append(r)
-    print(f"    P@10={r['precision@10']:.4f} R@10={r['recall@10']:.4f} F1@10={r['f1@10']:.4f} Hit@10={r['hit@10']:.4f} (eval={r['n_evaluated']}, skip={r['n_skipped']})")
-    
-    print("  KGMetapath...")
-    r = evaluate_model(kg_metapath, "KGMetapath", gt, valid_product_ids=mw_valid, food_pids=food_pids)
-    results.append(r)
-    print(f"    P@10={r['precision@10']:.4f} R@10={r['recall@10']:.4f} F1@10={r['f1@10']:.4f} Hit@10={r['hit@10']:.4f} (eval={r['n_evaluated']}, skip={r['n_skipped']})")
-    
-    print("  Ensemble (w/o CB)...")
-    r = evaluate_model(ensemble, "Ensemble (w/o CB)", gt, valid_product_ids=ensemble_valid, food_pids=food_pids, use_cb_filter=False)
-    results.append(r)
-    print(f"    P@10={r['precision@10']:.4f} R@10={r['recall@10']:.4f} F1@10={r['f1@10']:.4f} Hit@10={r['hit@10']:.4f} (eval={r['n_evaluated']}, skip={r['n_skipped']})")
-    
-    print("  Ensemble + CB...")
-    r = evaluate_model(ensemble, "Ensemble + CB", gt, valid_product_ids=ensemble_valid, food_pids=food_pids, use_cb_filter=True)
-    results.append(r)
-    print(f"    P@10={r['precision@10']:.4f} R@10={r['recall@10']:.4f} F1@10={r['f1@10']:.4f} Hit@10={r['hit@10']:.4f} (eval={r['n_evaluated']}, skip={r['n_skipped']})")
-    
-    # 4. In kết quả
-    print_results(results)
-    
-    # 5. Lưu kết quả
+    for model_name in MODEL_NAMES:
+        print(f"\n   Evaluating {model_name}...")
+        result = evaluate_model(
+            models[model_name], model_name, targets, comp_pairs
+        )
+        results.append(result)
+        print(f"     Precision@{TOP_K}: {result['precision']:.4f}")
+        print(f"     Recall@{TOP_K}:    {result['recall']:.4f}")
+        print(f"     F1@{TOP_K}:        {result['f1']:.4f}")
+        print(f"     Hit@{TOP_K}:       {result['hit']:.4f}")
+
+    # Lưu kết quả
     os.makedirs(RESULT_DIR, exist_ok=True)
-    output_path = os.path.join(RESULT_DIR, "llm_eval_results.csv")
-    df = pd.DataFrame(results)
-    df.to_csv(output_path, index=False, encoding='utf-8')
-    print(f"\n✅ Đã lưu kết quả tại: {output_path}")
+    results_df = pd.DataFrame(results)
+    results_df.to_csv(os.path.join(RESULT_DIR, "llm_eval_results.csv"), index=False)
+    print(f"\n✅ Results saved to {RESULT_DIR}llm_eval_results.csv")
+    print("\n" + "="*60)
+    print("  RESULTS SUMMARY")
+    print("="*60)
+    print(results_df.to_string(index=False))
 
 
 if __name__ == "__main__":
