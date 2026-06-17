@@ -194,7 +194,8 @@ def main():
     print(f"\n🎯 Đang chọn {n_targets:,} target product...")
     
     # Sắp xếp pool safe theo count giảm dần
-    count_of_pid = {pid: product_counts[idx_to_pid[pid]] 
+    item_cf = models['item_cf']
+    count_of_pid = {pid: product_counts[item_cf.product_id_to_idx[pid]] 
                     for pid in safe_pids}
     safe_sorted = sorted(safe_pids, key=lambda pid: count_of_pid[pid], reverse=True)
 
