@@ -29,6 +29,15 @@ from src.config import MODEL_DIR, RESULT_DIR
 
 
 # ============================================================
+# Đường dẫn ground truth
+# ============================================================
+GT_PATH = os.path.join(
+    MODEL_DIR, "..", "data", "survey",
+    "llm_raw_responses", "gemini_responses_filtered.csv"
+)
+
+
+# ============================================================
 # 1. Load ground truth
 # ============================================================
 def load_ground_truth():
@@ -36,9 +45,7 @@ def load_ground_truth():
     Load gemini_responses_filtered.csv — chỉ chứa các cặp complementary.
     Trả về dict: product_A_id → set of product_B_id
     """
-    gt_path = os.path.join(MODEL_DIR, "..", "data", "survey",
-                            "llm_raw_responses", "gemini_responses_filtered.csv")
-    df = pd.read_csv(gt_path, encoding='utf-8')
+    df = pd.read_csv(GT_PATH, encoding='utf-8')
     
     # Tạo mapping: product_A_id → set of product_B_id (complementary)
     gt = {}
@@ -90,7 +97,7 @@ def load_ensemble(load_sub_models=True):
 # ============================================================
 # 3. Đánh giá metrics cho 1 model
 # ============================================================
-def evaluate_model(model, model_name, gt, top_k=10, **recommend_kwargs):
+def evaluate_model(model, model_name, gt, top_k=10, valid_product_ids=None, **recommend_kwargs):
     """
     Đánh giá model dựa trên ground truth.
     
@@ -99,6 +106,7 @@ def evaluate_model(model, model_name, gt, top_k=10, **recommend_kwargs):
         model_name: str (dùng cho in ấn)
         gt: dict {product_A_id: set of product_B_id}
         top_k: int (default 10)
+        valid_product_ids: set[int] — các product_id mà model biết (nếu None thì bỏ qua filter)
         **recommend_kwargs: các kwargs thêm cho recommend (vd use_cb_filter=True)
     
     Returns:
@@ -111,30 +119,43 @@ def evaluate_model(model, model_name, gt, top_k=10, **recommend_kwargs):
     n_skipped = 0
     n_evaluated = 0
     
-    # Ensemble dùng self.final_k thay vì tham số top_k trong recommend()
-    # Nên cần set tạm thời
+    # Đảm bảo top_k công bằng:
+    # - Ensemble: set cả top_k (số candidate từ mỗi sub-model) và final_k
+    # - Các model khác: set top_k
     if hasattr(model, 'final_k'):
         orig_final_k = model.final_k
         model.final_k = top_k
-    if hasattr(model, 'top_k') and hasattr(model, 'final_k') is False:
+    if hasattr(model, 'top_k'):
         orig_top_k = model.top_k
         model.top_k = top_k
     
     for pid_a, true_set in gt.items():
+        # Pre-filter: bỏ qua nếu model không biết sản phẩm này
+        if valid_product_ids is not None and pid_a not in valid_product_ids:
+            n_skipped += 1
+            continue
+        
         try:
             if 'use_cb_filter' in recommend_kwargs:
                 recs = model.recommend(pid_a, use_cb_filter=recommend_kwargs['use_cb_filter'])
             else:
                 recs = model.recommend(pid_a, top_k=top_k)
-        except Exception:
-            recs = []
+        except KeyError:
+            # Product không tồn tại trong model vocabulary
+            n_skipped += 1
+            continue
+        except Exception as e:
+            print(f"    ⚠️ Lỗi khi recommend product {pid_a}: {e}")
+            n_skipped += 1
+            continue
         
         if not recs:
             n_skipped += 1
             continue
         
         # Lấy danh sách product_id từ recommendations (bỏ qua score)
-        pred_ids = [pid for pid, _ in recs[:top_k]]
+        n_recs = min(len(recs), top_k)
+        pred_ids = [pid for pid, _ in recs[:n_recs]]
         
         # Đếm số lượng đúng
         n_correct = sum(1 for pid in pred_ids if pid in true_set)
@@ -143,7 +164,8 @@ def evaluate_model(model, model_name, gt, top_k=10, **recommend_kwargs):
         if n_true == 0:
             continue  # không có ground truth cho product này, bỏ qua
         
-        precision = n_correct / top_k
+        # Precision: chia cho số lượng recommend thực tế (nếu < top_k vẫn chính xác)
+        precision = n_correct / n_recs if n_recs > 0 else 0.0
         recall = n_correct / n_true
         f1 = 2 * precision * recall / (precision + recall + 1e-10)
         hit = 1 if n_correct > 0 else 0
@@ -157,7 +179,7 @@ def evaluate_model(model, model_name, gt, top_k=10, **recommend_kwargs):
     # Khôi phục giá trị gốc
     if hasattr(model, 'final_k'):
         model.final_k = orig_final_k
-    if hasattr(model, 'top_k') and hasattr(model, 'final_k') is False:
+    if hasattr(model, 'top_k'):
         model.top_k = orig_top_k
     
     # Tính trung bình
@@ -218,33 +240,39 @@ def main():
     print("  Loading Ensemble (w/ sub-models)...")
     ensemble = load_ensemble(load_sub_models=True)
     
+    # Xác định valid product IDs cho từng model (pre-filter ground truth)
+    item_cf_valid = set(item_cf.product_id_to_idx.keys())
+    i2v_valid = set(int(k) for k in item2vec.model.wv.key_to_index.keys())
+    mw_valid = set(kg_metapath.product_id_to_idx.keys())
+    ensemble_valid = set(ensemble.item_cf.product_id_to_idx.keys())  # ensemble dùng chung product space
+    
     # 3. Đánh giá từng model
     print("\n📊 Đang đánh giá các model...")
     results = []
     
     # Item-CF
     print("  Evaluating Item-CF...")
-    r = evaluate_model(item_cf, "Item-CF", gt)
+    r = evaluate_model(item_cf, "Item-CF", gt, valid_product_ids=item_cf_valid)
     results.append(r)
     
     # Item2Vec
     print("  Evaluating Item2Vec...")
-    r = evaluate_model(item2vec, "Item2Vec", gt)
+    r = evaluate_model(item2vec, "Item2Vec", gt, valid_product_ids=i2v_valid)
     results.append(r)
     
     # KGMetapath
     print("  Evaluating KGMetapath...")
-    r = evaluate_model(kg_metapath, "KGMetapath", gt)
+    r = evaluate_model(kg_metapath, "KGMetapath", gt, valid_product_ids=mw_valid)
     results.append(r)
     
     # Ensemble (w/o CB)
     print("  Evaluating Ensemble (w/o CB)...")
-    r = evaluate_model(ensemble, "Ensemble (w/o CB)", gt, use_cb_filter=False)
+    r = evaluate_model(ensemble, "Ensemble (w/o CB)", gt, valid_product_ids=ensemble_valid, use_cb_filter=False)
     results.append(r)
     
     # Ensemble + CB
     print("  Evaluating Ensemble + CB...")
-    r = evaluate_model(ensemble, "Ensemble + CB", gt, use_cb_filter=True)
+    r = evaluate_model(ensemble, "Ensemble + CB", gt, valid_product_ids=ensemble_valid, use_cb_filter=True)
     results.append(r)
     
     # 4. In kết quả
