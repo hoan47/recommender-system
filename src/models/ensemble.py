@@ -149,7 +149,7 @@ class EnsembleModel:
 
         return result
 
-    def recommend(self, product_id: int, use_cb_filter: bool = True):
+    def recommend(self, product_id: int, use_cb_filter: bool = True, top_k: int = None):
         """
         Ensemble recommendation.
         
@@ -158,15 +158,19 @@ class EnsembleModel:
         3. Tính weighted score cho mỗi candidate
         4. Sort descending
         5. (Optional) CB Filter loại substitute
-        6. Trả về final_k gợi ý
+        6. Trả về top_k gợi ý
         
         Args:
             product_id: int, sản phẩm đầu vào
             use_cb_filter: bool, có dùng CB Filter không
+            top_k: int, số lượng gợi ý (default: self.final_k)
         
         Returns:
             list (product_id, final_score)
         """
+        if top_k is None:
+            top_k = self.final_k
+        
         # Lấy raw candidates
         candidates_sorted = self.get_raw_candidates(product_id, top_k=self.top_k)
         
@@ -179,8 +183,8 @@ class EnsembleModel:
                 product_id, candidates_sorted, threshold=ENS_CB_THRESHOLD
             )
         
-        # --- Bước 6: Lấy final_k ---
-        result = candidates_sorted[:self.final_k]
+        # --- Bước 6: Lấy top_k ---
+        result = candidates_sorted[:top_k]
         
         return result
     
