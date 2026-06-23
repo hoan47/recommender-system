@@ -200,8 +200,13 @@ Dữ liệu được cấu trúc theo **đơn hàng (order)**, mỗi đơn hàng
 
 ### 5.2 Hạn chế
 > **Lưu ý về dữ liệu sản phẩm:**
-> - `products.parquet` (36,181 records — đã lọc non-food) — tạo từ `01_load_data.py`, cột `product_name` đã được ghi đè bằng **tiếng Việt** (từ `products_vi.csv`). Dùng cho **tất cả models** (Ochiai, Item2Vec, DeepWalk, Association Rules, CB Filter).
+> - `products.parquet` (36,181 records — đã lọc non-food) — tạo từ `01_load_data.py`. Cả 3 cột mô tả đều được ghi đè bằng **tiếng Việt**:
+>   - `product_name` ← từ `products_vi.csv`
+>   - `aisle` ← từ `aisles_vi.csv`
+>   - `department` ← từ `departments_vi.csv`
+> - Dùng cho **tất cả models** (Item-CF, Item2Vec, KGMetapath, CB Filter, Ensemble).
 > - Không còn 2 nguồn riêng biệt nữa — `products.parquet` là nguồn duy nhất cho cả collaborative và content-based.
+> - File `aisles.csv` (gốc) vẫn được dùng riêng cho `product_filter.py` để map `EXCLUDED_DEPARTMENT_NAMES` → `department_id` (không phụ thuộc tên Anh/Việt).
 
 ⚠️ **Không có thông tin giá:** Không thể tính toán ngân sách hoặc giá trị đơn hàng  
 ⚠️ **Không có demographics:** Không biết tuổi, giới tính, vị trí của người dùng  
