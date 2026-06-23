@@ -36,6 +36,8 @@ SCATTER_ALPHA = 0.05
 
 SAVE_IMAGE = os.path.join(RESULT_DIR, "cb_similarity_distribution",
                           "cb_overlap_distribution.png")
+SAVE_HISTOGRAM = os.path.join(RESULT_DIR, "cb_similarity_distribution",
+                              "cb_score_histogram.png")
 # ─────────────────────────────────────────────────────────────
 
 
@@ -300,6 +302,63 @@ def plot_results(data, save_path):
     print(f"  Đồ thị đã lưu: {save_path}")
 
 
+def plot_score_histogram(data, save_path):
+    """
+    Vẽ histogram phân bố số lượng cặp theo khoảng similarity score.
+    3 phương pháp chồng lớp (step-filled) để so sánh trực quan.
+    Bins: 0-0.1, 0.1-0.2, ..., 0.9-1.0
+    """
+    bins = np.linspace(0, 1, 11)  # 10 bins
+    bin_labels = [f"{bins[i]:.1f}-{bins[i+1]:.1f}" for i in range(len(bins)-1)]
+
+    # Gộp tất cả overlap
+    all_tfidf, all_count, all_ensemble = [], [], []
+    for overlap in range(1, MAX_OVERLAP + 1):
+        pairs = data[overlap]
+        for p in pairs:
+            all_tfidf.append(p[0])
+            all_count.append(p[1])
+            all_ensemble.append(p[2])
+
+    fig, ax = plt.subplots(figsize=(14, 7))
+
+    colors = {'TF-IDF': '#1f77b4', 'Overlap': '#ff7f0e', 'Ensemble': '#2ca02c'}
+    alpha_hist = 0.4
+
+    # Vẽ 3 histograms chồng lớp
+    ax.hist(all_tfidf, bins=bins, alpha=alpha_hist, color=colors['TF-IDF'],
+            label='TF-IDF', edgecolor='white', linewidth=0.5)
+    ax.hist(all_count, bins=bins, alpha=alpha_hist, color=colors['Overlap'],
+            label='Overlap (Count)', edgecolor='white', linewidth=0.5)
+    ax.hist(all_ensemble, bins=bins, alpha=alpha_hist, color=colors['Ensemble'],
+            label='Ensemble', edgecolor='white', linewidth=0.5)
+
+    ax.set_xlabel('Similarity Score', fontsize=13)
+    ax.set_ylabel('Số lượng cặp', fontsize=13)
+    ax.set_title('Phân bố số lượng cặp theo khoảng similarity score\n'
+                 f'(tổng {len(all_tfidf):,} cặp, N_EXAMPLES={N_EXAMPLES:,}/overlap, Ensemble α={CB_ALPHA})',
+                 fontsize=14, fontweight='bold')
+    ax.set_xticks(bins)
+    ax.set_xlim(-0.02, 1.02)
+    ax.legend(fontsize=11, loc='upper right')
+    ax.grid(True, alpha=0.3, axis='y')
+
+    # Thêm chú thích số lượng trên mỗi cột (chỉ Ensemble)
+    n_total = len(all_ensemble)
+    counts_ens, _ = np.histogram(all_ensemble, bins=bins)
+    for i, c in enumerate(counts_ens):
+        if c > 0:
+            pct = c / n_total * 100
+            ax.text(bins[i] + 0.05, c + max(counts_ens) * 0.01,
+                    f'{c}\n({pct:.1f}%)',
+                    ha='center', va='bottom', fontsize=7, color=colors['Ensemble'])
+
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    fig.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    print(f"  Histogram đã lưu: {save_path}")
+
+
 def print_results(data):
     print()
     print("=" * 140)
@@ -368,6 +427,7 @@ def main():
     # Plot
     print("\n3. Vẽ đồ thị...")
     plot_results(data, SAVE_IMAGE)
+    plot_score_histogram(data, SAVE_HISTOGRAM)
 
     print("\n  HOÀN TẤT!")
 
