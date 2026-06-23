@@ -13,6 +13,7 @@ import json
 import numpy as np
 from tqdm import tqdm
 import pandas as pd
+from gensim.models import Word2Vec
 
 from src.config import (
     MW_EMBEDDING_DIM, MW_WALK_LENGTH, MW_NUM_WALKS,
@@ -302,7 +303,6 @@ class KGMetapathModel:
         
         # --- Train Word2Vec (Skip-gram + Negative Sampling) ---
         print(f"  Đang train Word2Vec (dim={self.params['embedding_dim']})...")
-        from gensim.models import Word2Vec
         
         self.model = Word2Vec(
             sentences=sentences,
@@ -350,13 +350,14 @@ class KGMetapathModel:
         
         idx = self.product_id_to_idx[product_id]
         vec_a = self.embeddings[idx]
+        norm_a = np.linalg.norm(vec_a)
         
-        if np.linalg.norm(vec_a) == 0:
+        if norm_a == 0:
             return []
         
         # Cosine similarity với tất cả nodes (dùng cached norms)
         similarities = (self.embeddings @ vec_a) / (
-            self._embedding_norms * np.linalg.norm(vec_a)
+            self._embedding_norms * norm_a
         )
         
         # Bỏ qua chính nó
@@ -402,7 +403,7 @@ class KGMetapathModel:
             },
         }
         with open(os.path.join(path, "metadata.json"), 'w') as f:
-            json.dump(metadata, f)
+            json.dump(metadata, f, indent=2)
         
         # Lưu Word2Vec model
         if self.model is not None:
@@ -446,7 +447,6 @@ class KGMetapathModel:
         # Load Word2Vec model
         model_path = os.path.join(path, "word2vec.model")
         if os.path.exists(model_path):
-            from gensim.models import Word2Vec
             self.model = Word2Vec.load(model_path)
         
         self.graph_csr = None

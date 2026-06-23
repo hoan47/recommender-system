@@ -7,6 +7,7 @@ import os
 import re
 import numpy as np
 from scipy import sparse
+from scipy.sparse import hstack as sparse_hstack
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 
 from src.config import (
@@ -176,8 +177,6 @@ def build_multi_field_vectors(fields_dict):
         sparse.csr_matrix: ma trận ghép (n_samples, tổng số features đã scale)
         list: các TfidfVectorizer đã fit (để sau dùng cho inference nếu cần)
     """
-    from scipy.sparse import hstack as sparse_hstack
-
     vectors = []
     vectorizers = []
 

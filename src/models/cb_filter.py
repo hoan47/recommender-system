@@ -222,8 +222,7 @@ class CBFilter:
                     ordered_result.append(cid)
             return ordered_result
 
-    def filter_df(self, product_a_id: int, candidate_df, threshold: float,
-                  score_col: str = "score"):
+    def filter_df(self, product_a_id: int, candidate_df, threshold: float):
         """
         Version trả về DataFrame thay vì list — lọc substitute.
 
@@ -231,7 +230,6 @@ class CBFilter:
             product_a_id: product_id đầu vào
             candidate_df: DataFrame [product_id, score, ...]
             threshold: cosine similarity >= threshold → substitute → loại bỏ
-            score_col: tên cột chứa score (chỉ để tương thích API)
 
         Returns:
             DataFrame đã loại bỏ substitute

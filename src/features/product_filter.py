@@ -12,6 +12,9 @@ import pandas as pd
 
 from src.config import EXCLUDED_DEPARTMENT_NAMES, DEPARTMENTS_FILE
 
+# Cache departments_df để tránh đọc file nhiều lần
+_departments_cache = None
+
 
 def _get_excluded_dept_ids():
     """
@@ -20,9 +23,11 @@ def _get_excluded_dept_ids():
     Returns:
         set[int] — các department_id bị loại
     """
-    departments = pd.read_csv(DEPARTMENTS_FILE)
+    global _departments_cache
+    if _departments_cache is None:
+        _departments_cache = pd.read_csv(DEPARTMENTS_FILE)
     excluded_ids = set(
-        departments[departments['department'].isin(EXCLUDED_DEPARTMENT_NAMES)]['department_id']
+        _departments_cache[_departments_cache['department'].isin(EXCLUDED_DEPARTMENT_NAMES)]['department_id']
     )
     return excluded_ids
 
@@ -86,8 +91,8 @@ def get_filter_stats(products_df, order_products_df, excluded_product_ids):
     # Thống kê theo department bị loại (dùng department_id để không phụ thuộc tên Anh/Việt)
     excluded_dept_ids = _get_excluded_dept_ids()
     excluded_df = products_df[products_df['department_id'].isin(excluded_dept_ids)]
-    departments = pd.read_csv(DEPARTMENTS_FILE)
-    dept_id_to_name = dict(zip(departments['department_id'], departments['department']))
+    # Dùng cache thay vì đọc lại DEPARTMENTS_FILE
+    dept_id_to_name = dict(zip(_departments_cache['department_id'], _departments_cache['department']))
     for dept_id in sorted(excluded_dept_ids):
         count = excluded_df[excluded_df['department_id'] == dept_id].shape[0]
         dept_name = dept_id_to_name.get(dept_id, "?")

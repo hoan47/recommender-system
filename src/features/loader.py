@@ -1,13 +1,14 @@
 """
 Đọc & merge dữ liệu từ các file CSV gốc.
 """
+import os
 import pandas as pd
 from tqdm import tqdm
 
 from src.config import (
     PRODUCTS_FILE, AISLES_FILE, DEPARTMENTS_FILE,
     ORDER_PRODUCTS_PRIOR, ORDER_PRODUCTS_TRAIN,
-    ORDERS_FILE, CHUNKSIZE
+    ORDERS_FILE, CHUNKSIZE, PROCESSED_DIR
 )
 
 
@@ -18,8 +19,6 @@ def _load_products_vi() -> pd.DataFrame:
     Returns:
         DataFrame columns: [product_id, product_name_vi]
     """
-    import os
-    from src.config import PROCESSED_DIR
     vi_path = os.path.join(PROCESSED_DIR, "products_vi.csv")
     if os.path.exists(vi_path):
         return pd.read_csv(vi_path)
@@ -34,8 +33,6 @@ def _load_aisles_vi() -> pd.DataFrame:
     Returns:
         DataFrame columns: [aisle_id, aisle_vi]
     """
-    import os
-    from src.config import PROCESSED_DIR
     vi_path = os.path.join(PROCESSED_DIR, "aisles_vi.csv")
     if os.path.exists(vi_path):
         return pd.read_csv(vi_path)
@@ -50,8 +47,6 @@ def _load_departments_vi() -> pd.DataFrame:
     Returns:
         DataFrame columns: [department_id, department_vi]
     """
-    import os
-    from src.config import PROCESSED_DIR
     vi_path = os.path.join(PROCESSED_DIR, "departments_vi.csv")
     if os.path.exists(vi_path):
         return pd.read_csv(vi_path)
