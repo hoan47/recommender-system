@@ -29,11 +29,6 @@ from src.features.vectorizer import cb_similarity
 N_EXAMPLES =   1000      # số cặp cho mỗi overlap (đặt 1K, có thể giảm nếu chậm)
 MAX_OVERLAP = 10         # từ 1 đến 10 từ trùng
 MAX_BUCKET_TRIES = 5_000_000  # giới hạn lấy mẫu trong bucket (tránh treo vô hạn)
-
-# Scatter subset: chỉ vẽ 1/SUBSAMPLE_FRAC số điểm để đỡ rát
-SUBSAMPLE_FRAC = 0.02    # vẽ 2% số điểm → ~4000 điểm/overlap với 200K
-SCATTER_ALPHA = 0.05
-
 SAVE_IMAGE = os.path.join(RESULT_DIR, "cb_similarity_distribution",
                           "cb_overlap_distribution.png")
 SAVE_HISTOGRAM = os.path.join(RESULT_DIR, "cb_similarity_distribution",
@@ -237,11 +232,10 @@ def find_pairs_by_overlap_fast(products, tfidf_vectors, count_vectors,
 
 
 def plot_results(data, save_path):
-    """Vẽ 3 đường mean ± std + scatter subset."""
+    """Vẽ 3 đường mean ± std."""
     overlaps = list(range(1, MAX_OVERLAP + 1))
     means = {'TF-IDF': [], 'Overlap': [], 'Ensemble': []}
     stds  = {'TF-IDF': [], 'Overlap': [], 'Ensemble': []}
-    all_scatter = {'TF-IDF': [], 'Overlap': [], 'Ensemble': [], 'overlap': []}
 
     for ov in overlaps:
         pairs = data[ov]
@@ -256,23 +250,10 @@ def plot_results(data, save_path):
         stds['Overlap'].append(np.std(count_vals))
         stds['Ensemble'].append(np.std(ensemble_vals))
 
-        # Scatter subset
-        n_scatter = max(1, int(len(pairs) * SUBSAMPLE_FRAC))
-        idxs = np.random.choice(len(pairs), n_scatter, replace=False)
-        all_scatter['TF-IDF'].extend(tfidf_vals[idxs])
-        all_scatter['Overlap'].extend(count_vals[idxs])
-        all_scatter['Ensemble'].extend(ensemble_vals[idxs])
-        all_scatter['overlap'].extend([ov] * n_scatter)
-
     fig, ax = plt.subplots(figsize=(12, 7))
 
     colors = {'TF-IDF': '#1f77b4', 'Overlap': '#ff7f0e', 'Ensemble': '#2ca02c'}
     markers = {'TF-IDF': 'o', 'Overlap': 's', 'Ensemble': '^'}
-
-    # Scatter background
-    for label, color in colors.items():
-        ax.scatter(all_scatter['overlap'], all_scatter[label],
-                   s=2, alpha=SCATTER_ALPHA, color=color, label='_nolegend_')
 
     # Line + error band
     for label in ['TF-IDF', 'Overlap', 'Ensemble']:
@@ -304,54 +285,54 @@ def plot_results(data, save_path):
 
 def plot_score_histogram(data, save_path):
     """
-    Vẽ histogram phân bố số lượng cặp theo khoảng similarity score.
-    3 phương pháp chồng lớp (step-filled) để so sánh trực quan.
+    Vẽ grouped bar chart: số lượng cặp theo khoảng similarity score.
     Bins: 0-0.1, 0.1-0.2, ..., 0.9-1.0
+    Mỗi overlap một nhóm thanh, 3 phương pháp cạnh nhau.
     """
-    bins = np.linspace(0, 1, 11)  # 10 bins
-    bin_labels = [f"{bins[i]:.1f}-{bins[i+1]:.1f}" for i in range(len(bins)-1)]
+    bins = np.linspace(0, 1, 11)
+    labels = [f"{bins[i]:.1f}-{bins[i+1]:.1f}" for i in range(len(bins)-1)]
 
-    # Gộp tất cả overlap
-    all_tfidf, all_count, all_ensemble = [], [], []
-    for overlap in range(1, MAX_OVERLAP + 1):
-        pairs = data[overlap]
-        for p in pairs:
-            all_tfidf.append(p[0])
-            all_count.append(p[1])
-            all_ensemble.append(p[2])
+    # Tính histogram cho từng overlap
+    n_overlaps = MAX_OVERLAP
+    all_counts = {}
+    for method, idx in [('TF-IDF', 0), ('Overlap', 1), ('Ensemble', 2)]:
+        all_counts[method] = np.zeros((n_overlaps, len(bins)-1), dtype=int)
+        for ov in range(1, n_overlaps + 1):
+            vals = [p[idx] for p in data[ov]]
+            counts, _ = np.histogram(vals, bins=bins)
+            all_counts[method][ov-1] = counts
+
+    # Tổng hợp tất cả overlap để vẽ grouped bar tổng
+    total_tfidf  = all_counts['TF-IDF'].sum(axis=0)
+    total_count  = all_counts['Overlap'].sum(axis=0)
+    total_ensemble = all_counts['Ensemble'].sum(axis=0)
 
     fig, ax = plt.subplots(figsize=(14, 7))
 
+    x = np.arange(len(labels))
+    width = 0.25
+
     colors = {'TF-IDF': '#1f77b4', 'Overlap': '#ff7f0e', 'Ensemble': '#2ca02c'}
-    alpha_hist = 0.4
 
-    # Vẽ 3 histograms chồng lớp
-    ax.hist(all_tfidf, bins=bins, alpha=alpha_hist, color=colors['TF-IDF'],
-            label='TF-IDF', edgecolor='white', linewidth=0.5)
-    ax.hist(all_count, bins=bins, alpha=alpha_hist, color=colors['Overlap'],
-            label='Overlap (Count)', edgecolor='white', linewidth=0.5)
-    ax.hist(all_ensemble, bins=bins, alpha=alpha_hist, color=colors['Ensemble'],
-            label='Ensemble', edgecolor='white', linewidth=0.5)
+    ax.bar(x - width, total_tfidf, width, label='TF-IDF', color=colors['TF-IDF'], edgecolor='white')
+    ax.bar(x, total_count, width, label='Overlap', color=colors['Overlap'], edgecolor='white')
+    ax.bar(x + width, total_ensemble, width, label='Ensemble', color=colors['Ensemble'], edgecolor='white')
 
-    ax.set_xlabel('Similarity Score', fontsize=13)
+    # Ghi số trên cột Ensemble
+    for i, v in enumerate(total_ensemble):
+        if v > 0:
+            ax.text(i + width, v + max(total_ensemble) * 0.01, str(v),
+                    ha='center', va='bottom', fontsize=9, fontweight='bold', color=colors['Ensemble'])
+
+    ax.set_xlabel('Khoảng similarity score', fontsize=13)
     ax.set_ylabel('Số lượng cặp', fontsize=13)
-    ax.set_title('Phân bố số lượng cặp theo khoảng similarity score\n'
-                 f'(tổng {len(all_tfidf):,} cặp, N_EXAMPLES={N_EXAMPLES:,}/overlap, Ensemble α={CB_ALPHA})',
+    ax.set_title(f'Phân bố số cặp theo similarity score\n'
+                 f'(tổng {total_ensemble.sum():,} cặp, N_EXAMPLES={N_EXAMPLES:,}/overlap, α={CB_ALPHA})',
                  fontsize=14, fontweight='bold')
-    ax.set_xticks(bins)
-    ax.set_xlim(-0.02, 1.02)
-    ax.legend(fontsize=11, loc='upper right')
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, rotation=30, ha='right')
+    ax.legend(fontsize=11)
     ax.grid(True, alpha=0.3, axis='y')
-
-    # Thêm chú thích số lượng trên mỗi cột (chỉ Ensemble)
-    n_total = len(all_ensemble)
-    counts_ens, _ = np.histogram(all_ensemble, bins=bins)
-    for i, c in enumerate(counts_ens):
-        if c > 0:
-            pct = c / n_total * 100
-            ax.text(bins[i] + 0.05, c + max(counts_ens) * 0.01,
-                    f'{c}\n({pct:.1f}%)',
-                    ha='center', va='bottom', fontsize=7, color=colors['Ensemble'])
 
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     fig.savefig(save_path, dpi=150, bbox_inches='tight')
@@ -402,27 +383,6 @@ def main():
         print(f"   overlap={ov}: {len(data[ov])} cặp")
 
     print_results(data)
-
-    # Lưu CSV (chỉ sample 10000 dòng để nhẹ)
-    save_dir = os.path.join(RESULT_DIR, "cb_similarity_distribution")
-    os.makedirs(save_dir, exist_ok=True)
-    rows = []
-    for overlap in range(1, MAX_OVERLAP + 1):
-        for sim_t, sim_c, sim_e, name_a, name_b, common in data[overlap]:
-            rows.append({
-                'overlap': overlap,
-                'sim_tfidf': sim_t,
-                'sim_count': sim_c,
-                'sim_ensemble': sim_e,
-                'product_a': name_a,
-                'product_b': name_b,
-                'common_tokens': ", ".join(common),
-            })
-    df = pd.DataFrame(rows)
-    # Lưu full
-    path_full = os.path.join(save_dir, "cb_overlap_samples_full.csv")
-    df.to_csv(path_full, index=False)
-    print(f"\nRaw data (full): {path_full}  ({len(df):,} dòng)")
 
     # Plot
     print("\n3. Vẽ đồ thị...")
