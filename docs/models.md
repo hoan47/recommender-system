@@ -594,7 +594,7 @@ def recommend(product_id, top_k=100):
 ```python
 final_score(A → B) = α × ItemCF_score(A, B)
                    + β × Item2Vec_sim(A, B)
-                   + γ × Metapath2Vec_sim(A, B)
+                   + γ × KGMetapath_sim(A, B)
 ```
 
 Trong đó:

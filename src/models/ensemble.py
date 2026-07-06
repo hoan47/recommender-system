@@ -21,7 +21,7 @@ class EnsembleModel:
     
     final_score(A → B) = α × ItemCF_score(A, B)
                         + β × Item2Vec_sim(A, B)
-                        + γ × Metapath2Vec_sim(A, B)
+                        + γ × KGMetapath_sim(A, B)
     
     Có thể save/load toàn bộ model ensemble (bao gồm các sub-models) bằng 1 lệnh.
     """
