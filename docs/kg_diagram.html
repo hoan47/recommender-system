@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>KG Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+    <style>
+        body { display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f5f5f5; }
+        .mermaid { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <div class="mermaid">
+        graph LR
+            subgraph ""
+                D1(("D1"))
+            end
+
+            subgraph ""
+                A1["A1"]
+                A2["A2"]
+            end
+
+            subgraph ""
+                P1(((P1)))
+                P2(((P2)))
+                P3(((P3)))
+            end
+
+            D1 --> A1
+            D1 --> A2
+            A1 --> P1
+            A1 --> P2
+            A2 --> P3
+
+            P1 -.->|CO_OCCUR| P2
+            P2 -.->|CO_OCCUR| P3
+
+            P1 ==>|"KG phát hiện<br>P1→P3 (gián tiếp)"| P3
+    </div>
+</body>
+</html>

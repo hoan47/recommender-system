@@ -1,0 +1,23 @@
+@startuml
+top to bottom direction
+
+rectangle "Department" as D1
+
+rectangle "Aisle 1" as A1
+rectangle "Aisle 2" as A2
+
+usecase "p11" as P11
+usecase "p12" as P12
+usecase "p21" as P21
+usecase "p22" as P22
+
+D1 --> A1
+D1 --> A2
+A1 --> P11
+A1 --> P12
+A2 --> P21
+A2 --> P22
+
+P11 ..> P21 : CO_OCCUR
+P11 ..> P22 : KG khám phá\ngián tiếp
+@enduml

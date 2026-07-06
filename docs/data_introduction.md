@@ -1,4 +1,4 @@
-# Khảo Sát Tập Dữ Liệu Instacart Market Basket Analysis
+# Khảo Sát Tập Dữ Liệu Instacart Market Basket Analysis — Dữ Liệu Gốc
 
 ## 1. Tổng Quan
 
@@ -57,7 +57,7 @@ Cấu trúc giống hệt `order_products__prior.csv`, dùng cho tập train.
 
 ---
 
-## 3. Thống Kê Cơ Bản
+## 3. Thống Kê Cơ Bản (Dữ Liệu Gốc)
 
 ### 3.1 Kích thước dữ liệu
 
@@ -84,85 +84,17 @@ Cấu trúc giống hệt `order_products__prior.csv`, dùng cho tập train.
 
 | Eval Set | Số lượng | % | Mục đích |
 |----------|----------|---|----------|
-| **prior** | **~3.2 triệu** | ~94% | Lịch sử mua hàng quá khứ → DÙNG ĐỂ TRAIN |
-| **train** | **~131,000** | ~4% | Dữ liệu train có sẵn → DÙNG ĐỂ TRAIN |
-| **test** | **~75,000** | ~2% | Dữ liệu test có sẵn → **KHÔNG DÙNG để đánh giá gợi ý mua kèm** |
-
-> ⚠️ **Lưu ý quan trọng:** Tổng cộng có **31,919,315 dòng** dữ liệu sau khi lọc non-food (từ `order_products__prior.csv` + `order_products__train.csv`) sẽ được sử dụng để train model. Đã loại 1,899,791 records non-food.
+| **prior** | **~3.2 triệu** | ~94% | Lịch sử mua hàng quá khứ |
+| **train** | **~131,000** | ~4% | Dữ liệu train có sẵn |
+| **test** | **~75,000** | ~2% | Dữ liệu test có sẵn |
 
 ### 3.4 Thống kê Sản phẩm
 
 | Chỉ số | Giá trị |
 |--------|---------|
 | Tổng số sản phẩm gốc | **49,689** |
-| Sản phẩm non-food bị loại | **13,507 (27.2%)** |
-| **Sản phẩm food giữ lại** | **36,181** |
 | Tổng số lối đi (aisles) | **134** |
 | Tổng số phòng ban (departments) | **21** |
-
-### 3.5 Top 10 Lối đi (Aisle) có nhiều sản phẩm nhất
-
-1. **fresh vegetables** 
-2. **fresh fruits**
-3. **packaged vegetables fruits**
-4. **yogurt**
-5. **packaged cheese**
-6. **milk**
-7. **water seltzer sparkling water**
-8. **chips pretzels**
-9. **baby food formula**
-10. **bread**
-
-### 3.6 Phân bố Phòng ban (Department)
-
-| Department | Mô tả |
-|------------|-------|
-| **produce** | Rau củ quả tươi (lớn nhất) |
-| **dairy eggs** | Sữa và trứng (lớn thứ 2) |
-| **snacks** | Đồ ăn nhẹ |
-| **beverages** | Đồ uống |
-| **frozen** | Đồ đông lạnh |
-| **pantry** | Thực phẩm khô |
-| **deli** | Đồ ăn chế biến sẵn |
-| **household** | Đồ gia dụng |
-| ... | ... |
-
-### 3.7 Thống kê Reorder (Mua lại)
-
-Dựa trên mẫu 100,000 dòng từ `order_products__prior.csv`:
-- **Tỷ lệ reorder:** ~59-60% (sản phẩm được mua lại)
-- **Tỷ lệ mua mới:** ~40-41% (sản phẩm lần đầu mua)
-
-Điều này cho thấy người dùng có xu hướng mua lại các sản phẩm quen thuộc, là tín hiệu tốt cho bài toán gợi ý mua kèm.
-
-### 3.8 Thống kê Kích thước Giỏ hàng (Basket Size)
-
-Dựa trên toàn bộ `order_products__prior.csv` (3,214,874 đơn hàng):
-
-| Chỉ số | Giá trị |
-|--------|---------|
-| Số đơn hàng | **3,214,874** |
-| Trung bình (mean) | **~10.09 sản phẩm/đơn** |
-| Độ lệch chuẩn (std) | **7.53** |
-| Nhỏ nhất (min) | **1** |
-| 25th percentile | **5** |
-| Trung vị (50%) | **8** |
-| 75th percentile | **14** |
-| Lớn nhất (max) | **145** |
-
-> Phân bố lệch phải (right-skewed): đa số đơn hàng có 5–14 sản phẩm, nhưng tồn tại đơn hàng rất lớn (tới 145 sản phẩm). Trung vị 8 cho thấy một nửa số đơn hàng có ≤ 8 sản phẩm.
-
-### 3.9 Thống kê Tần suất Sản phẩm (Product Frequency)
-
-Dựa trên 49,677 sản phẩm trong `order_products__prior.csv`:
-
-| Ngưỡng xuất hiện | Số sản phẩm | Tỷ lệ |
-|------------------|-------------|-------|
-| < 10 lần | **7,165** | ~14.4% |
-| < 30 lần | **17,850** | ~35.9% |
-| < 50 lần | **22,991** | ~46.3% |
-
-> **Nhận xét:** Gần một nửa số sản phẩm (46.3%) xuất hiện dưới 50 lần trong toàn bộ tập prior — đây là hiện tượng **long-tail** điển hình. Các sản phẩm hiếm gặp sẽ gây khó khăn cho các phương pháp gợi ý dựa trên đồng xuất hiện (co-occurrence), cần có chiến lược xử lý riêng (ví dụ: fallback sang department/aisle level, hoặc dùng content-based filtering).
 
 ---
 
@@ -190,34 +122,16 @@ Dữ liệu được cấu trúc theo **đơn hàng (order)**, mỗi đơn hàng
 
 ---
 
-## 5. Đánh Giá Chất Lượng Dữ Liệu
+## 5. Đánh Giá Chất Lượng Dữ Liệu Gốc
 
 ### 5.1 Ưu điểm
-✅ **Kích thước lớn:** 31.9+ triệu giao dịch (sau lọc non-food), đủ để huấn luyện model deep learning  
+✅ **Kích thước lớn:** Hàng chục triệu giao dịch, đủ để huấn luyện model deep learning  
 ✅ **Dữ liệu thực tế:** Từ người dùng Instacart thật  
 ✅ **Cấu trúc rõ ràng:** Quan hệ giữa các bảng được thiết kế tốt  
 ✅ **Thông tin phong phú:** Bao gồm thời gian, thứ tự, và tần suất mua lại  
 
 ### 5.2 Hạn chế
-> **Lưu ý về dữ liệu sản phẩm:**
-> - `products.parquet` (36,181 records — đã lọc non-food) — tạo từ `01_load_data.py`. Cả 3 cột mô tả đều được ghi đè bằng **tiếng Việt**:
->   - `product_name` ← từ `products_vi.csv`
->   - `aisle` ← từ `aisles_vi.csv`
->   - `department` ← từ `departments_vi.csv`
-> - Dùng cho **tất cả models** (Item-CF, Item2Vec, KGMetapath, CB Filter, Ensemble).
-> - Không còn 2 nguồn riêng biệt nữa — `products.parquet` là nguồn duy nhất cho cả collaborative và content-based.
-> - File `aisles.csv` (gốc) vẫn được dùng riêng cho `product_filter.py` để map `EXCLUDED_DEPARTMENT_NAMES` → `department_id` (không phụ thuộc tên Anh/Việt).
-
 ⚠️ **Không có thông tin giá:** Không thể tính toán ngân sách hoặc giá trị đơn hàng  
 ⚠️ **Không có demographics:** Không biết tuổi, giới tính, vị trí của người dùng  
 ⚠️ **Dữ liệu test không phù hợp:** `eval_set=test` là dữ liệu tuần tự không phải mua kèm thực tế  
-
----
-
-## 6. Kết Luận
-
-Tập dữ liệu Instacart là nguồn tài nguyên tuyệt vời cho bài toán **gợi ý mua kèm**. Với hơn **31.9 triệu giao dịch (sau lọc non-food)** từ **206,000+ người dùng** và **36,181 sản phẩm thực phẩm**, dữ liệu này cung cấp đủ độ phong phú để xây dựng model chất lượng cao.
-
-**Tổng số dòng dữ liệu khả dụng để train:** **31,919,315** (prior + train, đã loại non-food)
-
----
+⚠️ **Có sản phẩm non-food:** Cần lọc để chỉ giữ lại sản phẩm thực phẩm phục vụ bài toán gợi ý mua kèm

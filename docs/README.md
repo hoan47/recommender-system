@@ -42,7 +42,8 @@ recommender-system/
 ├── results/                   # Kết quả — không commit
 ├── docs/                      # Tài liệu dự án
 │   ├── README.md              # File này — tổng quan & cấu trúc
-│   ├── data_survey.md         # Khảo sát & thống kê dữ liệu
+│   ├── data_introduction.md   # Giới thiệu dữ liệu gốc Instacart
+│   ├── data_cleaned.md        # Dữ liệu sau khi làm sạch & thống kê
 │   └── models.md              # Mục đích dự án & phương pháp model (chi tiết thuật toán)
 ├── .gitignore
 ├── requirements.txt
@@ -65,7 +66,8 @@ recommender-system/
 
 | File | Mô tả |
 |------|-------|
-| `docs/data_survey.md` | Khảo sát chi tiết tập dữ liệu Instacart |
+| `docs/data_introduction.md` | Giới thiệu dữ liệu gốc Instacart (cấu trúc, thống kê ban đầu) |
+| `docs/data_cleaned.md` | Dữ liệu sau làm sạch (quy trình lọc, thống kê chi tiết, đánh giá) |
 | `docs/models.md` | Mục đích dự án, phân biệt bài toán, chiến lược dữ liệu & phương pháp (mô tả thuật toán chi tiết) |
 
 ## Cách chạy Pipeline Model
@@ -99,6 +101,7 @@ python 02_cb_filter.py
 
 - Dữ liệu gốc (CSV) nằm trong `data/` và **không được commit** lên git
 - `models/` và `results/` cũng được loại trừ qua `.gitignore`
-- Chi tiết về dữ liệu xem tại [data_survey.md](data_survey.md)
+- Chi tiết về dữ liệu gốc xem tại [data_introduction.md](data_introduction.md)
+- Chi tiết về dữ liệu sau làm sạch xem tại [data_cleaned.md](data_cleaned.md)
 - Chi tiết về mục đích dự án & model xem tại [models.md](models.md)
 - **Các script không thuộc pipeline model (08, 09, 10, 12, 13, 14, 15...) không được đề cập trong docs chính** — chỉ tập trung vào pipeline 1→7
