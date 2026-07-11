@@ -31,4 +31,6 @@ Thumbs.db
 
 # Environment
 .env
-*.env.local
+*.env.localECHO is on.
+"# Data parquet files"  
+"*.parquet" 
