@@ -74,7 +74,9 @@ class ItemCFModel:
                 order_lengths.append(len(items))
         
         # Build order_indices và order_ptr
+        # Ma trận lưu toàn bộ sản phẩm trong tất cả orders
         order_indices = np.zeros(total_items, dtype=np.int32)
+        # Ma trận lưu start index của mỗi order trong order_indices
         order_ptr = np.zeros(len(order_lengths) + 1, dtype=np.int32)
         
         pos = 0

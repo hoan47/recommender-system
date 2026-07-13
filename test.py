@@ -3,10 +3,10 @@ import os
 import edge_tts
 
 # 1. Đường dẫn file text của bạn
-INPUT_TEXT_FILE = r"C:\Users\b2h16\Downloads\Tài liệu không có tiêu đề (1).txt"
+INPUT_TEXT_FILE = r"C:\Users\b2h16\Downloads\Tài liệu không có tiêu đề (2).txt"
 
 # 2. Đường dẫn file âm thanh đầu ra (sẽ lưu cùng thư mục với file text)
-OUTPUT_AUDIO_FILE = r"C:\Users\b2h16\Downloads\output_voice (1).mp3"
+OUTPUT_AUDIO_FILE = r"C:\Users\b2h16\Downloads\output_voice (2).mp3"
 
 # 3. Chọn giọng đọc tiếng Việt (Hoài My hoặc Nam Minh)
 # Giọng nữ: "vi-VN-HoaiMyNeural"

@@ -178,7 +178,7 @@ Chỉ trên `product_name`:
 Overlap Coefficient = `|A ∩ B| / min(|A|, |B|)` — chỉ quan tâm tỷ lệ từ trùng so với bên ít từ hơn, bất chấp độ dài câu.
 
 Ví dụ:
-- "Sữa tươi Vinamilk" vs "Sữa tươi TH True Milk" → overlap = 2/2 = 1.0
+- "Sữa tươi Vinamilk" vs "Sữa tươi TH True Milk" → overlap = 2/3 ≈ 0.67
 - "Sữa tươi Vinamilk có đường" vs "Sữa tươi" → overlap = 2/2 = 1.0
 
 ##### Ensemble cuối cùng
